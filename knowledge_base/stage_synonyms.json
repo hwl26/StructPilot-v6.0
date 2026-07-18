@@ -1,0 +1,134 @@
+{
+  "_meta": {
+    "description": "14-step cryo-EM workflow stage synonym dictionary. Maps checkpoint IDs to Chinese/English keywords, abbreviations, and colloquial expressions for stage detection.",
+    "version": 1,
+    "stages_covered": 12
+  },
+  "cp_01": {
+    "checkpoint_name": "data_import",
+    "checkpoint_cn": "数据导入",
+    "phase": "数据预处理",
+    "keywords_cn": ["导入", "数据导入", "输入", "加载数据", "打开数据", "读入", "导入电影", "导入照片", "原始数据", "项目建立", "新建项目"],
+    "keywords_en": ["import", "data import", "import movies", "import micrographs", "load data", "raw data", "project setup", "new project"],
+    "abbreviations": ["cp_01", "data_import"],
+    "colloquial": ["怎么把数据弄进去", "数据怎么导进来", "从哪里开始", "第一步"],
+    "key_params": ["pixel_size", "accelerating_voltage", "spherical_aberration", "total_dose"]
+  },
+  "cp_02": {
+    "checkpoint_name": "motion_correction",
+    "checkpoint_cn": "运动校正",
+    "phase": "数据预处理",
+    "keywords_cn": ["运动校正", "漂移校正", "运动补偿", "对齐", "帧对齐", "校正运动", "motioncor", "漂移"],
+    "keywords_en": ["motion correction", "motioncor", "motioncor2", "drift correction", "frame alignment", "patch motion", "alignment"],
+    "abbreviations": ["cp_02", "motion_correction", "mc"],
+    "colloquial": ["图片抖", "漂移大", "帧间漂移", "怎么校正漂移"],
+    "key_params": ["bfactor", "number_of_patches"]
+  },
+  "cp_03": {
+    "checkpoint_name": "ctf_estimation",
+    "checkpoint_cn": "CTF 估计与照片筛选",
+    "phase": "数据预处理",
+    "keywords_cn": ["CTF", "ctf", "CTF估计", "CTF拟合", "功率谱", "defocus", "离焦", "像散", "振幅对比度", "照片筛选", "curate", "筛选照片", "质量筛选"],
+    "keywords_en": ["ctf", "ctf estimation", "ctf fit", "patch ctf", "ctffind", "gctf", "power spectrum", "defocus", "amplitude contrast", "curate exposures", "curate"],
+    "abbreviations": ["cp_03", "ctf_estimation"],
+    "colloquial": ["怎么看CTF好不好", "CTF拟合差怎么办", "哪些照片要删", "冰太厚"],
+    "key_params": ["defocus_range", "amplitude_contrast", "num_gpus"]
+  },
+  "cp_04": {
+    "checkpoint_name": "particle_picking",
+    "checkpoint_cn": "颗粒挑选",
+    "phase": "颗粒处理",
+    "keywords_cn": ["颗粒挑选", "挑颗粒", "picker", "挑选", "blob", "topaz", "template", "模板挑选", "自动挑选", "手动挑选", "粒子挑选"],
+    "keywords_en": ["particle picking", "picker", "blob picker", "topaz", "template picker", "auto-picking", "autopicking", "particle selection", "pick particles"],
+    "abbreviations": ["cp_04", "particle_picking", "picking"],
+    "colloquial": ["怎么挑颗粒", "用什么方法挑", "blob还是topaz", "颗粒选不好"],
+    "key_params": ["min_particle_diameter", "max_particle_diameter", "min_separation_dist", "max_local_maxima", "expected_particles", "num_templates", "zeropadding_factor"]
+  },
+  "cp_05": {
+    "checkpoint_name": "particle_extraction",
+    "checkpoint_cn": "颗粒提取",
+    "phase": "颗粒处理",
+    "keywords_cn": ["颗粒提取", "提取", "extract", "切颗粒", "box size", "盒子大小", "裁剪", "fourier crop", "降采样", "binning"],
+    "keywords_en": ["extraction", "particle extraction", "extract", "extract from micrographs", "box size", "fourier crop", "binning", "particle stack"],
+    "abbreviations": ["cp_05", "particle_extraction", "extract"],
+    "colloquial": ["怎么提取颗粒", "box多大", "要不要bin", "crop多少"],
+    "key_params": ["box_size", "fourier_crop_box_size", "binning"]
+  },
+  "cp_06": {
+    "checkpoint_name": "class_2d",
+    "checkpoint_cn": "2D 分类与精选",
+    "phase": "颗粒处理",
+    "keywords_cn": ["2D分类", "二维分类", "2D", "分类", "class 2d", "类别平均", "类平均", "2D精选", "选类", "select 2d", "条纹类", "垃圾类", "ESS"],
+    "keywords_en": ["2d classification", "2d class", "class 2d", "select 2d", "class average", "2d sorting", "online-em", "icuf"],
+    "abbreviations": ["cp_06", "class_2d", "2d"],
+    "colloquial": ["2D分类不好", "全是条纹", "类平均图糊", "怎么选类", "垃圾太多"],
+    "key_params": ["num_classes", "max_resolution", "online_em_iterations", "circular_mask_diameter", "cache_particles_on_ssd", "force_max_over_poses"]
+  },
+  "cp_07": {
+    "checkpoint_name": "ab_initio",
+    "checkpoint_cn": "Ab-initio 初始模型",
+    "phase": "三维重建",
+    "keywords_cn": ["ab-initio", "ab initio", "初始模型", "初始三维", "从头建模", "sgd", "初始体积", "3d initial model"],
+    "keywords_en": ["ab initio", "ab-initio", "initial model", "3d initial model", "sgd", "initial volume", "ab-initio reconstruction"],
+    "abbreviations": ["cp_07", "ab_initio"],
+    "colloquial": ["怎么建初始模型", "没有模板怎么办", "ab-initio参数", "初始模型不好"],
+    "key_params": ["num_classes", "max_resolution", "symmetry", "class_similarity"]
+  },
+  "cp_08": {
+    "checkpoint_name": "class_3d",
+    "checkpoint_cn": "3D 分类（异质性精修）",
+    "phase": "三维重建",
+    "keywords_cn": ["3D分类", "三维分类", "异质性", "heterogeneous", "构象分类", "多构象", "3d class", "组分分离"],
+    "keywords_en": ["3d classification", "heterogeneous refinement", "hetero refine", "3d class", "conformational classification", "heterogeneity"],
+    "abbreviations": ["cp_08", "class_3d", "hetero"],
+    "colloquial": ["怎么分构象", "有多种构象怎么办", "heterogeneous怎么设", "3D分类参数"],
+    "key_params": ["refinement_box_size", "max_alignment_resolution", "cache_particles_on_ssd"]
+  },
+  "cp_09": {
+    "checkpoint_name": "refine_3d",
+    "checkpoint_cn": "3D 精修（Homogeneous + Non-uniform）",
+    "phase": "三维重建",
+    "keywords_cn": ["3D精修", "三维精修", "homogeneous", "non-uniform", "非均匀", "精修", "refine", "分辨率提升", "FSC", "分辨率"],
+    "keywords_en": ["3d refinement", "homogeneous refinement", "non-uniform refinement", "refine 3d", "auto-refine", "refinement", "resolution improvement", "fsc"],
+    "abbreviations": ["cp_09", "refine_3d", "homorefine", "nurefine"],
+    "colloquial": ["怎么提高分辨率", "精修参数", "要不要做non-uniform", "FSC不好"],
+    "key_params": ["max_alignment_resolution", "dynamic_mask_use_absolute_value", "cache_particles_on_ssd"]
+  },
+  "cp_10": {
+    "checkpoint_name": "ctf_refinement",
+    "checkpoint_cn": "CTF 精修",
+    "phase": "后处理",
+    "keywords_cn": ["CTF精修", "CTF refinement", "光束倾斜", "beam tilt", "像差校正", "trefoil", "tetrafoil", "三叶草", "四叶草", "各向异性", "defocus精修"],
+    "keywords_en": ["ctf refinement", "global ctf refinement", "local ctf refinement", "beam tilt", "trefoil", "tetrafoil", "anisotropic magnification", "aberration correction"],
+    "abbreviations": ["cp_10", "ctf_refinement"],
+    "colloquial": ["CTF精修要不要做", "怎么提分辨率", "beam tilt", "像差校正"],
+    "key_params": ["fit_beam_tilt", "fit_trefoil", "fit_tetrafoil", "fit_defocus_per_particle"]
+  },
+  "cp_11": {
+    "checkpoint_name": "post_processing",
+    "checkpoint_cn": "后处理与锐化",
+    "phase": "后处理",
+    "keywords_cn": ["后处理", "锐化", "sharpening", "B-factor", "b因子", "掩膜", "mask", "分辨率估计", "FSC 0.143", "金标准", "密度图", "最终图"],
+    "keywords_en": ["post processing", "sharpening", "b-factor", "sharpen", "mask", "resolution estimation", "gold standard", "fsc 0.143", "final map"],
+    "abbreviations": ["cp_11", "post_processing", "sharpening"],
+    "colloquial": ["怎么锐化", "B-factor多少", "掩膜怎么做", "最终分辨率多少", "图糊怎么办"],
+    "key_params": ["bfactor", "bfactor_sharpening"]
+  },
+  "cp_12": {
+    "checkpoint_name": "model_building",
+    "checkpoint_cn": "模型构建与验证",
+    "phase": "后处理",
+    "keywords_cn": ["模型构建", "建模", "原子模型", "coot", "phenix", "chimerax", "isoldE", "molprobity", "验证", "pdb", "emdb", "提交发布", "ramachandran", "real_space_refine"],
+    "keywords_en": ["model building", "atomic model", "coot", "phenix", "chimerax", "isoldE", "molprobity", "validation", "pdb submission", "emdb", "ramachandran", "real space refine"],
+    "abbreviations": ["cp_12", "model_building"],
+    "colloquial": ["怎么建模", "模型验证", "怎么提交PDB", "模型不好怎么办"],
+    "key_params": []
+  },
+  "_cross_stage_terms": {
+    "resolution": ["分辨率", "resolution", "angstrom", "Å", "埃"],
+    "software_cryosparc": ["cryosparc", "cryoSPARC", "csparc"],
+    "software_relion": ["relion", "RELION", "relion4", "relion5"],
+    "quality_bad": ["不好", "差", "failed", "失败", "报错", "问题", "异常", "不对", "有问题"],
+    "quality_good": ["好", "不错", "ok", "通过", "达标", "正常"]
+  }
+}

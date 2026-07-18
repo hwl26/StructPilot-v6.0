@@ -1,0 +1,62 @@
+{
+  "box_size": {
+    "depends_on": ["estimated_mass_kda", "pixel_size_A"],
+    "formula_description": "粒子直径(Å) / 像素尺寸(Å/px) × 1.5~2.0，向上取整为高效 box size",
+    "formula_details": "1. estimate_diameter_A = 2 × (mass_kda × 1.21 × 3 / (4π))^(1/3); 2. raw_box = diameter / pixel_size × 1.8; 3. round up to nearest efficient size",
+    "efficient_sizes": [32, 36, 40, 44, 48, 52, 56, 60, 64, 72, 80, 88, 96, 104, 112, 120, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 1280],
+    "source": "CryoSPARC Guide: Box sizes that allow for efficient processing",
+    "example": {
+      "input": {"estimated_mass_kda": 400, "pixel_size_A": 0.96},
+      "calculation": "diameter ≈ 150Å → 150/0.96×1.8 ≈ 281px → round up to 288px",
+      "result": 288
+    }
+  },
+  "num_2d_classes": {
+    "depends_on": ["estimated_particles"],
+    "formula_description": "根据总颗粒数推荐 2D 分类类别数",
+    "rules": [
+      {"condition": "estimated_particles > 200000", "value": 100, "reason": "颗粒多→多分类，充分分离信号与垃圾"},
+      {"condition": "50000 < estimated_particles <= 200000", "value": 50, "reason": "中等颗粒量→50 类平衡速度与精度"},
+      {"condition": "estimated_particles <= 50000", "value": 30, "reason": "颗粒少→减少类别避免信号稀释"}
+    ],
+    "source": "Lab SOP + CryoSPARC Guide: 2D Classification"
+  },
+  "max_resolution": {
+    "depends_on": ["round_number"],
+    "formula_description": "根据处理轮次推荐最大分辨率",
+    "rules": [
+      {"condition": "round_number == 1", "value": 5, "reason": "第一轮 bin2 快速粗筛，低频分出轮廓即可"},
+      {"condition": "round_number == 2", "value": 3, "reason": "第二轮 bin1 精细挑选，push 高频信号"},
+      {"condition": "round_number == 0 or default", "value": 5, "reason": "默认低分辨率起步"}
+    ],
+    "source": "Lab SOP"
+  },
+  "accelerating_voltage": {
+    "depends_on": ["microscope"],
+    "formula_description": "根据显微镜型号推荐加速电压",
+    "rules": [
+      {"condition": "microscope contains 'Titan Krios'", "value": 300, "reason": "Titan Krios 标准电压 300kV"},
+      {"condition": "microscope contains 'Arctica' or 'Glacios'", "value": 200, "reason": "Arctica/Glacios 标准电压 200kV"}
+    ],
+    "source": "显微镜硬件规格"
+  },
+  "pixel_size": {
+    "depends_on": ["detector"],
+    "formula_description": "根据探测器推荐像素尺寸",
+    "rules": [
+      {"condition": "detector == 'K3' and mode == 'super-resolution'", "value": "物理像素/2", "reason": "K3 超分辨率模式：物理像素 0.48Å → 超分辨率像素 0.96Å（常见设置）"},
+      {"condition": "detector == 'Falcon 4i'", "value": "物理像素值", "reason": "Falcon 4i 通常使用物理像素大小"}
+    ],
+    "note": "像素尺寸必须从数据采集参数中确认，不可随意填写",
+    "source": "探测器硬件规格"
+  },
+  "spherical_aberration": {
+    "depends_on": ["microscope"],
+    "formula_description": "根据显微镜型号推荐球差值",
+    "rules": [
+      {"condition": "microscope contains 'Titan Krios'", "value": 2.7, "reason": "Titan Krios 标准球差 2.7mm"},
+      {"condition": "microscope contains 'Arctica' or 'Glacios'", "value": 2.0, "reason": "200kV 设备常用球差 2.0mm"}
+    ],
+    "source": "显微镜光学规格"
+  }
+}

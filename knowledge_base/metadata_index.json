@@ -1,0 +1,242 @@
+{
+  "_meta": {
+    "description": "Metadata index for RAG retrieval filtering. Links stages, problems, parameters, screenshots, and source types for hybrid retrieval.",
+    "version": 1,
+    "generated_from": "pipeline_checkpoints.json + fault_trouble.json + tier2_rules.json + glossary.json"
+  },
+  "stages": {
+    "cp_01": {
+      "name_cn": "数据导入",
+      "name_en": "data_import",
+      "software_params": {
+        "cryosparc": ["pixel_size", "accelerating_voltage", "spherical_aberration", "total_dose"],
+        "relion": ["pixel_size", "acceleration_voltage"]
+      },
+      "qc_checks": ["文件导入成功", "pixel size 正确", "加速电压正确", "球差值正确", "总电子剂量正确"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_02": {
+      "name_cn": "运动校正",
+      "name_en": "motion_correction",
+      "software_params": {
+        "cryosparc": [],
+        "relion": ["bfactor", "number_of_patches"]
+      },
+      "qc_checks": ["micrographs 清晰无漂移残留", "漂移曲线合理", "输出路径正确"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_03": {
+      "name_cn": "CTF 估计与照片筛选",
+      "name_en": "ctf_estimation",
+      "software_params": {
+        "cryosparc": ["num_gpus"],
+        "relion": ["defocus_range", "amplitude_contrast"]
+      },
+      "qc_checks": ["CTF fit 分辨率优于 6Å", "拟合曲线吻合", "保留照片数 >80%"],
+      "related_faults": ["ctf_bad_fit"],
+      "source_type": "sop"
+    },
+    "cp_04": {
+      "name_cn": "颗粒挑选",
+      "name_en": "particle_picking",
+      "software_params": {
+        "cryosparc": ["min_particle_diameter", "max_particle_diameter", "min_separation_dist", "max_local_maxima", "expected_particles", "num_templates", "zeropadding_factor"],
+        "relion": ["particle_diameter", "picking_threshold"]
+      },
+      "qc_checks": ["NCC vs Power 分离清晰", "颗粒位于蛋白质区域", "Inspect Picks 精度"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_05": {
+      "name_cn": "颗粒提取",
+      "name_en": "particle_extraction",
+      "software_params": {
+        "cryosparc": ["box_size", "fourier_crop_box_size"],
+        "relion": ["box_size", "binning"]
+      },
+      "qc_checks": ["box size 足够容纳蛋白", "Fourier crop 为 2 的幂次", "颗粒居中无截断"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_06": {
+      "name_cn": "2D 分类与精选",
+      "name_en": "class_2d",
+      "software_params": {
+        "cryosparc": ["num_classes", "max_resolution", "online_em_iterations", "circular_mask_diameter", "cache_particles_on_ssd", "force_max_over_poses"],
+        "relion": ["num_classes", "mask_diameter", "num_iterations"]
+      },
+      "qc_checks": ["类别平均图可见二级结构", "ESS 直方图接近 1", "取向均匀覆盖", "垃圾类独立"],
+      "related_faults": ["2d_stripe_noise", "too_many_junk"],
+      "source_type": "sop"
+    },
+    "cp_07": {
+      "name_cn": "Ab-initio 初始模型",
+      "name_en": "ab_initio",
+      "software_params": {
+        "cryosparc": ["num_classes", "max_resolution", "symmetry", "class_similarity"],
+        "relion": ["num_classes", "symmetry"]
+      },
+      "qc_checks": ["3D 模型符合预期形状", "至少 1 个像蛋白", "无碎片或空洞"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_08": {
+      "name_cn": "3D 分类",
+      "name_en": "class_3d",
+      "software_params": {
+        "cryosparc": ["refinement_box_size", "max_alignment_resolution", "cache_particles_on_ssd"],
+        "relion": ["num_classes", "angular_sampling"]
+      },
+      "qc_checks": ["不同 class 有构象差异", "颗粒数均匀", "FSC 曲线合理"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_09": {
+      "name_cn": "3D 精修",
+      "name_en": "refine_3d",
+      "software_params": {
+        "cryosparc": ["max_alignment_resolution", "dynamic_mask_use_absolute_value", "cache_particles_on_ssd"],
+        "relion": ["angular_sampling", "bfactor_sharpening"]
+      },
+      "qc_checks": ["FSC > 0.143 达标", "取向分布均匀", "Guinier B 因子 50-100 Å²", "核心分辨率最高"],
+      "related_faults": ["fsc_oscillation", "preferred_orientation"],
+      "source_type": "sop"
+    },
+    "cp_10": {
+      "name_cn": "CTF 精修",
+      "name_en": "ctf_refinement",
+      "software_params": {
+        "cryosparc": ["fit_beam_tilt", "fit_trefoil", "fit_tetrafoil", "fit_defocus_per_particle"],
+        "relion": ["fit_beam_tilt", "fit_aniso_mag"]
+      },
+      "qc_checks": ["CTF 精修后 FSC 提升", "光束倾斜 < 1 mrad", "各向异性校正合理"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_11": {
+      "name_cn": "后处理与锐化",
+      "name_en": "post_processing",
+      "software_params": {
+        "cryosparc": ["bfactor"],
+        "relion": ["bfactor_sharpening"]
+      },
+      "qc_checks": ["FSC 0.143 分辨率可信", "锐化无噪声增强", "局部分辨率合理"],
+      "related_faults": [],
+      "source_type": "sop"
+    },
+    "cp_12": {
+      "name_cn": "模型构建与验证",
+      "name_en": "model_building",
+      "software_params": {
+        "cryosparc": [],
+        "relion": []
+      },
+      "qc_checks": ["Ramachandran favored > 98%", "Clashscore < 5", "Rotamer outliers < 1%", "FSC_model vs map 一致", "MolProbity score 合理"],
+      "related_faults": [],
+      "source_type": "sop"
+    }
+  },
+  "faults": {
+    "2d_stripe_noise": {
+      "stage": "cp_06",
+      "source_type": "fault_card",
+      "priority": "high"
+    },
+    "fsc_oscillation": {
+      "stage": "cp_09",
+      "source_type": "fault_card",
+      "priority": "high"
+    },
+    "preferred_orientation": {
+      "stage": "cp_09",
+      "source_type": "fault_card",
+      "priority": "high"
+    },
+    "too_many_junk": {
+      "stage": "cp_06",
+      "source_type": "fault_card",
+      "priority": "medium"
+    },
+    "ctf_bad_fit": {
+      "stage": "cp_03",
+      "source_type": "fault_card",
+      "priority": "medium"
+    }
+  },
+  "parameters": {
+    "pixel_size": {
+      "stages": ["cp_01"],
+      "description_cn": "像素尺寸 (Å/pixel)",
+      "aliases": ["A/pix", "angstrom per pixel", "像素尺寸"]
+    },
+    "box_size": {
+      "stages": ["cp_05"],
+      "description_cn": "提取盒大小 (pixels)",
+      "aliases": ["particle box", "box", "盒子大小"]
+    },
+    "bfactor": {
+      "stages": ["cp_02", "cp_11"],
+      "description_cn": "B 因子",
+      "aliases": ["b-factor", "b因子", "锐化因子"]
+    },
+    "num_classes": {
+      "stages": ["cp_06", "cp_07", "cp_08"],
+      "description_cn": "类别数",
+      "aliases": ["number of classes", "类别数", "分类数"]
+    },
+    "max_resolution": {
+      "stages": ["cp_06", "cp_07", "cp_08", "cp_09"],
+      "description_cn": "最大分辨率 (Å)",
+      "aliases": ["maximum resolution", "最大分辨率"]
+    },
+    "defocus_range": {
+      "stages": ["cp_03"],
+      "description_cn": "离焦搜索范围",
+      "aliases": ["defocus search range", "离焦范围"]
+    },
+    "accelerating_voltage": {
+      "stages": ["cp_01"],
+      "description_cn": "加速电压 (kV)",
+      "aliases": ["voltage", "电压", "kV"]
+    },
+    "symmetry": {
+      "stages": ["cp_07", "cp_08", "cp_09"],
+      "description_cn": "对称性",
+      "aliases": ["symmetry", "对称", "C1", "D2"]
+    }
+  },
+  "source_types": {
+    "sop": {
+      "description": "标准操作流程",
+      "priority": 1,
+      "weight": 1.0
+    },
+    "fault_card": {
+      "description": "故障排查卡",
+      "priority": 2,
+      "weight": 0.9
+    },
+    "parameter_rule": {
+      "description": "参数规则",
+      "priority": 3,
+      "weight": 0.85
+    },
+    "glossary": {
+      "description": "术语表",
+      "priority": 4,
+      "weight": 0.6
+    },
+    "plot_interp": {
+      "description": "图表解读",
+      "priority": 5,
+      "weight": 0.7
+    },
+    "official_guide": {
+      "description": "官方文档",
+      "priority": 3,
+      "weight": 0.8
+    }
+  }
+}

@@ -1,0 +1,1264 @@
+[
+  {
+    "id": "cp_01",
+    "name": "data_import",
+    "label_cn": "数据导入",
+    "goal": "建立 RELION 项目目录，导入原始 movies 或 micrographs，并确认 pixel size、电压、Cs、文件路径和 STAR/metadata 信息正确。",
+    "inputs": [
+      "原始 movies 或 micrographs",
+      "采集参数：pixel size、voltage、Cs、dose 等",
+      "项目目录和原始数据目录"
+    ],
+    "relion_jobs": [
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "key_parameters": [
+      "Pixel size",
+      "Voltage",
+      "Spherical aberration / Cs",
+      "Input files pattern",
+      "Optics group / metadata"
+    ],
+    "qc_checks": [
+      "导入后的文件数量与原始数据一致",
+      "STAR 文件中的路径可访问",
+      "pixel size 和 optics 信息与显微镜记录一致",
+      "项目目录结构清晰，后续 job 可复现"
+    ],
+    "common_pitfalls": [
+      "从错误目录启动 RELION GUI，导致相对路径混乱",
+      "pixel size 写错，后续 CTF、重构尺度都会受影响",
+      "重复或不一致的 mdoc/STAR metadata 导致导入异常"
+    ],
+    "starter_questions": [
+      "RELION 项目目录应该怎么组织？",
+      "导入时 pixel size 写错会影响什么？",
+      "导入后应该检查哪些 STAR 文件字段？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "issue_72417c6603c23562",
+        "title": "Incorrect Import tilt_series star files if mdoc directory contains duplicate mdocs",
+        "url": "https://github.com/3dem/relion/issues/1327",
+        "source_type": "github_issue",
+        "match_score": 8,
+        "evidence_snippets": [
+          "Issue #1327: Incorrect Import tilt_series star files if mdoc directory contains duplicate mdocs",
+          "The bug only becomes apparent when looking at the star files in the Import/jobxxx/tilt_series directory"
+        ]
+      },
+      {
+        "document_id": "doc_c0f3f5c9df95b591",
+        "title": "Movie Compression — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 6,
+        "evidence_snippets": [
+          "relion_convert_to_tiff--imovies.star--oConverted/--gainConverted/gain_estimate.bin",
+          "You can also specify a list file .lst that contains movie names without any STAR headers."
+        ]
+      },
+      {
+        "document_id": "doc_fbc7799083c27959",
+        "title": "Using RELION — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 6,
+        "evidence_snippets": [
+          "Therefore, if a movie was originally imported as Movies/mic001.tif , its corresponding STAR file with the picked coordinate would be placed in External/job006/Movies/mic001_topaz.star .",
+          "For picking jobs, the directory structure of the input movies (or micrographs) should be maintained inside the output directory, and each micrograph would have a STAR file with the picked coordinates that has the same rootname as the original micrograph, but with a _PICKNAME.star suffix."
+        ]
+      },
+      {
+        "document_id": "doc_81c915826ea9c26b",
+        "title": "Preprocessing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "The first thing to do is to import the set of recorded micrograph movies into the pipeline.",
+          "If you use any of these, make sure to save the coordinate files as a text file in the same directory as from where you imported the micrographs (or movies), and with the same micrograph rootname, but a different (suffix+) extension as the micrograph, e.g."
+        ]
+      },
+      {
+        "document_id": "doc_e04a322aa52d8385",
+        "title": "Import — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ImportTomo.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "In the GUI, select Import from the jobt-type browser on the top left and fill in the following parameters on the General tab:",
+          "For each tilt series, a separate starfile contains relevant metadata that has been extracted from the input images and mdoc files."
+        ]
+      },
+      {
+        "document_id": "issue_7ead5ab909e80177",
+        "title": "Tomography - Scaling of particle coordinates for external import",
+        "url": "https://github.com/3dem/relion/issues/1334",
+        "source_type": "github_issue",
+        "match_score": 5,
+        "evidence_snippets": [
+          "I am following the tutorial for this step: https://relion.readthedocs.io/en/latest/STA_tutorial/ImportCoords.html",
+          "I am trying to import picked particles from crYOLO that were picked on tomograms that were reconstructed in Relion 5."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_02",
+    "name": "motion_correction",
+    "label_cn": "运动校正",
+    "goal": "校正 beam-induced motion 和帧间漂移，得到可用于 CTF 估计与颗粒挑选的 corrected micrographs。",
+    "inputs": [
+      "导入后的 movies",
+      "dose/frame、pixel size、gain reference 等采集信息"
+    ],
+    "relion_jobs": [
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "key_parameters": [
+      "Dose per frame",
+      "Patch/grid settings",
+      "Binning",
+      "Gain reference",
+      "Output micrograph STAR"
+    ],
+    "qc_checks": [
+      "校正后 micrograph 无明显拖影",
+      "运动轨迹合理，没有大面积异常漂移",
+      "输出文件和 STAR 路径完整",
+      "坏帧或异常电影被记录或排除"
+    ],
+    "common_pitfalls": [
+      "gain reference 或像素尺寸不匹配",
+      "dose 信息错误导致后续 dose weighting 或 polishing 受影响",
+      "异常 movies 混入后续流程"
+    ],
+    "starter_questions": [
+      "运动校正后主要看哪些 QC 图？",
+      "motion correction 参数异常会影响 CTF 吗？",
+      "什么时候需要重新做运动校正？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_c0f3f5c9df95b591",
+        "title": "Movie Compression — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "RELION 4.0.1 and newer support MRC movies compressed by bzip2, xz or ZStandard in RELION’s own motion correction and Bayesian Polish for SPA.",
+          "Since the dose rate of counting mode movies is very low (otherwise, you will have coincidence losses), it is highly probable that the list contains an observation corresponding to one electron."
+        ]
+      },
+      {
+        "document_id": "doc_0aec2311b2a224e5",
+        "title": "Motion correction — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/MotionCorrection.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "(As there is so little dose in each movie frame, it is better not to use patch-based motion correction.)",
+          "As the raw data in EMPIAR-10164 are movies, we need to carry out motion correction."
+        ]
+      },
+      {
+        "document_id": "doc_a80edd64e8b9ef8d",
+        "title": "Bayesian polishing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "relion implements a Bayesian approach to per-particle, reference-based beam-induced motion correction.",
+          "Note that this is not recommended when performing Bayesian polishing in relion ."
+        ]
+      },
+      {
+        "document_id": "doc_063588cdae32a654",
+        "title": "On-the-fly processing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Onthefly.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "Note that we do not recommend recording movies in super-resolution, and that they will be binned during the Motion correction job.)",
+          "(If selected, a Scheme called Schemes/prep will be lanuched that will loop over all movies (as defined in the section Preprocessing settings to run Import , Motion correction and CTF estimation ."
+        ]
+      },
+      {
+        "document_id": "doc_8244bb12ef9f2dd5",
+        "title": "CTF estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "(This is the highest resolution that is used for CTF estimation, in the image with the least dose.",
+          "(This estimates the CTF parameters using the power spectra that were saved during motion correction.)"
+        ]
+      },
+      {
+        "document_id": "doc_59c97fc8fb7133f7",
+        "title": "Tomogram set — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/STA/Datatypes/tomogram_set.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "The pixel size of the tilt series , given in Å ( rlnTomoTiltSeriesPixelSize ), corresponding to the dimensions given by rlnTomoSize<X/Y/Z> , after the binning applied in the Motion correction job"
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_03",
+    "name": "ctf_estimation",
+    "label_cn": "CTF 估计",
+    "goal": "估计每张 micrograph 的 defocus、CTF 拟合质量等参数，为颗粒筛选、提取和后续精修提供基础。",
+    "inputs": [
+      "运动校正后的 micrographs",
+      "正确的 optics、pixel size、voltage 信息"
+    ],
+    "relion_jobs": [
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "key_parameters": [
+      "Defocus search range",
+      "Pixel size",
+      "Voltage",
+      "Cs",
+      "Amplitude contrast",
+      "Resolution range"
+    ],
+    "qc_checks": [
+      "Thon rings 清晰且拟合曲线合理",
+      "defocus 分布符合采集预期",
+      "剔除 CTF 拟合差或污染严重的 micrographs",
+      "低分辨和高分辨拟合范围设置合理"
+    ],
+    "common_pitfalls": [
+      "pixel size 或 voltage 错误导致 CTF 系统性错误",
+      "冰太厚、污染或漂移导致 Thon rings 不清晰",
+      "defocus 搜索范围过窄漏掉真实值"
+    ],
+    "starter_questions": [
+      "CTF 估计结果怎么判断好坏？",
+      "defocus 范围应该怎么设？",
+      "哪些 micrographs 应该在 CTF 后剔除？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_8244bb12ef9f2dd5",
+        "title": "CTF estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 8,
+        "evidence_snippets": [
+          "(This is the highest resolution that is used for CTF estimation, in the image with the least dose.",
+          "Select the CTF estimation job type in the job-type browser and fill in the following parameters on the I/O tab:"
+        ]
+      },
+      {
+        "document_id": "doc_5a65741d76a4347d",
+        "title": "Tomo refinement 1: CTF refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "In this step we will show how to apply the refinement of the different parameters related to the CTF estimation such as tilt series projection defocus and contrast scale.",
+          "For a full description of the arguments, check the relion_tomo_refine_ctf program."
+        ]
+      },
+      {
+        "document_id": "doc_b9096ba5deb8aabc",
+        "title": "CTF and aberration refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Next, we’ll use the CTF refinement job-type to estimate the asymmetrical and symmetrical aberrations in the dataset; whether there is any anisotropic magnification; and we’ll re-estimate per-particle defocus values for the entire data set.",
+          "Per-particle defocus values are plotted by colour for each micrograph in the logfile.pdf ."
+        ]
+      },
+      {
+        "document_id": "doc_35ef60ae51127579",
+        "title": "Installation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Installation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Instead, relion provides a wrapper to Alexis Rohou and Niko Grigorieff’s ctffind 4 [ RG15 ] .",
+          "Blush, ModelAngelo and DynaMight) you will have to setup a Python environment with dependencies."
+        ]
+      },
+      {
+        "document_id": "doc_681117c840aaba80",
+        "title": "Pixel size issues — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/PixelSizeIssues.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "However, the defocus is fitted (by CtfFind, followed by CtfRefine) at 0.54 Å/px, the nominal pixel size.",
+          "At lower resolutions, the defocus term dominates and errors in the pixel size (i.e."
+        ]
+      },
+      {
+        "document_id": "doc_063588cdae32a654",
+        "title": "On-the-fly processing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Onthefly.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Since the motion correction and CTF estimation are CPU-only, this option is only used by the second Scheme .)",
+          "In that case, the user can provide the output STAR file from a previous CTF estimation job to perform the rest of the processing on."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_04",
+    "name": "particle_picking",
+    "label_cn": "颗粒挑选",
+    "goal": "从 micrographs 中识别颗粒坐标，先用 LoG、template-free 或少量模板生成初始颗粒集，再逐步优化挑选质量。",
+    "inputs": [
+      "CTF 估计后的 micrographs",
+      "颗粒尺寸或直径估计",
+      "可选：少量人工检查或模板"
+    ],
+    "relion_jobs": [
+      "Manual picking",
+      "LoG-based auto-picking",
+      "Auto-picking / Topaz related workflow"
+    ],
+    "key_parameters": [
+      "Particle diameter",
+      "LoG filter range",
+      "Picking threshold",
+      "Inter-particle distance",
+      "Topaz training set"
+    ],
+    "qc_checks": [
+      "随机抽查 micrographs 上的 picks 是否落在真实颗粒中心",
+      "假阳性和漏检比例可接受",
+      "颗粒密度不过高也不过低",
+      "挑选结果能支撑后续 2D 分类"
+    ],
+    "common_pitfalls": [
+      "阈值过松导致冰污染、碳边、噪声被大量挑入",
+      "阈值过严导致颗粒数量不足",
+      "颗粒直径估计不准影响 LoG 或 template picking"
+    ],
+    "starter_questions": [
+      "LoG auto-picking 适合什么场景？",
+      "怎么判断挑选阈值过松还是过严？",
+      "Topaz 前需要准备什么训练集？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_ea90e7be4855c191",
+        "title": "Particle picking — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Autopicking.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "Ignore the Topaz , References , autopicking and Helix tabs, and run using a single MPI processor on the Running tab .",
+          "In that case, one could skip the jobs of LoG-picking, 2D classification, automated 2D class selection and re-training of the topaz network below, and proceed straight to the last Auto-picking job on this page."
+        ]
+      },
+      {
+        "document_id": "doc_b9479e3c2029b01c",
+        "title": "Single particle tutorial — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "Single particle tutorial — RELION documentation\nSingle particle tutorial\nSingle particle tutorial\nIntroduction\nPreprocessing\nGetting organised\nBeam-induced motion correction\nCTF estimation\nManual particle picking\nParticle picking\nSelect a subset of the micrographs\nLoG-based auto-picking\nParticle extraction\n2D class averaging to select good particles\nSelecting good 2D classes for Topaz training\nRe-training the TOPAZ neural network\nPick all micrographs with the re-trained TOPAZ neural network\nPart"
+        ]
+      },
+      {
+        "document_id": "doc_fe8d495c293104a6",
+        "title": "Particle picking — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ParticlePicking.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Particle picking is probably the most difficult part of the subtomogram averaging pipeline."
+        ]
+      },
+      {
+        "document_id": "doc_fbc7799083c27959",
+        "title": "Using RELION — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 1,
+        "evidence_snippets": [
+          "data_output_nodesloop__rlnPipeLineNodeName#1_rlnPipeLineNodeType#2External/job006/coords_suffix_topaz.star2",
+          "The output node (the coords_suffix_topaz.star file) should also be listed in the RELION_OUTPUT_NODES.star file."
+        ]
+      },
+      {
+        "document_id": "doc_a2d4ef89446920e7",
+        "title": "Reference-free 2D class averaging — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 1,
+        "evidence_snippets": [
+          "Besides the information in the input particles.star file, there is now additional information about the optimal orientations, the optimal class assignment, the contribution to the log-likelihood, etc."
+        ]
+      },
+      {
+        "document_id": "doc_bda28d4f7a2bd469",
+        "title": "Conventions — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Reference/Conventions.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 1,
+        "evidence_snippets": [
+          "Thus, as long as you use Topaz via RELION’s wrapper, training and picking work fine.",
+          "Topaz does not support float16 but RELION’s wrapper performs preprocessing from float16 to float32."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_05",
+    "name": "particle_extraction",
+    "label_cn": "颗粒提取",
+    "goal": "根据颗粒坐标从 micrographs 中切出 particles，设置合适 box size，并生成后续 2D/3D 分类使用的 particle stack。",
+    "inputs": [
+      "颗粒坐标",
+      "micrographs",
+      "颗粒直径估计",
+      "CTF/optics metadata"
+    ],
+    "relion_jobs": [
+      "Particle extraction",
+      "Extract subtomos for STA"
+    ],
+    "key_parameters": [
+      "Box size",
+      "Downsampling / binning",
+      "Normalize particles",
+      "Coordinate scale",
+      "Optics group inheritance"
+    ],
+    "qc_checks": [
+      "Box size 覆盖至少粒径 1.5~2 倍（直径）",
+      "Fourier crop 值合适 2 的整数（32, 36, 42, ..., 64, 72, 80, ..., 128, 256, 320, ...）",
+      "筛选后的颗粒小概率：重启应中，无截断"
+    ],
+    "common_pitfalls": [
+      "box size 太小切掉颗粒信号",
+      "box size 太大增加噪声和计算负担",
+      "坐标缩放或导入坐标单位不一致"
+    ],
+    "starter_questions": [
+      "box size 应该怎么估算？",
+      "提取时是否要 downsample？",
+      "从外部坐标导入时最容易错哪里？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_c0d84aebbe79e35f",
+        "title": "Extract subtomos — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ExtractSubtomos.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "Now that we have 3D particle coordinates, the Extract job extracts the relevant cropped areas of the tilt series images for each individual particle and saves them as CTF-premultiplied extracted 2D image stacks (or as 3D volumes) on the disk for further processing using the relion_refine program.",
+          "(This is the box size for the original cropping of the particle from the tilt series images."
+        ]
+      },
+      {
+        "document_id": "issue_d81644b42135d243",
+        "title": "Creating Relion-5 compatible star files (particle and tomogram) from Warp to re-extract particles with Relion",
+        "url": "https://github.com/3dem/relion/issues/1333",
+        "source_type": "github_issue",
+        "match_score": 4,
+        "evidence_snippets": [
+          "I've been using Warp for tomogram processing and particle extraction and Relion-5 for subtomogram averaging.",
+          "Issue #1333: Creating Relion-5 compatible star files (particle and tomogram) from Warp to re-extract particles with Relion"
+        ]
+      },
+      {
+        "document_id": "doc_ed2613c460a3057b",
+        "title": "High-resolution 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "To do this, go to the Particle extraction jobtype on the GUI, and on the I/O tab give:",
+          "However, before we start our high-resolution refinement, we should first re-extract our current set of selected particles with less down-scaling, so that we can potentially go to higher resolution."
+        ]
+      },
+      {
+        "document_id": "doc_60fd44b2881c7b4d",
+        "title": "High-resolution 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "For 3D refinement at binning factor 1, make sure the following options are properly set on Extract subtomos Reconstruct tab and Reconstruct particle Average tab:",
+          "The order of running the Extract subtomos and Reconstruct particle jobtypes is irrelevant as long as they are run consecutively to keep track of the optimisation set file."
+        ]
+      },
+      {
+        "document_id": "doc_5a65741d76a4347d",
+        "title": "Tomo refinement 1: CTF refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Tomo refinement 1: CTF refinement — RELION documentation\nTomo refinement 1: CTF refinement\nTomo refinement 1: CTF refinement\nIn this step we will show how to apply the refinement of the different parameters related to the CTF estimation such as tilt series projection defocus and contrast scale.\nFor a full description of the arguments, check the relion_tomo_refine_ctf program.\nIf you are running this job without following the tutorial, please note the requirements for the reference map and FSC da"
+        ]
+      },
+      {
+        "document_id": "doc_c821cef88558fde2",
+        "title": "Tomo refinement 2: Bayesian polishing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "To assess the result, we generate new particles with the Extract subtomos job using the resulting optimisation_set.star file, followed by Reconstruct particle and Post-processing ."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_06",
+    "name": "class_2d",
+    "label_cn": "2D 分类",
+    "goal": "通过 reference-free 2D class averaging 清理坏颗粒、污染和错误 picks，保留结构特征清晰的颗粒集合。",
+    "inputs": [
+      "提取后的 particles",
+      "CTF metadata",
+      "合理的 box/downsampling 设置"
+    ],
+    "relion_jobs": [
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "key_parameters": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask diameter",
+      "Number of iterations",
+      "Particle subset size"
+    ],
+    "qc_checks": [
+      "好类显示清晰结构特征而非噪声",
+      "坏类或污染类被剔除",
+      "每个保留类颗粒数足够",
+      "不同视角覆盖合理"
+    ],
+    "common_pitfalls": [
+      "类别数过少导致异质性混在一起",
+      "类别数过多导致每类颗粒不足",
+      "把漂亮但非目标的污染类误保留"
+    ],
+    "starter_questions": [
+      "2D 分类中哪些 class 应该保留？",
+      "class 数量应该怎么设？",
+      "2D 结果差是挑选问题还是样品问题？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_a2d4ef89446920e7",
+        "title": "Reference-free 2D class averaging — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 10,
+        "evidence_snippets": [
+          "We almost always use reference-free 2D class averaging to throw away bad particles.",
+          "Because bad particles do not average well together, they often go to relatively small classes that yield ugly 2D class averages."
+        ]
+      },
+      {
+        "document_id": "doc_b9479e3c2029b01c",
+        "title": "Single particle tutorial — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Single particle tutorial — RELION documentation\nSingle particle tutorial\nSingle particle tutorial\nIntroduction\nPreprocessing\nGetting organised\nBeam-induced motion correction\nCTF estimation\nManual particle picking\nParticle picking\nSelect a subset of the micrographs\nLoG-based auto-picking\nParticle extraction\n2D class averaging to select good particles\nSelecting good 2D classes for Topaz training\nRe-training the TOPAZ neural network\nPick all micrographs with the re-trained TOPAZ neural network\nPart"
+        ]
+      },
+      {
+        "document_id": "doc_2d5926fab10c93e2",
+        "title": "Local-resolution estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Local-resolution estimation — RELION documentation\nLocal-resolution estimation\nLocal-resolution estimation\nThe estimated resolution from the post-processing program is a global estimate.\nHowever, a single number cannot describe the variations in resolution that are often observed in reconstructions of macromolecular complexes.\nAlp Kucukelbir and Hemant Tagare wrote a nifty program to estimate the variation in resolution throughout the map [ KST14 ] . relion implements a wrapper to this program t"
+        ]
+      },
+      {
+        "document_id": "doc_69c24f0c993dc017",
+        "title": "ModelAngelo: atomic modelling — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "ModelAngelo: atomic modelling — RELION documentation\nModelAngelo: atomic modelling\nModelAngelo: atomic modelling\nAs of release 5.0, relion comes with a machine-learning approach for automated atomic model building called ModelAngelo [ JKZ+24 ] . ModelAngelo is a graph neural network that combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\nBecause we know that the sample in this data set is beta-galactosidase fr"
+        ]
+      },
+      {
+        "document_id": "doc_d316ca1d11ee6c7f",
+        "title": "De novo 3D model generation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Provided you have a reasonable distribution of viewing directions, and your data were good enough to yield detailed class averages in 2D classification , this algorithm is likely to yield a suitable, low-resolution model that can subsequently be used for 3D classification or 3D auto-refine ."
+        ]
+      },
+      {
+        "document_id": "doc_f3f3b2e5cc5fa000",
+        "title": "Wrapping up — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "For example, harsh cleaning will remove averaged micrographs from a MotionCorr job, or extracted particles stacks from a Particle extraction job, while gentle cleaning will remove all files from itermediate iterations of 2D classification , 3D classification or 3D auto-refine jobs."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_07",
+    "name": "ab_initio",
+    "label_cn": "Ab-initio 初始模型",
+    "goal": "从清理后的颗粒生成初始 3D 模型，为后续 3D 分类和精修提供参考。",
+    "inputs": [
+      "筛选后的 particles",
+      "2D 分类结果",
+      "对称性初步判断"
+    ],
+    "relion_jobs": [
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "key_parameters": [
+      "Symmetry",
+      "Initial angular sampling",
+      "Mask diameter",
+      "Number of classes/models",
+      "Particle subset"
+    ],
+    "qc_checks": [
+      "模型整体形状与预期分子大小一致",
+      "没有明显 mirror、handedness 或塌缩异常",
+      "不同初始模型结果相互支持",
+      "能作为 3D 分类或 refinement 的稳定参考"
+    ],
+    "common_pitfalls": [
+      "颗粒异质性太强导致初始模型模糊",
+      "对称性设置不当引入伪结构",
+      "使用偏置参考造成 model bias"
+    ],
+    "starter_questions": [
+      "初始模型生成失败通常说明什么？",
+      "什么时候需要多个 initial models？",
+      "初始模型阶段能不能设置对称性？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_07168b41cdbd5a84",
+        "title": "De novo 3D model generation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/InitialModel.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "Values around 2-4 have been observed to be useful for 3D initial model calculations.)",
+          "However, here we will show how to obtain a de novo model without any prior knowledge, using the VDAM algorithm."
+        ]
+      },
+      {
+        "document_id": "doc_d316ca1d11ee6c7f",
+        "title": "De novo 3D model generation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 6,
+        "evidence_snippets": [
+          "relion -4.0 uses a gradient-driven algorithm to generate a de novo 3D initial reference from the 2D particles.",
+          "(The actual refinement will be run in C1, which has been observed to converge better than running VDAM in higher symmetry groups."
+        ]
+      },
+      {
+        "document_id": "doc_2d5926fab10c93e2",
+        "title": "Local-resolution estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "The SGD algorithm in the 3D initial model jobtype therefore has a 50 % chance of being in the opposite hand."
+        ]
+      },
+      {
+        "document_id": "doc_96ad174a4e67679c",
+        "title": "Introduction — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "This tutorial covers the entire single-particle analysis workflow in relion -5.0: beam-induced motion-correction, CTF estimation; automated particle picking; particle extraction; 2D class averaging; automated 2D class selection; VDAM-based initial model generation; 3D classification; high-resolution 3D refinement (including Blush regularisation); CTF refinement and higher-order aberration correction; Bayesian polishing to correct for beam-induced motions in the movies; map sharpening and local-resolution estimation; automated model building with ModelAngelo; and flexibility analysis with DynaM"
+        ]
+      },
+      {
+        "document_id": "doc_c0d84aebbe79e35f",
+        "title": "Extract subtomos — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ExtractSubtomos.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "We will start by extracting pseudo-subtomograms in relatively large boxes with a large (binned) pixel size to speed up the initial calculations for obtaining a de novo initial model."
+        ]
+      },
+      {
+        "document_id": "doc_69c24f0c993dc017",
+        "title": "ModelAngelo: atomic modelling — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "ModelAngelo: atomic modelling — RELION documentation\nModelAngelo: atomic modelling\nModelAngelo: atomic modelling\nAs of release 5.0, relion comes with a machine-learning approach for automated atomic model building called ModelAngelo [ JKZ+24 ] . ModelAngelo is a graph neural network that combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\nBecause we know that the sample in this data set is beta-galactosidase fr"
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_08",
+    "name": "class_3d",
+    "label_cn": "3D 分类",
+    "goal": "分离构象、组分或低质量颗粒，选择结构一致、可进一步精修的 3D class。",
+    "inputs": [
+      "particles",
+      "初始 3D 模型或参考图",
+      "CTF metadata"
+    ],
+    "relion_jobs": [
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "key_parameters": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask",
+      "Angular sampling",
+      "Symmetry"
+    ],
+    "qc_checks": [
+      "不同 3D class 差异有生物学或质量解释",
+      "目标 class 占比和分辨率合理",
+      "去除明显坏颗粒或错误构象",
+      "选择的 class 后续 refinement 表现更好"
+    ],
+    "common_pitfalls": [
+      "class 数过多导致过拟合或颗粒分散",
+      "mask 或参考引入偏置",
+      "把低占比但关键构象误删"
+    ],
+    "starter_questions": [
+      "3D 分类 class 数怎么选？",
+      "如何判断哪个 3D class 应该进入精修？",
+      "3D 分类能解决构象异质性吗？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_27e4124670932a94",
+        "title": "Unsupervised 3D classification — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "relion ’s 3D multi-reference refinement procedure provides a powerful unsupervised 3D classification approach.",
+          "We selected a single good class, discarding particles from 3 suboptimal classes."
+        ]
+      },
+      {
+        "document_id": "doc_65853e6062c7e58f",
+        "title": "3D classification — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Class3D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Note that the computational cost of 3D classification scales linearly with the number of classes, both in terms of CPU time and memory.)",
+          "Next, we want to only keep in our dataset the particles belonging to the best classes obtained in the 3D classification and discard the rest."
+        ]
+      },
+      {
+        "document_id": "issue_e4c5b16fdc79b0e1",
+        "title": "3D classification in RELION.",
+        "url": "https://github.com/3dem/relion/issues/1324",
+        "source_type": "github_issue",
+        "match_score": 3,
+        "evidence_snippets": [
+          "I would greatly appreciate your thoughts on what typically causes this behaviour in RELION 3D classification, and what strategies you would recommend to achieve a more complete and stable separation of classes.",
+          "I am writing to ask for your advice regarding an issue I am encountering with 3D classification in RELION."
+        ]
+      },
+      {
+        "document_id": "doc_ed2613c460a3057b",
+        "title": "High-resolution 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "(This will re-center all the particles according to the aligned offsets from the 3D classification job above.)",
+          "Parameters on the CTF , Optimisation tabs remain the same as they were in the 3D classification job, but let’s skip Blush regularisation for this data set with its relatively high signal-to-noise particles."
+        ]
+      },
+      {
+        "document_id": "doc_2d5926fab10c93e2",
+        "title": "Local-resolution estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "Local-resolution estimation — RELION documentation\nLocal-resolution estimation\nLocal-resolution estimation\nThe estimated resolution from the post-processing program is a global estimate.\nHowever, a single number cannot describe the variations in resolution that are often observed in reconstructions of macromolecular complexes.\nAlp Kucukelbir and Hemant Tagare wrote a nifty program to estimate the variation in resolution throughout the map [ KST14 ] . relion implements a wrapper to this program t"
+        ]
+      },
+      {
+        "document_id": "doc_69c24f0c993dc017",
+        "title": "ModelAngelo: atomic modelling — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "ModelAngelo: atomic modelling — RELION documentation\nModelAngelo: atomic modelling\nModelAngelo: atomic modelling\nAs of release 5.0, relion comes with a machine-learning approach for automated atomic model building called ModelAngelo [ JKZ+24 ] . ModelAngelo is a graph neural network that combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\nBecause we know that the sample in this data set is beta-galactosidase fr"
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_09",
+    "name": "refine_3d",
+    "label_cn": "3D 精修",
+    "goal": "对目标颗粒集合执行 high-resolution 3D refinement，得到 half maps、FSC 和 refined map。",
+    "inputs": [
+      "筛选后的 particles",
+      "目标 3D reference",
+      "mask 或对称性设置",
+      "CTF metadata"
+    ],
+    "relion_jobs": [
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "key_parameters": [
+      "Symmetry",
+      "Mask diameter",
+      "Angular sampling",
+      "Initial low-pass filter",
+      "Gold-standard FSC"
+    ],
+    "qc_checks": [
+      "gold-standard FSC 曲线合理",
+      "half-map 独立性没有被破坏",
+      "map 细节与报告分辨率一致",
+      "角度分布和 class 粒子数合理"
+    ],
+    "common_pitfalls": [
+      "参考低通不足造成 model bias",
+      "mask 过紧导致 FSC 虚高",
+      "把异质颗粒直接精修导致地图模糊"
+    ],
+    "starter_questions": [
+      "3D auto-refine 结果主要看哪些指标？",
+      "FSC 分辨率和实际 map 质量不一致怎么办？",
+      "mask 会怎样影响 refinement？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_ed2613c460a3057b",
+        "title": "High-resolution 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 8,
+        "evidence_snippets": [
+          "This procedure employs the so-called gold-standard way to calculate Fourier Shell Correlation (FSC) from independently refined half-reconstructions in order to estimate resolution, so that self-enhancing overfitting may be avoided [ SC12 ] .",
+          "(We typically start auto-refinements from low-pass filtered maps to prevent bias towards high-frequency components in the map, and to maintain the gold-standard of completely independent refinements at resolutions higher than the initial one.)"
+        ]
+      },
+      {
+        "document_id": "doc_60fd44b2881c7b4d",
+        "title": "High-resolution 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 8,
+        "evidence_snippets": [
+          "Finally, the procedure to sharpen a 3D reference map and estimate the gold-standard FSC curves for subtomogram averaging is the same as described in the SPA tutorial .",
+          "Next, we need to generate appropriate masks to help the refinement process and FSC assessment."
+        ]
+      },
+      {
+        "document_id": "doc_27409a9e1aeafe18",
+        "title": "Initial 3D refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DIni.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "This procedure employs the so-called gold-standard way to calculate Fourier Shell Correlation (FSC) from independently refined half-reconstructions in order to estimate resolution, so that self-enhancing overfitting may be avoided [ SC12 ] .",
+          "(We typically start auto-refinements from low-pass filtered maps to prevent bias towards high-frequency components in the map, and to maintain the gold-standard of completely independent refinements at resolutions higher than the initial one.)"
+        ]
+      },
+      {
+        "document_id": "doc_2d5926fab10c93e2",
+        "title": "Local-resolution estimation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Local-resolution estimation — RELION documentation\nLocal-resolution estimation\nLocal-resolution estimation\nThe estimated resolution from the post-processing program is a global estimate.\nHowever, a single number cannot describe the variations in resolution that are often observed in reconstructions of macromolecular complexes.\nAlp Kucukelbir and Hemant Tagare wrote a nifty program to estimate the variation in resolution throughout the map [ KST14 ] . relion implements a wrapper to this program t"
+        ]
+      },
+      {
+        "document_id": "doc_d316ca1d11ee6c7f",
+        "title": "De novo 3D model generation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Provided you have a reasonable distribution of viewing directions, and your data were good enough to yield detailed class averages in 2D classification , this algorithm is likely to yield a suitable, low-resolution model that can subsequently be used for 3D classification or 3D auto-refine ."
+        ]
+      },
+      {
+        "document_id": "doc_f3f3b2e5cc5fa000",
+        "title": "Wrapping up — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "For example, harsh cleaning will remove averaged micrographs from a MotionCorr job, or extracted particles stacks from a Particle extraction job, while gentle cleaning will remove all files from itermediate iterations of 2D classification , 3D classification or 3D auto-refine jobs."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_10",
+    "name": "ctf_refinement",
+    "label_cn": "CTF 精修",
+    "goal": "在已有较好 map/refinement 基础上，精修高阶像差、各向异性放大和 per-particle defocus，以提升高分辨信息。",
+    "inputs": [
+      "refined particles",
+      "half maps / refined map",
+      "可靠 mask",
+      "足够高分辨率信号"
+    ],
+    "relion_jobs": [
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "key_parameters": [
+      "Aberration refinement options",
+      "Anisotropic magnification",
+      "Per-particle defocus",
+      "Optics groups",
+      "Resolution limits"
+    ],
+    "qc_checks": [
+      "CTF refinement 后 FSC 或 map 质量有真实改善",
+      "参数变化幅度物理合理",
+      "不同 optics group 行为一致或可解释",
+      "没有因过拟合导致局部假改善"
+    ],
+    "common_pitfalls": [
+      "过早做 CTF refinement，信号不足",
+      "optics group 设置混乱",
+      "把 CTF refinement 当作修复坏数据的万能步骤"
+    ],
+    "starter_questions": [
+      "什么时候适合做 CTF refinement？",
+      "高阶像差和 anisotropic magnification 有什么区别？",
+      "CTF refinement 后一定要重新 refine 吗？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_b9096ba5deb8aabc",
+        "title": "CTF and aberration refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 6,
+        "evidence_snippets": [
+          "Next, we’ll use the CTF refinement job-type to estimate the asymmetrical and symmetrical aberrations in the dataset; whether there is any anisotropic magnification; and we’ll re-estimate per-particle defocus values for the entire data set.",
+          "That’s why in this example we’re first looking for beamtilt, and do the anisotropic magnification and the per-particle defocus later."
+        ]
+      },
+      {
+        "document_id": "doc_b9479e3c2029b01c",
+        "title": "Single particle tutorial — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Single particle tutorial — RELION documentation\nSingle particle tutorial\nSingle particle tutorial\nIntroduction\nPreprocessing\nGetting organised\nBeam-induced motion correction\nCTF estimation\nManual particle picking\nParticle picking\nSelect a subset of the micrographs\nLoG-based auto-picking\nParticle extraction\n2D class averaging to select good particles\nSelecting good 2D classes for Topaz training\nRe-training the TOPAZ neural network\nPick all micrographs with the re-trained TOPAZ neural network\nPart"
+        ]
+      },
+      {
+        "document_id": "doc_5a65741d76a4347d",
+        "title": "Tomo refinement 1: CTF refinement — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Tomo refinement 1: CTF refinement — RELION documentation\nTomo refinement 1: CTF refinement\nTomo refinement 1: CTF refinement\nIn this step we will show how to apply the refinement of the different parameters related to the CTF estimation such as tilt series projection defocus and contrast scale.\nFor a full description of the arguments, check the relion_tomo_refine_ctf program.\nIf you are running this job without following the tutorial, please note the requirements for the reference map and FSC da"
+        ]
+      },
+      {
+        "document_id": "doc_96ad174a4e67679c",
+        "title": "Introduction — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 2,
+        "evidence_snippets": [
+          "This tutorial covers the entire single-particle analysis workflow in relion -5.0: beam-induced motion-correction, CTF estimation; automated particle picking; particle extraction; 2D class averaging; automated 2D class selection; VDAM-based initial model generation; 3D classification; high-resolution 3D refinement (including Blush regularisation); CTF refinement and higher-order aberration correction; Bayesian polishing to correct for beam-induced motions in the movies; map sharpening and local-resolution estimation; automated model building with ModelAngelo; and flexibility analysis with DynaM"
+        ]
+      },
+      {
+        "document_id": "doc_738a3a1a19b43936",
+        "title": "What’s new? — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/Whats-new.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 1,
+        "evidence_snippets": [
+          "One of the major new features in relion -3.1 is a correction for higher-order aberrations in the data, i.e.",
+          "The signal to estimate these aberrations is calculated by averaging over particles from multiple micrographs."
+        ]
+      },
+      {
+        "document_id": "doc_a80edd64e8b9ef8d",
+        "title": "Bayesian polishing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 1,
+        "evidence_snippets": [
+          "Both Bayesian polishing and CTF refinement , which comprises per-particle defocus, magnification and higher-order aberration estimation, may improve the resolution of the reconstruction.",
+          "In this example, we first refined the aberrations, the magnification, and then the per-particle defocus values."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_11",
+    "name": "post_processing",
+    "label_cn": "后处理",
+    "goal": "创建合理 mask，执行 post-processing、sharpening、local resolution 或 Bayesian polishing 循环，形成可解释的最终 map。",
+    "inputs": [
+      "half maps",
+      "refined map",
+      "mask",
+      "CTF-refined 或 polished particles（可选）"
+    ],
+    "relion_jobs": [
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "key_parameters": [
+      "Mask threshold / extension / soft edge",
+      "B-factor sharpening",
+      "FSC cutoff",
+      "Polishing training",
+      "Local resolution settings"
+    ],
+    "qc_checks": [
+      "mask 不切掉真实密度且不过度包含噪声",
+      "sharpen 后细节增强但噪声不过强",
+      "local resolution 与 map 视觉质量一致",
+      "polishing 或 CTF refinement 循环带来可重复改善"
+    ],
+    "common_pitfalls": [
+      "mask 过紧导致分辨率虚高",
+      "B-factor sharpening 过度放大噪声",
+      "把一次局部改善误判为全局质量提升"
+    ],
+    "starter_questions": [
+      "mask 应该怎么做才不虚高 FSC？",
+      "post-processing 后 map 太噪怎么办？",
+      "Bayesian polishing 什么时候值得做？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_c821cef88558fde2",
+        "title": "Tomo refinement 2: Bayesian polishing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 8,
+        "evidence_snippets": [
+          "To assess the result, we generate new particles with the Extract subtomos job using the resulting optimisation_set.star file, followed by Reconstruct particle and Post-processing ."
+        ]
+      },
+      {
+        "document_id": "doc_a80edd64e8b9ef8d",
+        "title": "Bayesian polishing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "Note that this is not recommended when performing Bayesian polishing in relion .",
+          "Using this option, the solvent will be set to zero for all pixels outside the mask."
+        ]
+      },
+      {
+        "document_id": "doc_6ee9b14270b9f1ba",
+        "title": "Mask creation & Postprocessing — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 7,
+        "evidence_snippets": [
+          "relion ’s procedure for B-factor sharpening and calculating masked FSC curves [ CMF+13 ] is called post-processing .",
+          "In that case use a stronger low-pass filter and/or a wider and more softer mask in the Mask creation step above, and repeat the postprocessing."
+        ]
+      },
+      {
+        "document_id": "doc_b9479e3c2029b01c",
+        "title": "Single particle tutorial — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 5,
+        "evidence_snippets": [
+          "Single particle tutorial — RELION documentation\nSingle particle tutorial\nSingle particle tutorial\nIntroduction\nPreprocessing\nGetting organised\nBeam-induced motion correction\nCTF estimation\nManual particle picking\nParticle picking\nSelect a subset of the micrographs\nLoG-based auto-picking\nParticle extraction\n2D class averaging to select good particles\nSelecting good 2D classes for Topaz training\nRe-training the TOPAZ neural network\nPick all micrographs with the re-trained TOPAZ neural network\nPart"
+        ]
+      },
+      {
+        "document_id": "doc_69c24f0c993dc017",
+        "title": "ModelAngelo: atomic modelling — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "ModelAngelo: atomic modelling — RELION documentation\nModelAngelo: atomic modelling\nModelAngelo: atomic modelling\nAs of release 5.0, relion comes with a machine-learning approach for automated atomic model building called ModelAngelo [ JKZ+24 ] . ModelAngelo is a graph neural network that combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\nBecause we know that the sample in this data set is beta-galactosidase fr"
+        ]
+      },
+      {
+        "document_id": "issue_80bce2032b08c157",
+        "title": "A bug related to the process of doing Polish after using Motioncor3",
+        "url": "https://github.com/3dem/relion/issues/1321",
+        "source_type": "github_issue",
+        "match_score": 4,
+        "evidence_snippets": [
+          "+ The names of the reference half maps and the mask were taken from the PostProcess STAR file."
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  },
+  {
+    "id": "cp_12",
+    "name": "model_building",
+    "label_cn": "模型构建与验证",
+    "goal": "基于最终 map 执行 ModelAngelo 或外部工具建模，检查 handedness，识别未知蛋白，并形成可验证的结构解释。",
+    "inputs": [
+      "最终 density map",
+      "local resolution / map quality 信息",
+      "序列或候选蛋白信息",
+      "外部建模与验证工具"
+    ],
+    "relion_jobs": [
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "key_parameters": [
+      "Map handedness",
+      "Sequence input",
+      "Model confidence",
+      "Map-model fit",
+      "Validation metrics"
+    ],
+    "qc_checks": [
+      "模型与密度吻合",
+      "handedness 正确",
+      "主链和侧链可解释性与分辨率匹配",
+      "几何验证和 map-model 相关性合理"
+    ],
+    "common_pitfalls": [
+      "handedness 错误导致模型无法合理拟合",
+      "低分辨区域过度建模",
+      "未知蛋白识别缺乏来源证据"
+    ],
+    "starter_questions": [
+      "RELION 里的 ModelAngelo 适合做什么？",
+      "怎么检查 map handedness？",
+      "模型和 map 不匹配时先查什么？"
+    ],
+    "source_refs": [
+      {
+        "document_id": "doc_69c24f0c993dc017",
+        "title": "ModelAngelo: atomic modelling — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 8,
+        "evidence_snippets": [
+          "As of release 5.0, relion comes with a machine-learning approach for automated atomic model building called ModelAngelo [ JKZ+24 ] .",
+          "One can also run ModelAngelo without providing a FASTA file with the known protein sequence."
+        ]
+      },
+      {
+        "document_id": "doc_892565fe188d9d6c",
+        "title": "Model building with ModelAngelo — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ModelAngelo.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 6,
+        "evidence_snippets": [
+          "Building an atomic model using ModelAngelo [ JKZ+24 ] is done in the same way as in the SPA tutorial .",
+          "After inputing the path to the ModelAngelo executable and the GPUs to use and making sure that PerformHMMersearch?"
+        ]
+      },
+      {
+        "document_id": "doc_96ad174a4e67679c",
+        "title": "Introduction — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "This tutorial covers the entire single-particle analysis workflow in relion -5.0: beam-induced motion-correction, CTF estimation; automated particle picking; particle extraction; 2D class averaging; automated 2D class selection; VDAM-based initial model generation; 3D classification; high-resolution 3D refinement (including Blush regularisation); CTF refinement and higher-order aberration correction; Bayesian polishing to correct for beam-induced motions in the movies; map sharpening and local-resolution estimation; automated model building with ModelAngelo; and flexibility analysis with DynaM"
+        ]
+      },
+      {
+        "document_id": "doc_b9479e3c2029b01c",
+        "title": "Single particle tutorial — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 4,
+        "evidence_snippets": [
+          "Single particle tutorial — RELION documentation\nSingle particle tutorial\nSingle particle tutorial\nIntroduction\nPreprocessing\nGetting organised\nBeam-induced motion correction\nCTF estimation\nManual particle picking\nParticle picking\nSelect a subset of the micrographs\nLoG-based auto-picking\nParticle extraction\n2D class averaging to select good particles\nSelecting good 2D classes for Topaz training\nRe-training the TOPAZ neural network\nPick all micrographs with the re-trained TOPAZ neural network\nPart"
+        ]
+      },
+      {
+        "document_id": "doc_d316ca1d11ee6c7f",
+        "title": "De novo 3D model generation — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "De novo 3D model generation — RELION documentation\nDe novo 3D model generation\nDe novo 3D model generation\nrelion -4.0 uses a gradient-driven algorithm to generate a de novo 3D initial reference from the 2D particles.\nAs of release 4.0, this algorithm is different from the SGD algorithm in the CryoSPARC program [ PRFB17 ] .\nProvided you have a reasonable distribution of viewing directions, and your data were good enough to yield detailed class averages in 2D classification , this algorithm is li"
+        ]
+      },
+      {
+        "document_id": "doc_f3f3b2e5cc5fa000",
+        "title": "Wrapping up — RELION documentation",
+        "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+        "source_type": "relion_readthedocs",
+        "match_score": 3,
+        "evidence_snippets": [
+          "Wrapping up — RELION documentation\nWrapping up\nWrapping up\nCleaning up your directories\nCleaning up your directories\nIn order to save disk space, relion has an option to clean up job directories.\nThere are two modes of cleaning: ‘gentle’ cleaning will only delete intermediate files from the job directory being cleaned; ‘harsh’ cleaning also deletes files that may be necessary to launch a new job that needs input from the job being cleaned.\nFor example, harsh cleaning will remove averaged microgr"
+        ]
+      }
+    ],
+    "status": "draft_needs_expert_review"
+  }
+]

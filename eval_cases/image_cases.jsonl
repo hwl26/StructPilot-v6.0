@@ -1,0 +1,5 @@
+{"id":"image_upload_001","category":"image","input":"这张截图显示的界面有什么问题？","image_path":"","expected_keywords":["截图"],"forbidden_keywords":["Traceback"],"skip_without_image":true}
+{"id":"image_ocr_001","category":"image","input":"请结合 OCR 文本判断当前任务状态","image_path":"","expected_keywords":["OCR"],"forbidden_keywords":["Traceback"],"skip_without_image":true}
+{"id":"image_relion_001","category":"image","input":"RELION 截图里有哪些需要我确认的参数？","image_path":"","expected_keywords":["参数"],"forbidden_keywords":["Traceback"],"skip_without_image":true}
+{"id":"image_error_001","category":"image","input":"截图里如果有报错，先告诉我下一步排查顺序","image_path":"","expected_keywords":["报错"],"forbidden_keywords":["Traceback"],"skip_without_image":true}
+{"id":"image_qc_001","category":"image","input":"请根据截图做质控判断，不要编造不可见数值","image_path":"","expected_keywords":["质控"],"forbidden_keywords":["Traceback"],"skip_without_image":true}

@@ -1,0 +1,11 @@
+{
+  "demo_sop": {
+    "sop_name": "StructPilot v5.1 demo SOP",
+    "flow_steps": ["cp_01", "cp_02", "cp_03"],
+    "step_detail": {
+      "cp_01": "导入原始数据并检查 pixel size",
+      "cp_02": "进行运动校正并观察漂移轨迹",
+      "cp_03": "估计 CTF 并检查 fit 分辨率"
+    }
+  }
+}

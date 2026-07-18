@@ -1,0 +1,5 @@
+{"id":"fault_motion_001","category":"fault","input":"Motion correction 后 drift 很大，应该怎么排查？","expected_keywords":["drift"],"forbidden_keywords":["Traceback"]}
+{"id":"fault_ctf_001","category":"fault","input":"CTF 拟合失败，很多 micrograph 没有结果","expected_keywords":["CTF"],"forbidden_keywords":["Traceback"]}
+{"id":"fault_star_001","category":"fault","input":"RELION 报错找不到 particles.star","expected_keywords":["star"],"forbidden_keywords":["Traceback"]}
+{"id":"fault_memory_001","category":"fault","input":"运行 3D classification 时内存不够失败了","expected_keywords":["内存"],"forbidden_keywords":["Traceback"]}
+{"id":"fault_particles_001","category":"fault","input":"2D class 里大多数颗粒很糊，怎么判断原因？","expected_keywords":["2D"],"forbidden_keywords":["Traceback"]}

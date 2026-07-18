@@ -1,0 +1,4 @@
+{"id":"mm_text_box_size","modality":"text","input":"RELION extract 这一步 box size 怎么设？","expected_keywords":["box","1.8","RELION"],"forbidden_keywords":["不知道"],"max_latency_ms":3000}
+{"id":"mm_image_ctf_qc","modality":"image","input":"这张 CTF 截图是否合格？请给出证据","image_path":"assets/guides/cp_03_ctf_estimation/03.1.png","expected_keywords":["CTF","证据"],"forbidden_keywords":["无法处理图片"],"max_latency_ms":4000}
+{"id":"mm_image_2d_keep","modality":"image","input":"这张 2D class 图应该保留还是丢弃？请说明依据","image_path":"assets/guides/cp_06_2d_classification/Snipaste_2026-07-05_19-25-20.png","expected_keywords":["2D","保留","证据"],"forbidden_keywords":["无法处理图片"],"max_latency_ms":4000}
+{"id":"mm_voice_box_size_simulated","modality":"voice_transcript","input":"语音转写文本：box size 怎么设？","expected_keywords":["box","1.8","证据"],"forbidden_keywords":["无法处理语音"],"max_latency_ms":3000}

@@ -1,0 +1,174 @@
+{
+  "index_type": "structpilot_stage_navigation_index",
+  "version": "0.1.0",
+  "stages": [
+    {
+      "id": "cp_01",
+      "label_cn": "数据导入",
+      "name": "data_import",
+      "goal": "建立 RELION 项目目录，导入原始 movies 或 micrographs，并确认 pixel size、电压、Cs、文件路径和 STAR/metadata 信息正确。",
+      "formal_answer_count": 3,
+      "review_item_count": 3,
+      "high_risk_review_count": 0,
+      "starter_questions": [
+        "RELION 项目目录应该怎么组织？",
+        "导入时 pixel size 写错会影响什么？",
+        "导入后应该检查哪些 STAR 文件字段？"
+      ]
+    },
+    {
+      "id": "cp_02",
+      "label_cn": "运动校正",
+      "name": "motion_correction",
+      "goal": "校正 beam-induced motion 和帧间漂移，得到可用于 CTF 估计与颗粒挑选的 corrected micrographs。",
+      "formal_answer_count": 3,
+      "review_item_count": 3,
+      "high_risk_review_count": 0,
+      "starter_questions": [
+        "运动校正后主要看哪些 QC 图？",
+        "motion correction 参数异常会影响 CTF 吗？",
+        "什么时候需要重新做运动校正？"
+      ]
+    },
+    {
+      "id": "cp_03",
+      "label_cn": "CTF 估计",
+      "name": "ctf_estimation",
+      "goal": "估计每张 micrograph 的 defocus、CTF 拟合质量等参数，为颗粒筛选、提取和后续精修提供基础。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "CTF 估计结果怎么判断好坏？",
+        "defocus 范围应该怎么设？",
+        "哪些 micrographs 应该在 CTF 后剔除？"
+      ]
+    },
+    {
+      "id": "cp_04",
+      "label_cn": "颗粒挑选",
+      "name": "particle_picking",
+      "goal": "从 micrographs 中识别颗粒坐标，先用 LoG、template-free 或少量模板生成初始颗粒集，再逐步优化挑选质量。",
+      "formal_answer_count": 2,
+      "review_item_count": 3,
+      "high_risk_review_count": 1,
+      "starter_questions": [
+        "LoG auto-picking 适合什么场景？",
+        "怎么判断挑选阈值过松还是过严？",
+        "Topaz 前需要准备什么训练集？"
+      ]
+    },
+    {
+      "id": "cp_05",
+      "label_cn": "颗粒提取",
+      "name": "particle_extraction",
+      "goal": "根据颗粒坐标从 micrographs 中切出 particles，设置合适 box size，并生成后续 2D/3D 分类使用的 particle stack。",
+      "formal_answer_count": 2,
+      "review_item_count": 3,
+      "high_risk_review_count": 0,
+      "starter_questions": [
+        "box size 应该怎么估算？",
+        "提取时是否要 downsample？",
+        "从外部坐标导入时最容易错哪里？"
+      ]
+    },
+    {
+      "id": "cp_06",
+      "label_cn": "2D 分类",
+      "name": "class_2d",
+      "goal": "通过 reference-free 2D class averaging 清理坏颗粒、污染和错误 picks，保留结构特征清晰的颗粒集合。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "2D 分类中哪些 class 应该保留？",
+        "class 数量应该怎么设？",
+        "2D 结果差是挑选问题还是样品问题？"
+      ]
+    },
+    {
+      "id": "cp_07",
+      "label_cn": "Ab-initio 初始模型",
+      "name": "ab_initio",
+      "goal": "从清理后的颗粒生成初始 3D 模型，为后续 3D 分类和精修提供参考。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "初始模型生成失败通常说明什么？",
+        "什么时候需要多个 initial models？",
+        "初始模型阶段能不能设置对称性？"
+      ]
+    },
+    {
+      "id": "cp_08",
+      "label_cn": "3D 分类",
+      "name": "class_3d",
+      "goal": "分离构象、组分或低质量颗粒，选择结构一致、可进一步精修的 3D class。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "3D 分类 class 数怎么选？",
+        "如何判断哪个 3D class 应该进入精修？",
+        "3D 分类能解决构象异质性吗？"
+      ]
+    },
+    {
+      "id": "cp_09",
+      "label_cn": "3D 精修",
+      "name": "refine_3d",
+      "goal": "对目标颗粒集合执行 high-resolution 3D refinement，得到 half maps、FSC 和 refined map。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "3D auto-refine 结果主要看哪些指标？",
+        "FSC 分辨率和实际 map 质量不一致怎么办？",
+        "mask 会怎样影响 refinement？"
+      ]
+    },
+    {
+      "id": "cp_10",
+      "label_cn": "CTF 精修",
+      "name": "ctf_refinement",
+      "goal": "在已有较好 map/refinement 基础上，精修高阶像差、各向异性放大和 per-particle defocus，以提升高分辨信息。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "什么时候适合做 CTF refinement？",
+        "高阶像差和 anisotropic magnification 有什么区别？",
+        "CTF refinement 后一定要重新 refine 吗？"
+      ]
+    },
+    {
+      "id": "cp_11",
+      "label_cn": "后处理",
+      "name": "post_processing",
+      "goal": "创建合理 mask，执行 post-processing、sharpening、local resolution 或 Bayesian polishing 循环，形成可解释的最终 map。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "mask 应该怎么做才不虚高 FSC？",
+        "post-processing 后 map 太噪怎么办？",
+        "Bayesian polishing 什么时候值得做？"
+      ]
+    },
+    {
+      "id": "cp_12",
+      "label_cn": "模型构建与验证",
+      "name": "model_building",
+      "goal": "基于最终 map 执行 ModelAngelo 或外部工具建模，检查 handedness，识别未知蛋白，并形成可验证的结构解释。",
+      "formal_answer_count": 3,
+      "review_item_count": 0,
+      "high_risk_review_count": 3,
+      "starter_questions": [
+        "RELION 里的 ModelAngelo 适合做什么？",
+        "怎么检查 map handedness？",
+        "模型和 map 不匹配时先查什么？"
+      ]
+    }
+  ]
+}

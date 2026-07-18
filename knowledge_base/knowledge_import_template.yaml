@@ -1,0 +1,38 @@
+doc_id: relion_ctf_001
+software: relion
+version: "5.0"
+module: ctf_estimation
+screen_name: "CTF estimation"
+checkpoint_id: cp_03
+title_cn: "CTF 估计"
+title_en: "CTF estimation"
+summary: "用于评估微图像的 CTF 参数和分辨率趋势"
+ui_keywords:
+  - "CTF"
+  - "Estimate CTF"
+  - "Defocus"
+ui_elements:
+  - "micrograph list"
+  - "power spectrum panel"
+  - "fit quality panel"
+action_steps:
+  - "导入微图"
+  - "检查像素大小"
+  - "设置 defocus 范围"
+  - "运行 CTF 估计"
+qc_checks:
+  - "fit 线条是否清晰"
+  - "defocus 是否落在合理范围"
+common_errors:
+  - "power spectrum 过暗"
+  - "fit 偏移"
+rollback_nodes:
+  - "cp_02"
+  - "cp_01"
+image_refs:
+  - "assets/docs/relion_ctf_001_01.png"
+  - "assets/docs/relion_ctf_001_02.png"
+tags:
+  - relion
+  - ctf
+  - beginner

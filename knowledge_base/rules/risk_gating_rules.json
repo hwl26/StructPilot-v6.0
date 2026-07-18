@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "runtime_policy": {
+    "allow_only_reviewed_formal_answers": true,
+    "require_source_for_parameter_advice": true,
+    "block_unreviewed_candidate_qa": true,
+    "high_risk_topics_require_caution": [
+      "dose",
+      "pixel_size",
+      "box_size",
+      "ctf_fit",
+      "mask",
+      "symmetry",
+      "postprocess_resolution"
+    ]
+  },
+  "answer_requirements": [
+    "separate_observed_facts_from_inference",
+    "show_uncertainty_when_evidence_is_missing",
+    "prefer_stage_specific_verified_knowledge",
+    "ask_for_screenshot_or_log_when_diagnosis_is_ambiguous"
+  ]
+}

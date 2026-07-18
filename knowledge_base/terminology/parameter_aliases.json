@@ -1,0 +1,6 @@
+{
+  "pixel_size": ["pixel size", "A/pix", "angstrom per pixel", "像素尺寸"],
+  "box_size": ["box size", "particle box", "box", "盒子大小"],
+  "ctf": ["CTF", "ctf fit", "contrast transfer function"],
+  "dose": ["dose", "electron dose", "e/A^2", "电子剂量"]
+}

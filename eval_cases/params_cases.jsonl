@@ -1,0 +1,5 @@
+{"id":"params_voltage_001","category":"params","input":"加速电压 300 kV，像素 0.83 A，剂量 45 e/A2，这些参数合理吗？","expected_keywords":["300","0.83","45"],"forbidden_keywords":["Traceback"]}
+{"id":"params_pixel_001","category":"params","input":"pixel size 1.06 A/pix 会影响后续重构吗？","expected_keywords":["pixel"],"forbidden_keywords":["Traceback"]}
+{"id":"params_box_001","category":"params","input":"particle box size 256 是否够用？","expected_keywords":["256"],"forbidden_keywords":["Traceback"]}
+{"id":"params_dose_001","category":"params","input":"总剂量 60 e/A2 是否偏高？","expected_keywords":["60"],"forbidden_keywords":["Traceback"]}
+{"id":"params_ctf_001","category":"params","input":"defocus 范围 -0.8 到 -2.2 um 怎么看？","expected_keywords":["defocus"],"forbidden_keywords":["Traceback"]}

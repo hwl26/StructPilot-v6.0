@@ -1,0 +1,235 @@
+{
+  "fsc_curve": {
+    "name": "Fourier Shell Correlation (FSC)",
+    "name_cn": "FSC 曲线",
+    "appears_in": ["cp_08", "cp_09", "cp_11"],
+    "rules": [
+      {
+        "pattern": "fsc_crosses_0.143",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "分辨率达标，金标准验证通过",
+        "action_cn": "继续下一步精修或后处理",
+        "source": "CryoSPARC Guide: Common CryoSPARC Plots — FSC & Phase Randomization"
+      },
+      {
+        "pattern": "fsc_not_reach_0.143",
+        "severity": "problem",
+        "icon": "❌",
+        "meaning_cn": "分辨率未达标，0.143 交点对应的分辨率不理想",
+        "causes_cn": ["数据量不足", "优先取向严重", "参数设置不当", "CTF 估计错误"],
+        "actions_cn": ["检查取向分布图是否有明显偏侧", "增加粒子数或尝试 Heterogeneous Refinement", "检查 CTF 参数（像素大小、电压、球差）"],
+        "source": "CryoSPARC Guide: FSC & Phase Randomization"
+      },
+      {
+        "pattern": "fsc_oscillation",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "FSC 曲线出现振荡，通常由 CTF 参数错误导致",
+        "causes_cn": ["像素大小设置错误", "加速电压不正确", "球差值不正确"],
+        "actions_cn": ["检查 Import 中的像素大小", "确认加速电压和球差值"],
+        "source": "CryoSPARC Guide: FSC sharp oscillation"
+      },
+      {
+        "pattern": "fsc_stays_positive_at_nyquist",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "FSC 在 Nyquist 极限处仍为正值，可能表示过度降采样或重复颗粒",
+        "causes_cn": ["粒子过度降采样（box size 太小）", "重复颗粒未剔除"],
+        "actions_cn": ["用更大 box size 重新提取粒子", "使用 Remove Duplicate Particles"],
+        "source": "CryoSPARC Guide: FSC does not go to zero"
+      },
+      {
+        "pattern": "membrane_protein_dip",
+        "severity": "info",
+        "icon": "ℹ️",
+        "meaning_cn": "膜蛋白 FSC 在 9Å~5Å 出现凹陷是预期伪影，来自去垢剂胶束或脂质双层的有序信号",
+        "action_cn": "正常现象，无需处理",
+        "source": "CryoSPARC Guide: Membrane protein FSC dip"
+      }
+    ],
+    "version_changes": "v5: FSC 图表简化为 Resolution Mask + Corrected，不再显示 No Mask/Spherical/Loose/Tight"
+  },
+  "orientation_distribution": {
+    "name": "Viewing Direction Distribution / Posterior Precision",
+    "name_cn": "取向分布图",
+    "appears_in": ["cp_07", "cp_08", "cp_09"],
+    "rules": [
+      {
+        "pattern": "uniform_distribution",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "粒子取向均匀分布，有利于高分辨率各向同性重构",
+        "action_cn": "继续下一步精修",
+        "source": "CryoSPARC Guide: Orientation Plots"
+      },
+      {
+        "pattern": "preferred_orientation",
+        "severity": "problem",
+        "icon": "❌",
+        "meaning_cn": "粒子偏向某些取向，某些方向分辨率不足，可能导致各向异性重构",
+        "causes_cn": ["样品在冰中取向偏好", "网格类型导致", "颗粒形状导致"],
+        "actions_cn": ["运行 Orientation Diagnostics 作业量化 cFAR 指标", "尝试 Heterogeneous Refinement 用多构象改善", "考虑更换网格类型或优化样品制备"],
+        "source": "CryoSPARC Guide: Orientation Diagnostics tutorial"
+      }
+    ],
+    "important_note": "Viewing direction distribution 不能直接推断优先取向问题——需结合 posterior precision directional distribution（考虑 CTF 信息损失后的分布）综合判断。"
+  },
+  "class_ess": {
+    "name": "Class ESS (Effective Sample Size)",
+    "name_cn": "ESS 直方图",
+    "appears_in": ["cp_06"],
+    "rules": [
+      {
+        "pattern": "ess_near_1",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "粒子确信属于某一类，分类收敛好",
+        "action_cn": "继续 Select 2D 挑选好类",
+        "source": "CryoSPARC Guide: 2D Classification — Class ESS histogram"
+      },
+      {
+        "pattern": "ess_near_K",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "粒子均匀分布到所有类，分类不确定——粒子不知道自己该属于哪一类",
+        "causes_cn": ["重复/重叠类别", "类别质量差", "分类不完整"],
+        "actions_cn": ["增加 ICUF 让算法保持更多不确定性", "减少类别数", "关闭 Force max over poses/shifts"],
+        "source": "CryoSPARC Guide: 2D Classification — Class ESS histogram"
+      }
+    ]
+  },
+  "class_average": {
+    "name": "Class Averages",
+    "name_cn": "类别平均图",
+    "appears_in": ["cp_06"],
+    "rules": [
+      {
+        "pattern": "clear_secondary_structure",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "2D 类别清晰，可见二级结构特征（α-螺旋、β-折叠）",
+        "action_cn": "选择这些类继续下一步",
+        "source": "CryoSPARC Guide: 2D Classification"
+      },
+      {
+        "pattern": "stripe_noise",
+        "severity": "problem",
+        "icon": "❌",
+        "meaning_cn": "条纹类/纯噪声，无蛋白质特征——这些不是真正的蛋白颗粒",
+        "causes_cn": ["粒子太小 (<100 kDa) 导致低 SNR", "Force max over poses/shifts 开启强制对齐", "online-EM 迭代不足"],
+        "actions_cn": ["关闭 Force max over poses/shifts", "增加 online-EM 迭代到 40-80", "增加 Batchsize per class 到 200-500", "考虑跳过 2D 直接用 Heterogeneous Refinement"],
+        "source": "CryoSPARC Guide: 2D Classification — Force max over poses/shifts"
+      }
+    ]
+  },
+  "ncc_power": {
+    "name": "NCC vs Power Plot",
+    "name_cn": "NCC vs Power 图",
+    "appears_in": ["cp_04"],
+    "rules": [
+      {
+        "pattern": "distinct_clusters",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "真粒子与冰/聚集物分离清晰——NCC 高+Power 高的是真颗粒",
+        "action_cn": "正常挑选，使用默认 NCC 阈值",
+        "source": "CryoSPARC Guide: Inspect Picks"
+      },
+      {
+        "pattern": "mixed_clusters",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "真粒子和假粒子混杂，NCC 阈值难选——单阈值无法同时保留真粒子和排除假粒子",
+        "actions_cn": ["交互式调整 NCC 阈值", "使用 Inspect Picks 手动筛选", "考虑用 Topaz 深度学习替代"],
+        "source": "CryoSPARC Guide: Inspect Picks — NCC vs Power plots"
+      }
+    ]
+  },
+  "guinier": {
+    "name": "Guinier Plot",
+    "name_cn": "Guinier 图",
+    "appears_in": ["cp_09", "cp_11"],
+    "rules": [
+      {
+        "pattern": "reasonable_b_factor",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "B 因子在 50-100 Å² 范围内，数据质量好，高分辨率信息保留充分",
+        "action_cn": "继续下一步",
+        "source": "CryoSPARC Guide: Guinier plot"
+      },
+      {
+        "pattern": "high_b_factor",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "B 因子偏大（>150 Å²），高分辨率信息衰减严重",
+        "causes_cn": ["电子剂量加权不足", "运动校正参数不当", "原始数据质量下降"],
+        "actions_cn": ["检查运动校正的剂量权重参数", "确认总电子剂量设置正确"],
+        "source": "CryoSPARC Guide: Guinier plot"
+      }
+    ]
+  },
+  "noise_model": {
+    "name": "Noise Model",
+    "name_cn": "噪声模型图",
+    "appears_in": ["cp_06", "cp_07"],
+    "rules": [
+      {
+        "pattern": "smooth_decay",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "噪声功率谱随频率平滑衰减，噪声估计合理",
+        "action_cn": "继续下一步",
+        "source": "CryoSPARC Guide: Noise model"
+      },
+      {
+        "pattern": "high_freq_artifact",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "高频方差异常增高——可能是 box size 或 CTF 参数问题",
+        "actions_cn": ["检查 box size 是否为有效值", "确认 CTF 参数正确"],
+        "source": "CryoSPARC Guide: Noise model"
+      }
+    ]
+  },
+  "posterior_precision": {
+    "name": "Posterior Precision Directional Distribution",
+    "name_cn": "后验精度方向分布",
+    "appears_in": ["cp_08", "cp_09"],
+    "rules": [
+      {
+        "pattern": "uniform_precision",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "各方向后验精度均匀——考虑 CTF 信息损失后，取向仍均匀",
+        "action_cn": "继续下一步精修",
+        "source": "CryoSPARC Guide: Orientation Diagnostics — Posterior Precision"
+      },
+      {
+        "pattern": "anisotropic_precision",
+        "severity": "warning",
+        "icon": "⚠️",
+        "meaning_cn": "某些方向后验精度明显低于其他方向，可能影响该方向分辨率",
+        "causes_cn": ["CTF 节点方向信息缺失", "优先取向叠加效应"],
+        "actions_cn": ["这是比 viewing direction distribution 更真实的取向评估——基于此判断是否需要改善取向"],
+        "source": "CryoSPARC Guide: Orientation Diagnostics — Fourier-slice theorem"
+      }
+    ]
+  },
+  "best_class_prob": {
+    "name": "Best Class Probability",
+    "name_cn": "最佳类别概率图",
+    "appears_in": ["cp_06"],
+    "rules": [
+      {
+        "pattern": "probability_near_1",
+        "severity": "good",
+        "icon": "🟢",
+        "meaning_cn": "大多数颗粒以高概率 (>0.9) 分配给某个类，分类收敛良好",
+        "action_cn": "继续 Select 2D",
+        "source": "CryoSPARC Guide: 2D Classification"
+      }
+    ]
+  }
+}

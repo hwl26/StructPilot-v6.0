@@ -1,0 +1,8 @@
+{
+  "coach_opening": {
+    "template": "你好！我是 StructPilot v5.1 教练，你的 cryo-EM 数据处理陪跑助手。\n\n我可以帮你：\n- 📋 逐站引导 12 步标准处理流程\n- 💡 根据你的显微镜和样品推荐个性化参数\n- 📊 解读 FSC、取向分布、ESS 等结果图表\n- 🩺 逐步诊断 2D 分类、CTF、取向偏侧等常见问题\n- 📘 每条建议都有 CryoSPARC 官方 Guide 引用\n\n回复「开始」启动陪跑流程！"
+  },
+  "stage_intro": {
+    "template": "## 检查站 #{order}: {checkpoint_cn}\n\n**目标**: {stage_goal}\n\n**步骤**:\n{steps}\n\n**质控标准**:\n{checks}\n\n> {coach_prompt}"
+  }
+}

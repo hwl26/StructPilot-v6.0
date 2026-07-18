@@ -1,0 +1,20 @@
+{
+  "eer": "EER Electron Event Representation Falcon4i super-resolution counting",
+  "ctf": "CTF Contrast Transfer Function",
+  "cs": "Cs spherical aberration",
+  "mrc": "MRC Micrograph Image Format ccp4",
+  "mrcs": "MRCS MRC image stack particle stack",
+  "star": "STAR Self-defining Text Archiving and Retrieval RELION metadata",
+  "fsc": "FSC Fourier Shell Correlation resolution",
+  "bfactor": "B-factor sharpening",
+  "mtf": "MTF Modulation Transfer Function detector",
+  "snr": "SNR Signal-to-Noise Ratio",
+  "dose": "electron dose dose-rate e per angstrom squared",
+  "sparc": "SPARC cryoSPARC",
+  "abinitio": "ab-initio initial model",
+  "sva": "SVA subtract vector average heterogeneous",
+  "nmr": "NMR nuclear magnetic resonance",
+  "em": "EM electron microscopy cryo-EM",
+  "2d": "2D two dimensional classification",
+  "3d": "3D three dimensional refinement classification"
+}

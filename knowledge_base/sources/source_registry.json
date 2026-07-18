@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "source_id": "relion_spa_tutorial",
+      "name": "RELION 5.0 Single Particle Analysis Tutorial",
+      "url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html",
+      "vendor": "relion",
+      "doc_count": 12,
+      "license_note": "官方 Guide 精选摘要，用户点击原文链接跳转查看完整内容（合法引用，非全文复制）",
+      "ingested_at": "2026-07-10T10:52:44"
+    },
+    {
+      "source_id": "cryosparc_user_management",
+      "name": "CryoSPARC Guide — User Management",
+      "url": "https://guide.cryosparc.com/setup-configuration-and-management/software-system-guides/tutorial-user-management",
+      "vendor": "cryosparc",
+      "doc_count": 1,
+      "license_note": "官方 Guide 精选摘要，合法引用",
+      "ingested_at": "2026-07-10T10:52:44"
+    }
+  ]
+}

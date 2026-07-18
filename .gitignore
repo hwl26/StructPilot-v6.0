@@ -1,0 +1,61 @@
+# StructPilot v3.0 .gitignore
+
+# Environment variables (contains API keys - DO NOT COMMIT)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sqlite3
+*.db
+memory/memory.sqlite3
+
+# Runtime data
+runtime/
+*.tmp
+*.temp
+
+# Config caches and user-specific files
+config/embeddings_cache.json
+config/corpus_cache.json
+config/llm_config.json
+config/ui_settings.json
+
+# Internal tooling (do not submit)
+.reasonix/
+.claude/
+
+# Release artifacts
+dist/

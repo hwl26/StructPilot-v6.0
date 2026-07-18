@@ -1,0 +1,172 @@
+[
+  {
+    "term": "CTF",
+    "aliases": ["contrast transfer function", "ctf fit", "衬度传递函数"],
+    "definition_cn": "显微镜成像中由离焦、像散、球差、欠采样等因素造成的频率传递函数，决定不同空间频率信息的相位与振幅对比度；用于评估微图质量、推算 defocus，并作为后续三维重构的可信度参照。CTF 估计失败（如横纹/条纹噪声）会直接污染 2D/3D 结果。",
+    "stage_ids": ["cp_03"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "pixel size",
+    "aliases": ["A/pix", "angstrom per pixel", "像素尺寸", "标定像素尺寸", "pixelsize"],
+    "definition_cn": "样品平面上一个图像像素对应的实际物理长度（Å/px）。它由探测器物理像素尺寸与相机放大倍数共同决定，会直接影响 CTF 估计、粒子盒大小（box size）的选择以及最终重构的绝对标尺。\n\n**为什么重要（采样定理 / Nyquist）**：根据 Nyquist 采样定理，像素尺寸必须满足 pixel size ≤ 1/(2×目标分辨率)，否则高于该频率的高频信息会发生混叠（aliasing）而永久丢失，分辨率上限被直接锁死。像素太大 → 欠采样、丢高频细节、后续即使算力再强也救不回；像素太小 → 单粒子占的像素过多，box size 被迫变大，引入更多背景噪声与计算开销。因此导入阶段必须正确标定 pixel size（用标样或后续 refinements 反推），它是整条流程分辨率与信噪比的物理地基。",
+    "stage_ids": ["cp_01", "cp_03", "cp_05"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "box size",
+    "aliases": ["particle box", "box", "粒子盒", "提取框"],
+    "definition_cn": "单颗粒从微图中裁剪出来的正方形像素边长（box size）。它应略大于颗粒主体直径并保留适度背景，以保证衬度与避免混叠；过小会截掉颗粒信息，过大则引入更多噪声与计算开销。常取颗粒直径的 1.5–2 倍，并在 2D/3D 分类后按需放大。",
+    "stage_ids": ["cp_05"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "EER",
+    "aliases": ["eer", "electron event representation", "falcon 4i eer", "电子事件表示"],
+    "definition_cn": "Thermo Fisher Falcon 4i 探测器在『超分辨计数模式（super-resolution counting mode）』下输出的原始事件文件格式。它记录每个像素上每个电子事件（electron event）到达的时间戳与位置，而非直接输出求和图像，因此兼具超分辨（2× 像素）与计数（photon-counting）优势、噪声更低、对高剂量率更耐受。EER 体积极大，需在 Motion Correction 阶段用支持 EER 的解包器（cryoSPARC 的 Patch Motion Correction (EER) / RELION 的 MotionCorr2+ 或 cryoCARE 流程）按帧（sub-frame / dose fractionation）解包并做子帧运动校正，再帧平均得到可用于 CTF 估计的校正微图。",
+    "stage_ids": ["cp_01", "cp_02"],
+    "software": "both",
+    "related_file_formats": [".eer"],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "MRC",
+    "aliases": ["mrc", ".mrc", "micrograph image format", "ccp4 mrc"],
+    "definition_cn": "cryo-EM 最常用的图像/体积文件格式（MRC2014 标准），以 1024 字节头 + 二进制密度数据存放微图、粒子栈或三维重构。头中记录像素尺寸（pixel size）、网格维度、坐标系等关键信息，是 Import、Motion Correction、Extraction、Refinement 各阶段间传递数据的事实标准。",
+    "stage_ids": ["cp_01", "cp_02", "cp_05", "cp_09"],
+    "software": "both",
+    "related_file_formats": [".mrc", ".mrcs"],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "STAR",
+    "aliases": ["star", ".star", "self-defining text archiving and retrieval"],
+    "definition_cn": "RELION 的事实标准元数据格式（Self-defining Text Archiving and Retrieval）。一个 .star 文件用表格描述粒子坐标、微图路径、CTF 参数、光学组等，是 RELION 各作业（提取、2D/3D 分类、Refinement）之间传递粒子集与参数的核心载体；cryoSPARC 亦可导入/导出 .star 与 RELION 互通。",
+    "stage_ids": ["cp_05", "cp_06", "cp_07", "cp_08", "cp_09"],
+    "software": "relion",
+    "related_file_formats": [".star"],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "defocus",
+    "aliases": ["defocus", "离焦量", "defocus value"],
+    "definition_cn": "样品相对于电子光学焦平面的轴向偏移量（负值表示欠焦 underfocus）。适当的欠焦能引入相位衬度使弱相位物体（蛋白质）可见，是 CTF 估计要反推的关键参数；典型范围约 -0.5 µm ~ -4 µm。defocus 估计偏差会直接导致 CTF 拟合失败或分辨率虚高。",
+    "stage_ids": ["cp_03"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "micrograph",
+    "aliases": ["micrograph", "微图", "原始微图", "motion corrected micrograph", "校正微图"],
+    "definition_cn": "探测器对单张冷冻样品拍摄得到的一幅二维投影图像（即一张『格子照片』）。经 Motion Correction 与 CTF 估计后称为『校正微图（motion-corrected micrograph）』，是后续粒子挑选与提取的输入。质量（信噪比、冰厚均匀性、无污染）直接决定上限。",
+    "stage_ids": ["cp_02", "cp_03", "cp_04"],
+    "software": "both",
+    "related_file_formats": [".mrc"],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "particle",
+    "aliases": ["particle", "粒子", "single particle", "单颗粒"],
+    "definition_cn": "从微图中裁剪出来的单个生物大分子投影（单次『拍照』所得二维图像）。成千上万个同质粒子的对齐平均，是单颗粒分析（SPA）把低于噪声的信号积分出来、重建三维结构的基础。粒子集的质量（均一性、取向覆盖、无杂质）决定重构上限。",
+    "stage_ids": ["cp_04", "cp_05", "cp_06"],
+    "software": "both",
+    "related_file_formats": [".star", ".mrcs"],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "2D classification",
+    "aliases": ["2d classification", "2d class", "二维分类", "2D 分类"],
+    "definition_cn": "把提取出的大量二维粒子按外观相似度聚成若干类平均（class average），用于剔除 junk（污染物、坏粒子、异质群体），并评估颗粒质量与取向偏好。它是 3D 之前的关键质控闸门，类平均的清晰度直接预示后续 3D 能否成功。",
+    "stage_ids": ["cp_06"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "ab-initio model",
+    "aliases": ["ab-initio", "ab initio", "initial model", "从头模型", "初始模型"],
+    "definition_cn": "不依赖任何已知结构先验，仅用二维类平均（或粒子）通过随机/随机梯度方法重建出的低分辨率三维初始模型。它是连接 2D 与 3D 的桥梁，后续 3D Classification / Refinement 都以此种子为起点。模型手性（handedness）与对称性需后续验证。",
+    "stage_ids": ["cp_07"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "3D classification",
+    "aliases": ["3d classification", "3d class", "三维分类", "异质性分析"],
+    "definition_cn": "在 Refinement 框架下对粒子集做三维空间上的异质性聚类，分离出构象不同/组成不同的亚群（如结合/未结合、开放/关闭态）。用于解析结构异质性、剔除污染亚群，是获得均一高分辨率图的关键步骤。",
+    "stage_ids": ["cp_08"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "refinement",
+    "aliases": ["refinement", "3d refinement", "三维精修", "refine"],
+    "definition_cn": "以初始模型为种子，迭代进行粒子对准（pose assignment）、三维重建与对比度传递函数（CTF）参数优化，逐步逼近高分辨率三维密度图的过程。cryoSPARC 的 Non-Uniform Refinement 与 RELION 的 3D auto-refine 是典型实现；输出密度图供后续 sharpening 与分辨率评估。",
+    "stage_ids": ["cp_09"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "FSC",
+    "aliases": ["fsc", "fourier shell correlation", "傅里叶壳层相关"],
+    "definition_cn": "衡量两个独立半集（half-map，由 gold-standard 拆分得到）三维重构之间相似度的指标，是 cryo-EM 分辨率判定的金标准。FSC=0.143 阈值对应的空间频率反推即为报告分辨率；FSC 曲线的形状还能暴露过拟合、Mask 伪影或取向缺失（preferred orientation）等问题。",
+    "stage_ids": ["cp_12"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "B-factor",
+    "aliases": ["b-factor", "bfactor", "sharpening", "sharpen", "锐化"],
+    "definition_cn": "由于高频信号随剂量衰减，原始重构密度图偏『软』。Sharpening（cryoSPARC 的 DeepEMhancer / RELION 的 post-process 自动 B-factor）通过施加负 B-factor 补偿高频衰减，让密度更『锐』、更易建模型。B-factor 取值过强会放大噪声，需结合 FSC 与真实结构判读。",
+    "stage_ids": ["cp_10"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "dose",
+    "aliases": ["dose", "electron dose", "dose rate", "电子剂量", "剂量率"],
+    "definition_cn": "照射到样品单位面积上的电子数（e⁻/Å²）。总剂量与剂量率（dose rate, e⁻/pixel/s）共同决定信噪比与辐射损伤：剂量越高信号越好但损伤越大，需在工作流中做 dose weighting（如 Motion Correction 的帧加权）以在噪声与损伤间取平衡。Falcon 4i 的 EER 计数模式对高剂量率更耐受。",
+    "stage_ids": ["cp_02"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  },
+  {
+    "term": "gold-standard FSC",
+    "aliases": ["gold-standard fsc", "gold standard", "half-map fsc", "金标准"],
+    "definition_cn": "为避免过拟合而把粒子集随机拆成两个独立半集（half-sets），分别重建出 half-map1 / half-map2，再用二者的 FSC 评估分辨率的方法。报告分辨率必须基于 gold-standard FSC（而非训练集自相关），否则会严重虚高。RELION post-process 与 cryoSPARC 的 FSC 报表默认即采用此拆分。",
+    "stage_ids": ["cp_12"],
+    "software": "both",
+    "related_file_formats": [],
+    "runtime_allowed": true,
+    "review_status": "seed_pending_expert_review"
+  }
+]

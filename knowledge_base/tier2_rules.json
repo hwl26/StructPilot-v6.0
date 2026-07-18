@@ -1,0 +1,10 @@
+[
+  {
+    "rule_id": "r_box_size",
+    "rule_name": "Box Size 选择决策",
+    "condition": "用户需要设置 box size 或询问盒大小",
+    "decision_tree": ["box_size_pixels = particle_diameter_A × 1.8 / pixel_size"],
+    "reference": "StructPilot 建议新手使用直径 × 1.8",
+    "approval_level": "推荐"
+  }
+]

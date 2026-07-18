@@ -1,0 +1,607 @@
+[
+  {
+    "id": "cp_01",
+    "name": "data_import",
+    "label_cn": "数据导入",
+    "goal": "在 cryoSPARC 中导入原始 movies 或 micrographs，建立项目和工作区，确认采集参数正确。",
+    "inputs": [
+      "原始 movies (.tiff, .mrc, .eer)",
+      "采集参数：pixel size、voltage、Cs、dose",
+      "增益参考文件 (gain reference)"
+    ],
+    "cryosparc_jobs": [
+      "Import Movies",
+      "Import Micrographs"
+    ],
+    "key_parameters": [
+      "Pixel size (A)",
+      "Accelerating voltage (kV)",
+      "Spherical aberration (mm)",
+      "Amplitude contrast",
+      "Total exposure (e-/A^2)"
+    ],
+    "qc_checks": [
+      "导入的 movie 数量与原始数据一致",
+      "增益文件方向设置正确",
+      "pixel size 与显微镜记录一致",
+      "数据路径正确，可被 cryoSPARC 访问"
+    ],
+    "common_pitfalls": [
+      "增益文件旋转/翻转方向设置错误，导致运动校正异常",
+      "pixel size 单位混淆（A 与 nm）",
+      "数据路径含中文或特殊字符导致读取失败",
+      "Symlink 数据时权限不足"
+    ],
+    "starter_questions": [
+      "cryoSPARC 项目目录应该怎么组织？",
+      "导入时增益文件方向怎么选？",
+      "eer格式数据怎么导入？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Importing Data",
+        "url": "https://guide.cryosparc.com/setup-configuration-and-management/software-system-guides/importing-data",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Movies and Micrographs",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/import-jobs/import-movies",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Tutorial: Single Particle Analysis",
+        "url": "https://guide.cryosparc.com/processing-data/tutorials-and-case-studies/tutorial-single-particle-analysis",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_02",
+    "name": "motion_correction",
+    "label_cn": "运动校正",
+    "goal": "对原始 movies 进行帧对齐，校正样品漂移和束诱导运动，输出高质量平均显微图。",
+    "inputs": [
+      "原始 movies",
+      "增益参考文件",
+      "采集参数（dose per frame 等）"
+    ],
+    "cryosparc_jobs": [
+      "Patch Motion Correction",
+      "Motion Correction (MBF)",
+      "Local Motion Correction"
+    ],
+    "key_parameters": [
+      "Number of frames",
+      "Patch size (A)",
+      "Motion model",
+      "B-factor for alignment",
+      "Use doze-weighting"
+    ],
+    "qc_checks": [
+      "运动校正后显微图清晰无拖尾",
+      "位移曲线合理（总位移 < 50 A）",
+      "Ctf 估计质量高（分辨率 < 4 A）",
+      "输出显微图数量与输入一致"
+    ],
+    "common_pitfalls": [
+      "帧范围设置错误，舍弃了过多或过少的帧",
+      "增益方向与实际数据不匹配",
+      "Patch size 设置过大或过小",
+      "高剂量数据未启用 dose-weighting"
+    ],
+    "starter_questions": [
+      "Patch Motion Correction 和 Motion Correction 有什么区别？",
+      "运动校正后图还是模糊怎么办？",
+      "Local Motion Correction 什么时候用？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Patch Motion Correction",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/motion-correction/patch-motion-correction",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Motion Correction",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/motion-correction/motion-correction",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_03",
+    "name": "ctf_estimation",
+    "label_cn": "CTF 估计",
+    "goal": "估计每张显微图的衬度传递函数参数（defocus、astigmatism 等），为后续重构提供准确的光学参数。",
+    "inputs": [
+      "运动校正后的显微图",
+      "采集参数（voltage、Cs、amp contrast）"
+    ],
+    "cryosparc_jobs": [
+      "Patch CTF Estimation",
+      "CTF Estimation",
+      "CTF Refinement (motion-corrected)"
+    ],
+    "key_parameters": [
+      "Min resolution",
+      "Max resolution",
+      "Min defocus (A)",
+      "Max defocus (A)",
+      "Astigmatism tolerance"
+    ],
+    "qc_checks": [
+      "CTF 拟合曲线与 Thon ring 匹配良好",
+      "Defocus 值在合理范围（1-3 um）",
+      "像散量小于 10% defocus",
+      "估计分辨率优于 5 A 的图占大多数"
+    ],
+    "common_pitfalls": [
+      "Defocus 范围设置不当，漏掉高/低欠焦图",
+      "冰污染或碳膜影响 CTF 拟合",
+      "分辨率范围设置过宽导致拟合不准",
+      "忽略像散，认为所有图都是圆形对称"
+    ],
+    "starter_questions": [
+      "CTF 估计的分辨率怎么看？",
+      "什么样的图应该被过滤掉？",
+      "像散太大怎么办？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Patch CTF Estimation",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/ctf-estimation/patch-ctf-estimation",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: CTF Estimation",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/ctf-estimation/ctf-estimation",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_04",
+    "name": "particle_picking",
+    "label_cn": "颗粒挑选",
+    "goal": "从显微图中识别并提取颗粒位置，获取高质量颗粒坐标用于后续 2D 分类。",
+    "inputs": [
+      "运动校正+CTF估计后的显微图",
+      "模板（模板匹配时）或训练数据（深度学习时）"
+    ],
+    "cryosparc_jobs": [
+      "Template Picker",
+      "Blob Picker",
+      "Topaz Pick",
+      "CryoLoRA Picker",
+      "Wing Picks"
+    ],
+    "key_parameters": [
+      "Particle diameter (A)",
+      "Threshold / lowpass filter",
+      "Inter-particle distance",
+      "Expected number of particles"
+    ],
+    "qc_checks": [
+      "颗粒分布均匀，无明显聚集成团",
+      "未挑选到明显的污染、碳膜边缘",
+      "颗粒密度合理（每图几十到几百个）",
+      "假阳性率低（可通过 2D 分类验证）"
+    ],
+    "common_pitfalls": [
+      "颗粒直径估计偏差导致漏挑或多挑",
+      "模板偏差（template bias）导致颗粒都是假阳性",
+      "只挑了明显的大颗粒，漏掉小的/取向差的",
+      "冰污染或金颗粒被当成蛋白颗粒"
+    ],
+    "starter_questions": [
+      "Blob Picker、Template Picker、Topaz 各有什么优缺点？",
+      "颗粒直径怎么确定？",
+      "假阳性太多怎么办？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Particle Picking",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Template Picker",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking/template-picker",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Topaz Training and Prediction",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking/topaz-picker",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_05",
+    "name": "particle_extraction",
+    "label_cn": "颗粒提取",
+    "goal": "按坐标从显微图中切出颗粒，生成颗粒堆栈，注意分两轮策略：第一轮 bin 快速粗筛，第二轮无 bin 精细挑选。",
+    "inputs": [
+      "颗粒坐标 + 显微图（含 CTF 信息）",
+      "Box size 参数"
+    ],
+    "cryosparc_jobs": [
+      "Extract from Micrographs",
+      "Downsample Particles"
+    ],
+    "key_parameters": [
+      "Box size (pix)",
+      "Fourier crop to box size (pix)",
+      "Scale / downsample factor",
+      "Normalize particles"
+    ],
+    "qc_checks": [
+      "提取后的颗粒小图（2D 平均）有清晰蛋白密度",
+      "Box size 足够容纳整个蛋白（直径 × 1.5~2 倍）",
+      "Fourier crop 值是否为 2 的幂次",
+      "提取后的颗粒小图预览中，无截断"
+    ],
+    "common_pitfalls": [
+      "Box size 设置太小，蛋白被截断",
+      "Fourier crop 过大导致分辨率浪费，过小导致计算太慢",
+      "第一轮 bin2 太粗，后续无法精细分析",
+      "颗粒中心化不好，密度偏在一边"
+    ],
+    "starter_questions": [
+      "Box size 怎么确定？",
+      "为什么要做两轮提取？",
+      "Fourier crop 和 Downsample 有什么区别？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Extract from Micrographs",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-tools/extract-from-micrographs",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Particle Sets",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-tools",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_06",
+    "name": "2d_classification",
+    "label_cn": "2D 分类",
+    "goal": "通过 2D 分类评估颗粒质量，筛选出好的颗粒进入 3D 重构，排除假阳性和变性颗粒。",
+    "inputs": [
+      "提取后的颗粒堆栈",
+      "初始参数（CTF 参数等）"
+    ],
+    "cryosparc_jobs": [
+      "2D Classification",
+      "2D Classification (Simple)",
+      "Fast 2D Classification"
+    ],
+    "key_parameters": [
+      "Number of classes",
+      "Number of iterations",
+      "Mask diameter (A)",
+      "Initial classification uncertainty"
+    ],
+    "qc_checks": [
+      "好的 2D 类有清晰的二级结构特征",
+      "差的类（模糊、噪点、碳膜）占比合理",
+      "颗粒在各类间分布均匀，无某类独大",
+      "保留的颗粒数足够后续 3D 分析"
+    ],
+    "common_pitfalls": [
+      "分类数太少导致好颗粒和坏颗粒混在一起",
+      "分类数太多导致同一类被拆成多个子类",
+      "迭代次数不够导致分类不稳定",
+      "只看最漂亮的几类，漏掉重要的稀有取向"
+    ],
+    "starter_questions": [
+      "2D 分类多少类合适？",
+      "怎么判断哪些类是好的？",
+      "2D 分类后一般保留多少颗粒？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: 2D Classification",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/2d-classification/2d-classification",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Select 2D Classes",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/selection/select-2d-classes",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_07",
+    "name": "ab_initio_model",
+    "label_cn": "初始模型构建",
+    "goal": "从零开始构建 3D 初始模型，无需已知结构，为后续同质性评估和精修提供起点。",
+    "inputs": [
+      "2D 分类筛选后的好颗粒"
+    ],
+    "cryosparc_jobs": [
+      "Ab Initio Reconstruction",
+      "Ab Initio Model (New Stack)"
+    ],
+    "key_parameters": [
+      "Symmetry",
+      "Initial resolution",
+      "Number of classes",
+      "Minibatch size"
+    ],
+    "qc_checks": [
+      "初始模型有合理的蛋白形状和大小",
+      "无明显的假对称或假像",
+      "多类重构时各类有生物学意义",
+      "模型分辨率在 ~15-20 A 级别即可"
+    ],
+    "common_pitfalls": [
+      "对称性指定错误导致模型被平均变形",
+      "颗粒质量太差导致初始模型只是噪点",
+      "单类重构掩盖了颗粒的异质性",
+      "模型大小与预期蛋白分子量不匹配"
+    ],
+    "starter_questions": [
+      "Ab initio 和 3D classification 有什么区别？",
+      "初始模型分辨率很低正常吗？",
+      "怎么判断初始模型是对的？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Ab Initio Reconstruction",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-reconstruction-and-refinement/ab-initio-reconstruction",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_08",
+    "name": "3d_classification",
+    "label_cn": "3D 分类与同质性评估",
+    "goal": "评估颗粒的同质性，通过 3D 分类分离不同构象/组成的颗粒子集，排除坏颗粒。",
+    "inputs": [
+      "初始模型 + 筛选后的颗粒"
+    ],
+    "cryosparc_jobs": [
+      "3D Classification",
+      "3D Classification (Simple)",
+      "3D Variability"
+    ],
+    "key_parameters": [
+      "Number of classes",
+      "Target resolution",
+      "Classification batch size",
+      "Learning rate"
+    ],
+    "qc_checks": [
+      "不同类之间有可解释的生物学差异",
+      "各类颗粒分布合理，无极端不均",
+      "好的类有清晰的二级结构特征",
+      "假类（噪点、不完整颗粒）被排除"
+    ],
+    "common_pitfalls": [
+      "分类数太少导致不同构象混在一起",
+      "分类数太多导致好颗粒被拆分",
+      "掩模不正确导致分类关注错误区域",
+      "只选最好的一类，扔掉了有价值的构象"
+    ],
+    "starter_questions": [
+      "3D 分类多少类合适？",
+      "3D Variability 是什么？",
+      "怎么判断分类结果是有意义的？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: 3D Classification",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-classification-and-heterogeneity/3d-classification",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: 3D Variability",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-classification-and-heterogeneity/3d-variability",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_09",
+    "name": "3d_refinement",
+    "label_cn": "3D 精修",
+    "goal": "对选定的颗粒子集进行高分辨率 3D 重构，优化取向和 CTF 参数，获得最高分辨率的密度图。",
+    "inputs": [
+      "3D 分类后的好颗粒",
+      "初始 3D 模型"
+    ],
+    "cryosparc_jobs": [
+      "Homogeneous Refinement",
+      "Non-uniform Refinement",
+      "Refinement (New Stack)"
+    ],
+    "key_parameters": [
+      "Initial lowpass resolution",
+      "Symmetry",
+      "Reference mask",
+      "Use per-particle CTF"
+    ],
+    "qc_checks": [
+      "FSC 曲线在 0.143 阈值处达到目标分辨率",
+      "密度图有清晰的二级结构和侧链",
+      "重构结果无各向异性分辨率问题",
+      "角度分布合理，无缺失楔形"
+    ],
+    "common_pitfalls": [
+      "过拟合（high-resolution noise substitution 验证未通过）",
+      "各向异性分辨率导致某方向模糊",
+      "掩模选择不当影响 FSC 计算",
+      "忽略 CTF refinement 能带来的分辨率提升"
+    ],
+    "starter_questions": [
+      "Homogeneous 和 Non-uniform refinement 有什么区别？",
+      "FSC 0.143 和 0.5 有什么区别？",
+      "分辨率上不去怎么办？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Homogeneous Refinement",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-reconstruction-and-refinement/homogeneous-refinement",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Non-uniform Refinement",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-reconstruction-and-refinement/non-uniform-refinement",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_10",
+    "name": "post_processing",
+    "label_cn": "后处理与掩模优化",
+    "goal": "对重构后的密度图进行后处理（局部滤波、掩模优化、局部分辨率等），获得最终可用的密度图。",
+    "inputs": [
+      "精修后的 half maps",
+      "初始掩模"
+    ],
+    "cryosparc_jobs": [
+      "Sharpening / Local Filter",
+      "Mask Creation / Optimization",
+      "Local Resolution Estimation"
+    ],
+    "key_parameters": [
+      "B-factor (自动或手动)",
+      "Mask threshold",
+      "Soft padding / edge width",
+      "Lowpass filter resolution"
+    ],
+    "qc_checks": [
+      "Sharpened 图细节清晰，不过度锐化",
+      "局部分辨率分布合理，核心高、外围低",
+      "掩模恰好包裹蛋白，不松不紧",
+      "FSC 曲线在后处理后无明显下降"
+    ],
+    "common_pitfalls": [
+      "过度锐化导致噪点被放大",
+      "掩模太松包含太多溶剂区",
+      "掩模太紧切掉了蛋白外围结构",
+      "局部分辨率异常提示各向异性问题"
+    ],
+    "starter_questions": [
+      "B-factor 怎么确定？",
+      "Local resolution 怎么看？",
+      "为什么要做 density modification？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Sharpening Tools",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation/sharpening-tools",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Local Resolution Estimation",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation/local-resolution-estimation",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_11",
+    "name": "validation",
+    "label_cn": "模型验证与构建",
+    "goal": "对密度图进行建模型和验证，确保结构可靠，包括模型搭建、立体化学验证和交叉验证。",
+    "inputs": [
+      "Sharpened 密度图",
+      "Half maps"
+    ],
+    "cryosparc_jobs": [
+      "Model Building (phenix / coot)",
+      "Validation (MTRIAGE)",
+      "Map-to-model FSC"
+    ],
+    "key_parameters": [
+      "Sequence identity",
+      "Resolution cutoff",
+      "Refinement constraints"
+    ],
+    "qc_checks": [
+      "模型密度拟合良好（Map-model FSC 合理）",
+      "Ramachandran 图大部分在允许区",
+      "RMS Z-scores 在正常范围",
+      "无严重的立体化学违规"
+    ],
+    "common_pitfalls": [
+      "模型在分辨率外建模（building beyond resolution）",
+      "用 work half map 建模导致过拟合",
+      "忽略侧链密度不好的区域，强行建模",
+      "模型验证只看一个指标"
+    ],
+    "starter_questions": [
+      "怎么用 coot 建模？",
+      "Ramachandran 图怎么看？",
+      "Model vs map FSC 怎么算？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Validation",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: MTRIAGE Validation",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation/mtriage",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_12",
+    "name": "final_output",
+    "label_cn": "最终结果与交付",
+    "goal": "整理最终结果，导出密度图、模型和处理记录，生成可复现的工作流，确保数据可追溯。",
+    "inputs": [
+      "最终密度图",
+      "最终原子模型",
+      "处理流程记录"
+    ],
+    "cryosparc_jobs": [
+      "Volume Tools (Export)",
+      "Particle Tools (Export)"
+    ],
+    "key_parameters": [
+      "Output format (MRC, CCP4)",
+      "PDB deposition format",
+      "Map sharpening state"
+    ],
+    "qc_checks": [
+      "密度图坐标与模型一致",
+      "所有原始数据和中间结果有备份",
+      "处理流程可复现",
+      "用于投稿的图表齐全"
+    ],
+    "common_pitfalls": [
+      "导出时忘记 half maps，后续无法验证",
+      "工作流没有保存，无法追溯参数",
+      "原始数据与处理结果混放，难以管理",
+      "忽略了数据备份"
+    ],
+    "starter_questions": [
+      "投稿需要准备哪些数据？",
+      "EMDB 和 PDB 怎么同时提交？",
+      "怎么保证结果可复现？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Volume Tools",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-tools/extract-from-micrographs",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Data Management",
+        "url": "https://guide.cryosparc.com/setup-configuration-and-management/data-management-in-cryosparc",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  }
+]

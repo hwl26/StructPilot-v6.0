@@ -1,0 +1,774 @@
+{
+  "schema_version": "1.1",
+  "source": "StructPilot_Visual_UI migrated visual guide cards",
+  "cards": [
+    {
+      "checkpoint_id": "cp_01",
+      "software": "RELION",
+      "title": "导入数据",
+      "title_en": "Import Movies",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "将原始电影数据导入 RELION/cryoSPARC，生成可用的项目结构",
+      "substeps": [
+        {
+          "id": "io",
+          "label": "I/O",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_01_import/01.1 relion import.png",
+              "caption": "Import 高级参数"
+            },
+            {
+              "image_id": "2",
+              "path": "assets/guides/cp_01_import/01.2 relion import.png",
+              "caption": "Import 细节说明"
+            },
+            {
+              "image_id": "3",
+              "path": "assets/guides/cp_01_import/01.3 relion import.png",
+              "caption": "Import 输出文件"
+            }
+          ],
+          "caption": "将原始电影数据导入 RELION/cryoSPARC，生成可用的项目结构",
+          "parameters": [
+            {
+              "id": "movies_path",
+              "name": "Movies path",
+              "name_cn": "电影文件路径",
+              "name_en": "Movies path",
+              "type": "file_path",
+              "default": "/path/to/movies/*.eer",
+              "meaning": "原始电影文件（EER 或 TIFF 格式）的路径",
+              "official_doc": "支持通配符（如 *.eer）批量导入。路径必须是 worker 可以访问的位置。",
+              "lab_experience": "实验室常用路径：/fs/pool/pool-train/EM_data/{日期}_{蛋白名}/Movies/*.eer",
+              "common_mistake": "路径错误或权限不足会导致 Import 失败；确保路径末尾有通配符（如 *.eer）",
+              "image_ref": "@image#1",
+              "hotspot_order": 1,
+              "hotspot_x": 20,
+              "hotspot_y": 25
+            },
+            {
+              "id": "pixel_size",
+              "name": "Pixel size (A)",
+              "name_cn": "像素尺寸",
+              "name_en": "Pixel size (A)",
+              "type": "number",
+              "default": "0.96",
+              "unit": "Å/px",
+              "meaning": "电影数据的像素尺寸（Å/像素）",
+              "official_doc": "必须与采集参数一致。EER 格式通常为 super-resolution 模式，像素尺寸可能是物理值的一半。",
+              "lab_experience": "实验室常用 0.96 Å/px（300kV Titan Krios + Falcon 4i）",
+              "common_mistake": "像素尺寸填错会导致后续所有步骤的分辨率估算错误",
+              "image_ref": "@image#1",
+              "hotspot_order": 2,
+              "hotspot_x": 20,
+              "hotspot_y": 45
+            },
+            {
+              "id": "voltage",
+              "name": "Accelerating Voltage (kV)",
+              "name_cn": "加速电压",
+              "name_en": "Accelerating Voltage (kV)",
+              "type": "number",
+              "default": "300",
+              "unit": "kV",
+              "meaning": "电子显微镜的加速电压",
+              "official_doc": "常见值：200kV（Tecnai Arctica）、300kV（Titan Krios、Krios G4）",
+              "lab_experience": "实验室 Titan Krios 使用 300kV",
+              "common_mistake": "电压填错会影响 CTF 估计的准确性",
+              "image_ref": "@image#1",
+              "hotspot_order": 3,
+              "hotspot_x": 20,
+              "hotspot_y": 65
+            },
+            {
+              "id": "spherical_aberration",
+              "name": "Spherical Aberration (mm)",
+              "name_cn": "球差",
+              "name_en": "Spherical Aberration (mm)",
+              "type": "number",
+              "default": "2.7",
+              "unit": "mm",
+              "meaning": "物镜的球差系数",
+              "official_doc": "常见值：2.7 mm（Titan Krios、Krios G4）、2.0 mm（一些 200kV 设备）",
+              "lab_experience": "实验室 Titan Krios 使用 2.7 mm",
+              "common_mistake": "球差填错会导致 CTF 估计的 defocus 值偏差",
+              "image_ref": "@image#1",
+              "hotspot_order": 4,
+              "hotspot_x": 20,
+              "hotspot_y": 85
+            }
+          ]
+        },
+        {
+          "id": "import",
+          "label": "Import",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_01_import/01.1 relion import.png",
+              "caption": "Import 高级参数"
+            }
+          ],
+          "caption": "将原始电影数据导入 RELION/cryoSPARC，生成可用的项目结构",
+          "parameters": [
+            {
+              "id": "gain_reference",
+              "name": "Gain reference",
+              "name_cn": "增益参考文件",
+              "name_en": "Gain reference",
+              "type": "file_path",
+              "meaning": "增益参考文件（.gain）路径（可选，EER 格式不需要）",
+              "official_doc": "TIFF 格式数据需要增益参考文件来校正像素响应不均匀性。EER 格式不需要。",
+              "lab_experience": "实验室使用 EER 格式，不需要增益参考文件",
+              "common_mistake": "TIFF 数据忘记提供增益参考文件会导致运动校正结果异常",
+              "image_ref": "@image#1",
+              "hotspot_order": 1,
+              "hotspot_x": 50,
+              "hotspot_y": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_02",
+      "software": "cryoSPARC",
+      "title": "运动校正",
+      "title_en": "Patch Motion Correction",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "校正电子束引起的样品漂移，将多帧电影叠加成清晰的显微图",
+      "substeps": [
+        {
+          "id": "io",
+          "label": "I/O",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_02_motion_correction/02.1 motion corr io.png",
+              "caption": "02.1 motion corr io.png"
+            }
+          ],
+          "caption": "校正电子束引起的样品漂移，将多帧电影叠加成清晰的显微图",
+          "parameters": [
+            {
+              "id": "movies",
+              "name": "Input movies STAR file",
+              "name_cn": "输入电影文件",
+              "name_en": "Input movies STAR file",
+              "type": "file_path",
+              "default": "Import Movies/job001/movies.star",
+              "meaning": "Import Movies 步骤输出的 movies.star 文件路径",
+              "official_doc": "必须输入 Import Movies 或 Import Micrographs Job 输出的 STAR 文件。",
+              "lab_experience": "一般引用 Import 步骤的 job 输出，命名保持 Import/job{编号}/movies.star",
+              "common_mistake": "误选原始 tiff 目录；STAR 文件是 Import 步骤产生的元数据文件，不是原始图片"
+            },
+            {
+              "id": "first_frame",
+              "name": "First frame for corrected sum",
+              "name_cn": "起始帧",
+              "name_en": "First frame for corrected sum",
+              "type": "number",
+              "default": "1",
+              "meaning": "用于求和的起始帧编号",
+              "official_doc": "默认从第 1 帧开始。若前若干帧信噪比较差可适当跳过。",
+              "lab_experience": "大多数情况下保持 1 即可",
+              "common_mistake": "跳过过多帧会导致 dose-weighting 计算不准确"
+            },
+            {
+              "id": "dose_per_frame",
+              "name": "Dose per frame (e-/A2)",
+              "name_cn": "每帧剂量",
+              "name_en": "Dose per frame (e-/A2)",
+              "type": "number",
+              "default": "1.25",
+              "unit": "e⁻/Å²",
+              "meaning": "每帧电子剂量，用于 dose-weighting",
+              "official_doc": "填入每帧的物理剂量，总剂量 = dose_per_frame × 帧数。",
+              "lab_experience": "以 300kV Falcon 4i 为例，常用 1.25 e⁻/Å²/帧，总剂量约 50 e⁻/Å²",
+              "common_mistake": "与总剂量混淆；填错会导致后续 CTF 和 refinement 的 B-factor 估算偏差"
+            },
+            {
+              "id": "eer_fractionation",
+              "name": "EER fractionation",
+              "name_cn": "EER 分帧数",
+              "name_en": "EER fractionation",
+              "type": "number",
+              "default": "33",
+              "meaning": "EER 格式数据在 Motion Correction 前的分帧数",
+              "official_doc": "EER 格式需要设置 fractionation，将原始压缩帧拆分为物理帧。",
+              "lab_experience": "Falcon 4i 的 EER 数据常用 33 或 40，取决于采集设置；Number of sections /40 ,只保留结果的整数",
+              "common_mistake": "非 EER 格式（如 TIFF）不需要设置此参数，保持默认值即可"
+            }
+          ]
+        },
+        {
+          "id": "motion",
+          "label": "Motion",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_02_motion_correction/02.2 motion corr io.png",
+              "caption": "02.2 motion corr io.png"
+            },
+            {
+              "image_id": "2",
+              "path": "assets/guides/cp_02_motion_correction/02.3 motion corr io.png",
+              "caption": "02.3 motion corr io.png"
+            }
+          ],
+          "caption": "校正电子束引起的样品漂移，将多帧电影叠加成清晰的显微图",
+          "parameters": [
+            {
+              "id": "patch_size",
+              "name": "Patch size",
+              "name_cn": "Patch 尺寸",
+              "name_en": "Patch size",
+              "type": "number",
+              "default": "7",
+              "meaning": "用于估计局部运动的 patch 数量（X 和 Y 方向）",
+              "official_doc": "把整张 micrograph 分成 N × N 个网格（patch）；因为样品在电子束下不是'整块平移'，而是冰层局部形变。",
+              "lab_experience": "Number of patches X, Y = 7, 7（把整张 micrograph 分成 7 × 7 = 49 个网格）",
+              "common_mistake": "Patch 过小会导致估计噪声过大，出现网格状伪影；Patch 过大会导致局部运动校正不足"
+            },
+            {
+              "id": "b_factor",
+              "name": "B-factor (A2)",
+              "name_cn": "B-factor",
+              "name_en": "B-factor (A2)",
+              "type": "number",
+              "default": "0",
+              "unit": "Å²",
+              "meaning": "用于 dose-weighting 的 B-factor",
+              "official_doc": "默认 0（自动估计）。B-factor 用于补偿高能电子对样品的损伤。",
+              "lab_experience": "保持默认 0 即可",
+              "common_mistake": "手动设置错误的 B-factor 会导致 dose-weighting 不准确"
+            },
+            {
+              "id": "use_gpu",
+              "name": "Use GPU",
+              "name_cn": "使用 GPU",
+              "name_en": "Use GPU",
+              "type": "boolean",
+              "default": "True",
+              "meaning": "是否使用 GPU 加速计算",
+              "official_doc": "默认开启。Motion Correction 计算量大，建议使用 GPU。",
+              "lab_experience": "保持开启",
+              "common_mistake": "关闭 GPU 会导致计算时间大幅增加"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_03",
+      "software": "cryoSPARC",
+      "title": "计算 CTF",
+      "title_en": "CTF Estimation",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "估计每张显微图的对比度传递函数（CTF），用于后续运动校正和重构",
+      "substeps": [
+        {
+          "id": "io",
+          "label": "I/O",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_03_ctf_estimation/03.1.png",
+              "caption": "03.1.png"
+            }
+          ],
+          "caption": "估计每张显微图的对比度传递函数（CTF），用于后续运动校正和重构",
+          "parameters": [
+            {
+              "id": "micrographs",
+              "name": "Input micrographs",
+              "name_cn": "输入显微图",
+              "name_en": "Input micrographs",
+              "type": "file_path",
+              "default": "Motion Correction/job002/corrected_micrographs.cs",
+              "meaning": "运动校正后的显微图文件（.cs 格式）",
+              "official_doc": "必须输入 Patch Motion Correction 或 Full Frame Motion Correction 的输出。",
+              "lab_experience": "一般引用 Motion Correction 步骤的 job 输出，命名保持 MotionCorr/job{编号}/corrected_micrographs.cs",
+              "common_mistake": "误选原始 movies 或未校正显微图；必须使用运动校正后的显微图"
+            }
+          ]
+        },
+        {
+          "id": "ctf",
+          "label": "CTF",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_03_ctf_estimation/03.2.png",
+              "caption": "03.2.png"
+            },
+            {
+              "image_id": "2",
+              "path": "assets/guides/cp_03_ctf_estimation/03.3.png",
+              "caption": "03.3.png"
+            },
+            {
+              "image_id": "3",
+              "path": "assets/guides/cp_03_ctf_estimation/03.4.png",
+              "caption": "03.4.png"
+            }
+          ],
+          "caption": "估计每张显微图的对比度传递函数（CTF），用于后续运动校正和重构",
+          "parameters": [
+            {
+              "id": "resolution_range_high",
+              "name": "Resolution range (A) - High",
+              "name_cn": "高分辨率界限",
+              "name_en": "Resolution range (A) - High",
+              "type": "number",
+              "default": "10",
+              "unit": "Å",
+              "meaning": "CTF 估计的高分辨率界限（Å）",
+              "official_doc": "默认 10 Å，对应 thon ring 可见的最高分辨率。数据质量好可以提高到 5-8 Å。",
+              "lab_experience": "实验室常用 10 Å，数据质量好时可设为 8 Å",
+              "common_mistake": "设得太高（如 5 Å）会导致 CTF 估计不稳定，出现虚假振荡"
+            },
+            {
+              "id": "resolution_range_low",
+              "name": "Resolution range (A) - Low",
+              "name_cn": "低分辨率界限",
+              "name_en": "Resolution range (A) - Low",
+              "type": "number",
+              "default": "400",
+              "unit": "Å",
+              "meaning": "CTF 估计的低分辨率界限（Å）",
+              "official_doc": "默认 400 Å，对应 thon ring 可见的最低分辨率。一般不需要修改。",
+              "lab_experience": "保持默认 400 Å 即可",
+              "common_mistake": "设得太低会导致 CTF 估计包含过多的低频噪声"
+            },
+            {
+              "id": "defocus_range_min",
+              "name": "Min defocus (A)",
+              "name_cn": "最小 defocus",
+              "name_en": "Min defocus (A)",
+              "type": "number",
+              "default": "5000",
+              "unit": "Å",
+              "meaning": "Defocus 搜索范围的最小值",
+              "official_doc": "默认 5000 Å。根据样品厚度和冰层厚度调整。",
+              "lab_experience": "实验室常用 5000-50000 Å 范围",
+              "common_mistake": "范围设得太窄会漏掉实际 defocus 在范围外的显微图"
+            },
+            {
+              "id": "defocus_range_max",
+              "name": "Max defocus (A)",
+              "name_cn": "最大 defocus",
+              "name_en": "Max defocus (A)",
+              "type": "number",
+              "default": "50000",
+              "unit": "Å",
+              "meaning": "Defocus 搜索范围的最大值",
+              "official_doc": "默认 50000 Å。根据样品厚度和冰层厚度调整。",
+              "lab_experience": "实验室常用 5000-50000 Å 范围",
+              "common_mistake": "范围设得太宽会增加计算时间，且可能估计出不合理的 defocus 值"
+            },
+            {
+              "id": "astigmatism",
+              "name": "Estimate astigmatism",
+              "name_cn": "像散",
+              "name_en": "Estimate astigmatism",
+              "type": "boolean",
+              "default": "True",
+              "meaning": "是否估计像散",
+              "official_doc": "默认开启。像散会导致 CTF 在不同方向上不同，影响后续重构。",
+              "lab_experience": "保持开启",
+              "common_mistake": "关闭此选项会导致 CTF 估计不准确，尤其是高分辨率数据"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_04",
+      "software": "cryoSPARC",
+      "title": "Blob 挑颗粒",
+      "title_en": "Blob Picker",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "使用带通滤波和局部极值检测快速挑选出颗粒坐标",
+      "substeps": [
+        {
+          "id": "picking",
+          "label": "Picking",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_04_blob_picker/04.1.1.png",
+              "caption": "04.1.1.png"
+            },
+            {
+              "image_id": "2",
+              "path": "assets/guides/cp_04_blob_picker/04.1.2.png",
+              "caption": "04.1.2.png"
+            }
+          ],
+          "caption": "使用带通滤波和局部极值检测快速挑选出颗粒坐标",
+          "parameters": [
+            {
+              "id": "micrographs",
+              "name": "Input micrographs",
+              "name_cn": "输入显微图",
+              "name_en": "Input micrographs",
+              "type": "file_path",
+              "default": "CTF Estimation/job003/micrographs.cs",
+              "meaning": "CTF 估计后的显微图文件（.cs 格式）",
+              "official_doc": "必须输入 CTF Estimation 的输出（包含 CTF 信息）。",
+              "lab_experience": "一般引用 CTF Estimation 步骤的 job 输出",
+              "common_mistake": "误选 Import 或 Motion Correction 的输出；必须使用包含 CTF 信息的显微图"
+            },
+            {
+              "id": "min_diameter",
+              "name": "Min particle diameter (A)",
+              "name_cn": "最小颗粒直径",
+              "name_en": "Min particle diameter (A)",
+              "type": "number",
+              "default": "通过数据库结构模型在pymol中测定的外接圆直径所得",
+              "unit": "Å",
+              "meaning": "颗粒的最小直径（Å），用于带通滤波",
+              "official_doc": "设为颗粒直径的 0.8-1.0 倍。太小会挑出噪声，太大会漏掉小颗粒。",
+              "lab_experience": "通过 PDB 结构在 PyMOL 中测定外接圆直径，min=max",
+              "common_mistake": "直径设错会导致挑出的颗粒数量异常（太多或太少）"
+            },
+            {
+              "id": "max_diameter",
+              "name": "Max particle diameter (A)",
+              "name_cn": "最大颗粒直径",
+              "name_en": "Max particle diameter (A)",
+              "type": "number",
+              "default": "通过数据库结构模型在pymol中测定的外接圆直径所得",
+              "unit": "Å",
+              "meaning": "颗粒的最大直径（Å），用于带通滤波",
+              "official_doc": "设为颗粒直径的 1.0-1.2 倍。",
+              "lab_experience": "通过 PDB 结构在 PyMOL 中测定外接圆直径，min=max",
+              "common_mistake": "直径设错会导致挑出的颗粒数量异常（太多或太少）"
+            },
+            {
+              "id": "min_separation",
+              "name": "Min. separation dist (diameters)",
+              "name_cn": "最小分离距离",
+              "name_en": "Min. separation dist (diameters)",
+              "type": "number",
+              "default": "0.6",
+              "meaning": "两个颗粒中心之间的最小距离（以直径为单位）",
+              "official_doc": "默认 0.6。防止同一个颗粒被多次挑出。",
+              "lab_experience": "保持 0.6 即可",
+              "common_mistake": "设得太小会导致同一个颗粒被多次挑出；设得太大会导致颗粒被漏挑"
+            },
+            {
+              "id": "max_particles",
+              "name": "Maximum number of local maxima to consider",
+              "name_cn": "最大颗粒数",
+              "name_en": "Maximum number of local maxima to consider",
+              "type": "number",
+              "default": "400",
+              "meaning": "每张显微图最多挑出的颗粒数",
+              "official_doc": "根据显微图颗粒密度调整。设得太高会挑出太多噪声。",
+              "lab_experience": "一般设 400 左右，根据数据颗粒量灵活调整（多则加、少则减）",
+              "common_mistake": "设得太高会挑出太多噪声颗粒；设得太低会漏掉真实颗粒"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_05",
+      "software": "cryoSPARC",
+      "title": "提取颗粒",
+      "title_en": "Extract Particles",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "根据挑出的颗粒坐标，从运动校正后的显微图中提取颗粒图像",
+      "substeps": [
+        {
+          "id": "io",
+          "label": "I/O",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_05_extract/05.1.png",
+              "caption": "05.1.png"
+            }
+          ],
+          "caption": "根据挑出的颗粒坐标，从运动校正后的显微图中提取颗粒图像",
+          "parameters": [
+            {
+              "id": "particles",
+              "name": "Input particles",
+              "name_cn": "输入颗粒坐标",
+              "name_en": "Input particles",
+              "type": "file_path",
+              "default": "Blob Picker/job004/particles.cs",
+              "meaning": "挑颗粒步骤输出的颗粒坐标文件（.cs 格式）",
+              "official_doc": "必须输入 Blob Picker、Template Picker 或 Topaz Picker 的输出。",
+              "lab_experience": "一般引用挑颗粒步骤的 job 输出",
+              "common_mistake": "误选显微图或 movies；必须输入颗粒坐标文件（.cs 格式）"
+            },
+            {
+              "id": "micrographs",
+              "name": "Input micrographs",
+              "name_cn": "输入显微图",
+              "name_en": "Input micrographs",
+              "type": "file_path",
+              "default": "Patch Motion Correction/job002/corrected_micrographs.cs",
+              "meaning": "运动校正后的显微图文件（.cs 格式）",
+              "official_doc": "必须输入 Patch Motion Correction 的输出（包含运动校正信息）。",
+              "lab_experience": "一般引用 Motion Correction 步骤的 job 输出",
+              "common_mistake": "误选 CTF Estimation 的输出；虽然也可以工作，但建议使用 Motion Correction 的输出以保留全部信息"
+            }
+          ]
+        },
+        {
+          "id": "extract",
+          "label": "Extract",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_05_extract/05.2.png",
+              "caption": "05.2.png"
+            },
+            {
+              "image_id": "2",
+              "path": "assets/guides/cp_05_extract/bin1 extract.png",
+              "caption": "bin1 extract.png"
+            }
+          ],
+          "caption": "根据挑出的颗粒坐标，从运动校正后的显微图中提取颗粒图像",
+          "parameters": [
+            {
+              "id": "box_size",
+              "name": "Extraction box size (pix)",
+              "name_cn": "提取框大小",
+              "name_en": "Extraction box size (pix)",
+              "type": "number",
+              "default": "particle的直径A/0.9/0.96(A/pix) *1.5-2",
+              "meaning": "提取颗粒的框大小（像素）",
+              "official_doc": "设为颗粒直径的 1.5-2.0 倍（以像素为单位）。太小会截断颗粒边缘，太大会包含过多背景。",
+              "lab_experience": "公式：particle直径(Å) / pixel_size(Å/px) × 1.5~2.0；实验室常用 240 px（pixel=0.96 时）",
+              "common_mistake": "框太小会截断颗粒边缘，影响后续 2D/3D 分类；框太大会增加计算量和内存占用"
+            },
+            {
+              "id": "fourier_crop",
+              "name": "Fourier crop to box size (pix)",
+              "name_cn": "Fourier crop 框大小",
+              "name_en": "Fourier crop to box size (pix)",
+              "type": "number",
+              "default": "100~120",
+              "meaning": "Fourier crop 后的框大小（像素），用于加速计算",
+              "official_doc": "设为 2 的幂（如 64, 128, 256）。Fourier crop 会降低分辨率但加快计算。",
+              "lab_experience": "第一轮 Fourier crop=100~120 px（不超过 2^8=128 保证计算效率）；第二轮精细挑不用 bin，关闭 Fourier crop",
+              "common_mistake": "超过 128 计算量大；Fourier crop 太小会丢失高频信号"
+            },
+            {
+              "id": "invert_contrast",
+              "name": "Invert contrast",
+              "name_cn": "反转对比度",
+              "name_en": "Invert contrast",
+              "type": "boolean",
+              "default": "True",
+              "meaning": "是否反转颗粒图像的对比度（黑白反转）",
+              "official_doc": "默认开启。冷冻电镜数据中，蛋白颗粒比背景亮（正对比度），但有些软件期望负对比度。",
+              "lab_experience": "保持开启",
+              "common_mistake": "对比度不正确会导致后续 2D/3D 分类结果异常"
+            },
+            {
+              "id": "normalize",
+              "name": "Normalize particles",
+              "name_cn": "归一化",
+              "name_en": "Normalize particles",
+              "type": "boolean",
+              "default": "True",
+              "meaning": "是否对颗粒图像进行归一化（均值为 0，标准差为 1）",
+              "official_doc": "默认开启。归一化可以提高分类和重构的稳定性。",
+              "lab_experience": "保持开启",
+              "common_mistake": "关闭归一化会导致分类和重构结果不稳定"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_06",
+      "software": "cryoSPARC",
+      "title": "2D 分类",
+      "title_en": "2D Classification",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "将提取的颗粒图像分成若干类，每类代表一种二维投影",
+      "substeps": [
+        {
+          "id": "io",
+          "label": "I/O",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_06_2d_classification/Snipaste_2026-07-05_19-25-20.png",
+              "caption": "Snipaste_2026-07-05_19-25-20.png"
+            }
+          ],
+          "caption": "将提取的颗粒图像分成若干类，每类代表一种二维投影",
+          "parameters": [
+            {
+              "id": "particles",
+              "name": "Input particles",
+              "name_cn": "输入颗粒",
+              "name_en": "Input particles",
+              "type": "file_path",
+              "default": "Extract Particles/job005/particles.cs",
+              "meaning": "提取颗粒步骤输出的颗粒文件（.cs 格式）",
+              "official_doc": "必须输入 Extract Particles 的输出。",
+              "lab_experience": "一般引用 Extract 步骤的 job 输出",
+              "common_mistake": "误选挑颗粒步骤的输出；必须使用提取后的颗粒图像"
+            }
+          ]
+        },
+        {
+          "id": "2d",
+          "label": "2D",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_06_2d_classification/Snipaste_2026-07-05_19-25-20.png",
+              "caption": "Snipaste_2026-07-05_19-25-20.png"
+            }
+          ],
+          "caption": "将提取的颗粒图像分成若干类，每类代表一种二维投影",
+          "parameters": [
+            {
+              "id": "num_classes",
+              "name": "Number of 2D classes",
+              "name_cn": "分类数",
+              "name_en": "Number of 2D classes",
+              "type": "number",
+              "default": "100",
+              "meaning": "2D 分类的数量",
+              "official_doc": "根据颗粒数量调整。颗粒多则分类多（如 100-200），颗粒少则分类少（如 50）。",
+              "lab_experience": "第一轮 2D：100 类（对挑出来的所有颗粒进行分类，根据数量级确定）；第二轮 2D：50 类（第二轮分走坏的之后，调低 class，加快计算）",
+              "common_mistake": "分类太少会导致不同构象被混在一起；分类太多会导致每类颗粒数太少，统计不稳定"
+            },
+            {
+              "id": "max_resolution",
+              "name": "Maximum resolution (A)",
+              "name_cn": "最大分辨率",
+              "name_en": "Maximum resolution (A)",
+              "type": "number",
+              "default": "5",
+              "unit": "Å",
+              "meaning": "2D 分类的最大分辨率（Å）",
+              "official_doc": "默认 5 Å。低频信号分出大概轮廓，高频信号细化特征。",
+              "lab_experience": "第一轮 2D：5 Å（低频信号分出大概轮廓）；第二轮 2D：3 Å（第二轮分类 push 高频信号，分辨率调高）",
+              "common_mistake": "分辨率设得太高（如 3 Å）会导致分类不稳定，出现噪声驱动的分类"
+            },
+            {
+              "id": "circular_mask_diameter",
+              "name": "Circular mask diameter (A)",
+              "name_cn": "圆形掩膜直径",
+              "name_en": "Circular mask diameter (A)",
+              "type": "number",
+              "default": "particle直径/0.9",
+              "unit": "Å",
+              "meaning": "圆形掩膜的直径（Å），用于限制颗粒的信号范围",
+              "official_doc": "设为颗粒直径的 1.0-1.2 倍（以 Å 为单位）。掩膜会限制对齐和分类时考虑的信号范围。",
+              "lab_experience": "particle直径/0.9（限制颗粒的信号范围，做 align 中间的信号圈）",
+              "common_mistake": "掩膜太小会截断颗粒边缘信号；掩膜太大会包含过多背景噪声"
+            },
+            {
+              "id": "num_iterations",
+              "name": "Number of online-EM iterations",
+              "name_cn": "迭代次数",
+              "name_en": "Number of online-EM iterations",
+              "type": "number",
+              "default": "40",
+              "meaning": "在线 EM 算法的迭代次数",
+              "official_doc": "默认 40。迭代次数越多，分类结果越收敛。",
+              "lab_experience": "40 次迭代（根据挑出来的用某种算法 particle 分类站队，轮次 iterations 数值表示分类计算了的轮次，收敛可能性大）",
+              "common_mistake": "迭代次数太少会导致分类不收敛；迭代次数太多会浪费计算时间（通常 40 次足够收敛）"
+            },
+            {
+              "id": "cache_ssd",
+              "name": "Cache particle images on SSD",
+              "name_cn": "缓存到 SSD",
+              "name_en": "Cache particle images on SSD",
+              "type": "boolean",
+              "default": "False",
+              "meaning": "是否将颗粒图像缓存到 SSD 以加速计算",
+              "official_doc": "开启会加快计算，但需要足够的 SSD 空间。",
+              "lab_experience": "保持 off（减少运算缓存数据占空间）",
+              "common_mistake": "开启后 SSD 空间不足会导致 job 失败"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "checkpoint_id": "cp_07",
+      "software": "cryoSPARC",
+      "title": "选择 2D 类",
+      "title_en": "Select 2D Classes",
+      "status": "runtime_allowed",
+      "source": "StructPilot_Visual_UI",
+      "description": "从 2D 分类结果中选择高质量的类别，用于后续 3D 重构",
+      "substeps": [
+        {
+          "id": "main",
+          "label": "Main",
+          "images": [
+            {
+              "image_id": "1",
+              "path": "assets/guides/cp_07_select_2d/Snipaste_2026-07-05_19-25-33.png",
+              "caption": "Snipaste_2026-07-05_19-25-33.png"
+            }
+          ],
+          "caption": "从 2D 分类结果中选择高质量的类别，用于后续 3D 重构",
+          "parameters": [
+            {
+              "id": "input_classes",
+              "name": "Input 2D classes",
+              "name_cn": "输入 2D 类",
+              "name_en": "Input 2D classes",
+              "type": "file_path",
+              "default": "2D Classification/job006/run.cs",
+              "meaning": "2D Classification 输出的类别文件（.cs 格式）",
+              "official_doc": "必须输入 2D Classification 的输出（包含各类别的 2D 密度图）。",
+              "lab_experience": "一般引用 2D Classification 步骤的 job 输出",
+              "common_mistake": "误选 Extract 或 Blob Picker 的输出；必须输入 2D 分类结果"
+            },
+            {
+              "id": "selection_criteria",
+              "name": "Selection criteria",
+              "name_cn": "选择标准",
+              "name_en": "Selection criteria",
+              "type": "text",
+              "default": "选择不同 view，清晰，二级结构明显的 class",
+              "meaning": "选择高质量 2D 类的标准",
+              "official_doc": "在 2D Classification 结果页面，手动勾选高质量的类别（清晰度好、有二级结构特征、颗粒数足够）。",
+              "lab_experience": "选择不同 view（视角），清晰，二级结构明显的 class",
+              "common_mistake": "选择太多低质量类别会污染后续 3D 重构；选择太少类别会导致颗粒数不足"
+            },
+            {
+              "id": "min_particles_per_class",
+              "name": "Minimum particles per class",
+              "name_cn": "每类最少颗粒数",
+              "name_en": "Minimum particles per class",
+              "type": "number",
+              "default": "100",
+              "meaning": "每类最少颗粒数，低于此数的类别会被过滤掉",
+              "official_doc": "默认不设置。可以过滤掉颗粒数太少的类别（可能是噪声）。",
+              "lab_experience": "根据实际数据调整，一般 100-500",
+              "common_mistake": "设得太高会过滤掉真实但颗粒数少的类别"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

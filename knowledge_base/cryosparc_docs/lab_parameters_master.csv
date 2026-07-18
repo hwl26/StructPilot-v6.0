@@ -1,0 +1,59 @@
+stage_id,stage_name,cryosparc_job_type,parameter_name,lab_value,lab_note,official_tutorial_value,data_source,confidence,diff_from_official,parameter_role,category,tuning_guidance
+0.0,前置操作,终端命令,赋权命令,setfacl -m u:cryosparcuser:rwx -R 【数据目录】,需确认工作站站点（225/226/227）；文件非软连接是实际路径,N/A,lab_excel,official_sop,新增,运维,系统操作,需根据实际路径和用户名修改
+1.1,数据导入,Import Movies,micrographs_data_path,../MotionCorr/job002/Movies/*EER.mrc,注意输入的是 motion-corrected 之后的 .mrc 不是原始 .eer,../MotionCorr/job*/Movies/*.mrc,lab_excel,official_sop,路径结构不同,路径,数据处理,根据实际 motion correction 输出目录调整
+1.1,数据导入,Import Movies,pixel_size_angstrom,0.96,,0.5585,lab_excel,official_sop,实验室常用单颗粒数据采集模式，与官方 Tutorial 不同,核心物理参数,数据采集,300kV Titan Krios 采集参数
+1.1,数据导入,Import Movies,accelerating_voltage_kv,300,Titan Krios,200,lab_excel,official_sop,300kV vs 200kV，信号更强,核心物理参数,数据采集,根据实际显微镜配置
+1.1,数据导入,Import Movies,spherical_aberration_mm,2.7,Cs 值,2.7,lab_excel,official_sop,一致,核心物理参数,数据采集,一般不变
+1.1,数据导入,Import Movies,total_exposure_dose,50,单位 e⁻/Å²,69,lab_excel,official_sop,比官方低，不同的采集策略,核心物理参数,数据采集,根据样品耐受度和采集策略调整
+1.2,CTF估算,Patch CTF Estimation,num_gpus,视情况,根据可用 GPU 调整,视情况,lab_excel,reasonable_inference,一致,计算资源,并行加速,多 GPU 可显著加速
+1.3,照片筛选,Curate Exposures,筛选标准,手动交互式筛选,删除像散过高/冰层太厚/污染/破损/CTF fit 差的照片,N/A,lab_excel,official_sop,新增（官方为自动化）,质控,质量筛选,需要人工经验判断
+2.1,Blob挑颗粒,Blob Picker,min_particle_diameter_angstrom,Pymol 测定值 (max=min),通过数据库结构模型在 PyMOL 中测定蛋白外接圆直径,50,lab_excel,reasonable_inference,蛋白特异性参数,颗粒识别,挑颗粒,需在 PyMOL 中测量
+2.1,Blob挑颗粒,Blob Picker,max_particle_diameter_angstrom,同 min,,50,lab_excel,reasonable_inference,与 min 相同（圆形假设）,颗粒识别,挑颗粒,一般保持 max=min
+2.1,Blob挑颗粒,Blob Picker,min_separation_dist_diameters,0.6,,0.5,lab_excel,reasonable_inference,略高于官方默认值,颗粒识别,挑颗粒,控制相邻颗粒最小间距
+2.1,Blob挑颗粒,Blob Picker,max_local_maxima,400,视颗粒数量灵活调整,300,lab_excel,reasonable_inference,比官方默认值高,颗粒识别,挑颗粒,颗粒多则加少则减
+2.2,Topaz训练,Topaz Train,topaz_executable_path,/home/software/miniconda3/envs/topaz/bin/topaz,,N/A,lab_excel,official_sop,新增（官方无 Topaz）,环境,软件路径,根据服务器安装路径调整
+2.2,Topaz训练,Topaz Train,num_parallel_processes,16,默认参数,N/A,lab_excel,official_sop,新增,计算资源,并行加速,一般保持默认
+2.2,Topaz训练,Topaz Train,expected_particles,450（可调）,根据单张 micrograph 颗粒数量灵活调整——颗粒多则加、少则减。一般设 400 左右起步,N/A,lab_excel,official_sop,新增,核心参数,深度学习训练,根据实际颗粒密度调整，训练曲线判读过拟合
+2.2,Topaz训练,Topaz Train,训练集照片数,约 1000 张,太多计算慢太少训练不足,N/A,lab_excel,reasonable_inference,新增,数据准备,深度学习训练,通过 Curate Exposures 的 Threshold 调整
+2.3,Topaz提取,Topaz Extract,topaz_executable_path,/home/software/miniconda3/envs/topaz/bin/topaz,,N/A,lab_excel,official_sop,新增,环境,软件路径,同 Topaz Train
+2.3,Topaz提取,Topaz Extract,num_parallel_processes,16,默认参数,N/A,lab_excel,official_sop,新增,计算资源,并行加速,一般保持默认
+2.4,模板生成,Create Templates,num_templates,50,默认 50 生成全部方向投影,N/A,lab_excel,reasonable_inference,新增,模板生成,取向覆盖,50 可覆盖大多数取向空间
+2.4,模板生成,Create Templates,zeropadding_factor,2,在傅里叶空间补零让实空间插值更精细,N/A,lab_excel,reasonable_inference,新增,模板生成,插值精度,默认值
+2.5,模板挑颗粒,Template Picker,particle_diameter_angstrom,Pymol 测定值 (max=min),同 Blob,N/A,lab_excel,reasonable_inference,新增,颗粒识别,挑颗粒,与 Blob 保持一致
+2.5,模板挑颗粒,Template Picker,min_separation_dist_diameters,0.6,,N/A,lab_excel,reasonable_inference,新增,颗粒识别,挑颗粒,同 Blob
+2.5,模板挑颗粒,Template Picker,max_local_maxima,100~400,投影像少的面设低，颗粒多/优势构象设高,N/A,lab_excel,reasonable_inference,新增,颗粒识别,挑颗粒,根据取向分布调整，用于补全劣势方向
+3.1,第一轮提取,Extract From Micrographs,num_gpus,视情况,,视情况,lab_excel,reasonable_inference,一致,计算资源,并行加速,
+3.1,第一轮提取,Extract From Micrographs,extraction_box_size_pix,particle直径(Å)÷0.96×1.5~2（取64倍数）,,dim/pixel×(2.5~3),lab_excel,reasonable_inference,系数更保守（1.5~2 vs 2.5~3）,核心参数,颗粒提取,公式：diam/pixel × 倍率
+3.1,第一轮提取,Extract From Micrographs,fourier_crop_box_size_pix,100~120（2的幂）,像素合并加速计算，一般不超过2^8=128方可保证效率,未bin,lab_excel,official_sop,官方无 Fourier crop 策略,核心参数,加速策略,第一轮 bin 加快计算
+3.2,第一轮2D分类,2D Classification,num_2d_classes,100,第一轮多分类根据颗粒数量级确定,100,lab_excel,official_sop,一致,分类,2D分类,数量多则多分类（但计算久）
+3.2,第一轮2D分类,2D Classification,max_resolution_angstrom,5,低频信号分出大概轮廓即可,未指定,lab_excel,reasonable_inference,新增（官方未指定）,分辨率控制,2D分类,第一轮粗筛不必追求高分辨
+3.2,第一轮2D分类,2D Classification,circular_mask_diameter_angstrom,particle直径÷0.9,限制颗粒信号范围,未指定,lab_excel,reasonable_inference,新增（官方未指定）,掩膜,信噪比优化,
+3.2,第一轮2D分类,2D Classification,num_online_em_iterations,40,越多收敛可能性越大,40（推荐）,lab_excel,official_sop,一致,迭代,收敛控制,
+3.2,第一轮2D分类,2D Classification,cache_particles_on_ssd,OFF,减少运算缓存占空间,推荐OFF,lab_excel,official_sop,一致,存储,空间优化,
+3.2,第一轮2D分类,2D Classification,num_gpus,视情况,,视情况,lab_excel,reasonable_inference,一致,计算资源,并行加速,
+4.1,第二轮提取,Extract From Micrographs,extraction_box_size_pix,同第一轮,公式不变,同第一轮,lab_excel,reasonable_inference,一致,核心参数,颗粒提取,
+4.1,第二轮提取,Extract From Micrographs,fourier_crop_box_size_pix,关闭（不 bin）,第二轮精细挑保留原始分辨率,未bin,lab_excel,official_sop,关键差异：第一轮bin第二轮不bin,核心参数,分辨率策略,
+4.2,第二轮2D分类,2D Classification,num_2d_classes,50,第一轮已分走坏的减少 class 加快计算,50（推荐）,lab_excel,official_sop,一致,分类,2D分类,
+4.2,第二轮2D分类,2D Classification,max_resolution_angstrom,3,push 高频信号比第一轮精细得多,未指定,lab_excel,reasonable_inference,新增（官方未指定）,分辨率控制,2D分类,第二轮 push 到 3Å
+4.2,第二轮2D分类,2D Classification,circular_mask_diameter_angstrom,particle直径÷0.9,同第一轮,同第一轮,lab_excel,reasonable_inference,一致,掩膜,信噪比优化,
+4.2,第二轮2D分类,2D Classification,num_online_em_iterations,40,同第一轮,40,lab_excel,official_sop,一致,迭代,收敛控制,
+4.2,第二轮2D分类,2D Classification,cache_particles_on_ssd,OFF,同第一轮,推荐OFF,lab_excel,official_sop,一致,存储,空间优化,
+5.1,去重,Remove Duplicates,所有参数,default,,default,lab_excel,reasonable_inference,一致,预处理,去重,
+5.2,初始模型,Ab-Initio Reconstruction,num_ab_initio_classes,3,一般设 3 类,3,lab_excel,official_sop,一致,分类,3D初始,
+5.2,初始模型,Ab-Initio Reconstruction,max_resolution_angstrom,10,初始模型分辨率设低,未指定,lab_excel,reasonable_inference,新增（官方未指定）,分辨率控制,3D初始,
+5.2,初始模型,Ab-Initio Reconstruction,symmetry,视蛋白而定（不对称选C1）,,视蛋白,lab_excel,reasonable_inference,蛋白特异性,对称性,3D初始,需根据具体蛋白确认
+5.2,初始模型,Ab-Initio Reconstruction,class_similarity,0.1,default=0.1；想分得更开可调到0.03,0.1,lab_excel,official_sop,一致,分类,3D初始,
+5.3,异质性精修,Heterogeneous Refinement,refinement_box_size_voxels,particle直径÷0.96×1.5~2,同之前的 box size 越小对 GPU 越友好,未指定,lab_excel,reasonable_inference,新增（官方未覆盖）,核心参数,3D精修,与 Extract box size 保持一致
+5.3,异质性精修,Heterogeneous Refinement,max_alignment_resolution_angstrom,3,比初始模型的10Å精细得多,未指定,lab_excel,reasonable_inference,新增,分辨率控制,3D精修,逐步push分辨率
+5.3,异质性精修,Heterogeneous Refinement,cache_particles_on_ssd,OFF（default）,减少运算缓存,推荐OFF,lab_excel,reasonable_inference,一致,存储,空间优化,
+5.4,同质性精修,Homogeneous Refinement,max_alignment_resolution_angstrom,3,同质对齐 push 分辨率,未指定,lab_excel,reasonable_inference,新增,分辨率控制,3D精修,
+5.4,同质性精修,Homogeneous Refinement,cache_particles_on_ssd,OFF（default）,,推荐OFF,lab_excel,reasonable_inference,一致,存储,空间优化,
+5.5,非均匀精修,Non-uniform Refinement,max_alignment_resolution_angstrom,3,刚性和柔性区域同步精修 push 最终分辨率,未指定,lab_excel,reasonable_inference,新增,分辨率控制,3D精修,
+5.5,非均匀精修,Non-uniform Refinement,dynamic_mask_use_absolute_value,OFF,常规 off；算法自动计算软掩膜排除溶剂噪声,未指定,lab_excel,reasonable_inference,新增,掩膜,3D精修,
+5.5,非均匀精修,Non-uniform Refinement,cache_particles_on_ssd,OFF（default）,,推荐OFF,lab_excel,reasonable_inference,一致,存储,空间优化,
+B.2,RELION桥接,csparc2star.py,box,根据实际 box size,需与 cryoSPARC Extract 时设置的 box size 保持一致,N/A,lab_excel,reasonable_inference,新增,坐标转换,跨软件,示例值240需替换为实际值
+B.2,RELION桥接,csparc2star.py,swapxy,必须,交换X/Y坐标（坐标系兼容）,N/A,lab_excel,reasonable_inference,新增,坐标转换,跨软件,
+B.2,RELION桥接,csparc2star.py,inverty,必须,翻转Y坐标（Y轴方向不同）,N/A,lab_excel,reasonable_inference,新增,坐标转换,跨软件,
+B.2,RELION桥接,csparc2star.py,strip_uid,推荐,去掉UID字段让输出更干净,N/A,lab_excel,reasonable_inference,新增,数据清理,跨软件,
+B.2,RELION桥接,star文件修改,路径替换命令,":%s #原路径#新路径#g",需进入vi后执行,N/A,lab_excel,reasonable_inference,新增,路径修正,跨软件,每套数据的路径前缀不同
+B.4,RELION端,CTF Estimation,CTF重算,必须,N/A,在RELION端重算一次用于后续精修,N/A,lab_excel,reasonable_inference,新增,CTF,跨软件,跨软件后原cryoSPARC CTF无法直接使用

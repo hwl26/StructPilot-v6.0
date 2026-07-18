@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "runtime_layers": {
+    "raw_sources": "only used for traceability and extraction",
+    "candidate_layer": "not allowed in direct answers before review",
+    "formal_runtime_layer": "expert-reviewed content allowed for user-facing answers"
+  },
+  "approval_required_for": [
+    "parameter recommendations",
+    "failure diagnosis",
+    "rollback decisions",
+    "quality thresholds",
+    "software-version-specific workflow advice"
+  ],
+  "minimum_record_fields": [
+    "doc_id",
+    "checkpoint_id",
+    "software",
+    "answer",
+    "source",
+    "review_status",
+    "reviewer",
+    "reviewed_at"
+  ]
+}

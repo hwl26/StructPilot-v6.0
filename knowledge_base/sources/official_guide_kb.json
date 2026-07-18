@@ -1,0 +1,304 @@
+{
+  "meta": {
+    "source": "CryoSPARC Official Guide (guide.cryosparc.com)",
+    "version_tag": "v5_guide",
+    "generated": "2026-07-07",
+    "note": "每条摘要是官方 Guide 的精选内容。用户点击原文链接跳转到 guide.cryosparc.com 查看完整内容。这是合法引用，非全文复制。"
+  },
+  "import_movies": {
+    "job_id": "import_movies",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/import/job-import-movies",
+    "description": "Import Movies allows you to import raw movie frames into cryoSPARC for downstream motion correction.",
+    "inputs": ["Raw movie frames (.mrc, .tif, .eer)"],
+    "outputs": ["Imported movies ready for motion correction"],
+    "parameters": [
+      {
+        "name": "Pixel size (A)",
+        "official_desc": "The physical pixel size of the detector at the specimen level. For super-resolution mode, divide the super-resolution pixel size by 2.",
+        "type": "number",
+        "notes": "Critical parameter — errors here propagate to all downstream jobs (CTF, reconstruction, resolution)",
+        "version_changes": ""
+      },
+      {
+        "name": "Accelerating voltage (kV)",
+        "official_desc": "The accelerating voltage of the microscope, typically 200 or 300 kV.",
+        "type": "enum",
+        "options": ["200", "300"],
+        "notes": "Must match actual microscope settings",
+        "version_changes": ""
+      },
+      {
+        "name": "Spherical aberration (mm)",
+        "official_desc": "The spherical aberration coefficient (Cs) of the objective lens.",
+        "type": "number",
+        "notes": "Titan Krios typically 2.7 mm; 200kV scopes typically 2.0 mm",
+        "version_changes": ""
+      },
+      {
+        "name": "Total exposure dose (e⁻/Å²)",
+        "official_desc": "The total electron dose used during data collection.",
+        "type": "number",
+        "notes": "Typical values: 40-70 e⁻/Å² for single-particle cryo-EM",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Incorrect pixel size is one of the most common errors in cryo-EM processing",
+      "Ensure you are importing raw movie frames, not already motion-corrected micrographs"
+    ]
+  },
+  "patch_motion": {
+    "job_id": "patch_motion",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/motion-correction/job-patch-motion-correction",
+    "description": "Patch Motion Correction performs local (patch-based) alignment of movie frames to correct for beam-induced motion.",
+    "inputs": ["Imported movies"],
+    "outputs": ["Motion-corrected micrographs (.mrc)"],
+    "parameters": [],
+    "warnings": [
+      "Excessive drift may indicate sample stability issues — not fixable by software parameters alone"
+    ]
+  },
+  "patch_ctf": {
+    "job_id": "patch_ctf",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/ctf-estimation/job-patch-ctf-estimation",
+    "description": "Patch CTF Estimation determines the contrast transfer function parameters for each micrograph by fitting the power spectrum of local patches.",
+    "inputs": ["Motion-corrected micrographs"],
+    "outputs": ["Micrographs with CTF parameters"],
+    "parameters": [
+      {
+        "name": "Amplitude contrast",
+        "official_desc": "The fraction of total contrast attributed to amplitude contrast (vs phase contrast).",
+        "type": "number",
+        "notes": "Typical values: 0.07 for 300kV, 0.1 for 200kV",
+        "version_changes": ""
+      },
+      {
+        "name": "Defocus search range",
+        "official_desc": "The range of defocus values to search during CTF fitting.",
+        "type": "range",
+        "notes": "Wider range increases chance of finding correct values but increases computation",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Poor CTF fits should be filtered out using Curate Exposures before particle picking",
+      "Defocus search range too narrow may miss the true defocus value"
+    ]
+  },
+  "blob_picker": {
+    "job_id": "blob_picker",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking/job-blob-picker",
+    "description": "Blob Picker automatically picks particles by band-pass filtering and finding local maxima, without requiring templates or training data.",
+    "inputs": ["CTF-estimated micrographs"],
+    "outputs": ["Particle coordinates"],
+    "parameters": [
+      {
+        "name": "Use circular, elliptical, or ring blob",
+        "official_desc": "Blob picker can generate circular blobs (best for generally globular targets), elliptical blobs (best for rod or disk shaped targets), or ring blobs (best for hollow targets).",
+        "type": "enum",
+        "options": ["circular", "elliptical", "ring"],
+        "notes": "We recommend only one mode per individual Blob Picker job due to differential normalization between blob types.",
+        "version_changes": "v5: Between 2 and 10 circular blobs generated (before v5: always 3)"
+      },
+      {
+        "name": "Minimum / Maximum particle diameter (A)",
+        "official_desc": "Blobs are generated with sizes varying in one dimension from min to max diameter.",
+        "type": "range",
+        "notes": "Exact behavior differs between circular/elliptical/ring modes and between v5 vs earlier versions. Measure protein diameter in PyMOL or ChimeraX.",
+        "version_changes": "v5: Blob size spacing parameter added"
+      }
+    ],
+    "warnings": [
+      "Blob picking is fast but generally the least accurate method",
+      "Incorrect particles can be filtered using 2D Classification and Select 2D"
+    ]
+  },
+  "template_picker": {
+    "job_id": "template_picker",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking/job-template-picker",
+    "description": "Template Picker uses 3D projections as templates for cross-correlation based particle picking. More accurate than Blob Picker when good templates are available.",
+    "inputs": ["CTF-estimated micrographs + 2D templates from 3D model"],
+    "outputs": ["Particle coordinates with cross-correlation scores"],
+    "parameters": [
+      {
+        "name": "Particle diameter (A)",
+        "official_desc": "The expected diameter of the particle, used to limit the search area.",
+        "type": "number",
+        "notes": "Use the same diameter as Blob Picker for consistency",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Template Picker quality depends heavily on the quality of the input templates",
+      "Can be used to fill in orientations missed by Blob or Topaz picking"
+    ]
+  },
+  "topaz_picker": {
+    "job_id": "topaz_picker",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-picking/job-topaz-train-extract-pick",
+    "description": "Topaz uses deep learning (U-Net) trained on manually picked particles to automatically identify particles in micrographs. More accurate than Blob Picker, especially for low-contrast data.",
+    "inputs": ["Training micrographs with known particle coordinates"],
+    "outputs": ["Particle coordinates from trained model"],
+    "parameters": [
+      {
+        "name": "Expected number of particles",
+        "official_desc": "The approximate number of particles expected per micrograph.",
+        "type": "number",
+        "notes": "Adjust based on particle density — higher for dense samples, lower for sparse",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Overfitting: training loss decreases but validation loss increases — need more/varied training data",
+      "Topaz training requires good initial particle picks as ground truth"
+    ]
+  },
+  "extract": {
+    "job_id": "extract",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/extraction/job-extract-from-micrographs",
+    "description": "Extract From Micrographs cuts out particle images from micrographs based on coordinate files.",
+    "inputs": ["Micrographs + particle coordinates"],
+    "outputs": ["Particle stack"],
+    "parameters": [
+      {
+        "name": "Extraction box size (pix)",
+        "official_desc": "The size of the box in pixels to extract around each particle. Should be large enough to contain the entire particle with margins.",
+        "type": "number",
+        "notes": "Use box sizes from the efficient sizes list: 32, 36, 40, …, 64, 72, …, 256, 320, 384, 448, 512, 576, 640, 1280",
+        "version_changes": ""
+      },
+      {
+        "name": "Fourier crop to box size (pix)",
+        "official_desc": "If set, particles are Fourier-cropped to this box size (binning). Smaller values speed up computation at the cost of resolution.",
+        "type": "number",
+        "notes": "For initial screening: crop to ~100-120px. For final refinement: disable crop.",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Box size too small → particles truncated, cannot align properly",
+      "Box size not from efficient sizes list → FFT performance degraded"
+    ]
+  },
+  "2d_classification": {
+    "job_id": "2d_classification",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-curation/job-2d-classification",
+    "description": "2D Classification groups particles by similarity and produces class average images. Used to identify and remove junk particles before 3D reconstruction.",
+    "inputs": ["Particle stack"],
+    "outputs": ["2D class averages + classified particles"],
+    "parameters": [
+      {
+        "name": "Number of 2D classes",
+        "official_desc": "The number of classes to divide particles into. 50-200 is a good starting point depending on particle count.",
+        "type": "number",
+        "notes": "Rule of thumb: >200k particles → 100 classes; 50k-200k → 50; <50k → 20-30",
+        "version_changes": ""
+      },
+      {
+        "name": "Force max over poses/shifts",
+        "official_desc": "When ON, forces alignment by taking the maximum over poses. When OFF, marginalizes over poses — better for low-SNR but ~5-6x slower.",
+        "type": "boolean",
+        "notes": "Turn OFF for small particles (<100 kDa) or low SNR data to reduce stripe noise",
+        "version_changes": ""
+      },
+      {
+        "name": "Online-EM iterations",
+        "official_desc": "Number of iterations for the online expectation-maximization algorithm.",
+        "type": "number",
+        "notes": "More iterations (40-80) give better convergence at cost of computation time",
+        "version_changes": ""
+      },
+      {
+        "name": "Batchsize per class",
+        "official_desc": "Number of particles used to update each class average per iteration.",
+        "type": "number",
+        "notes": "Larger batchsize (200-500) provides more information per update but uses more memory",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Stripe noise / pure noise classes → turn OFF Force max over poses/shifts, increase iterations",
+      "Too few classes → junk mixed into good classes. Too many → signal dilution per class",
+      "For small particles (<100 kDa), consider skipping 2D and using Heterogeneous Refinement directly (~3x more good particles retained)"
+    ]
+  },
+  "ab_initio": {
+    "job_id": "ab_initio",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-reconstruction/job-ab-initio-reconstruction",
+    "description": "Ab-Initio Reconstruction generates initial 3D density maps from 2D particles without requiring any prior structural information, using stochastic gradient descent (SGD).",
+    "inputs": ["Cleaned particle stack"],
+    "outputs": ["Initial 3D volumes (typically 3 classes)"],
+    "parameters": [
+      {
+        "name": "Number of Ab-Initio classes",
+        "official_desc": "Number of 3D classes to reconstruct. 3 is standard.",
+        "type": "number",
+        "notes": "More classes help capture heterogeneity but increase computation",
+        "version_changes": ""
+      },
+      {
+        "name": "Class similarity",
+        "official_desc": "Controls how similar output classes can be. Lower values force classes to be more distinct.",
+        "type": "number",
+        "notes": "Default 0.1; use 0.03 to force greater separation between classes",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Always run Remove Duplicate Particles before Ab-Initio to avoid overfitting artifacts",
+      "Symmetry must be specified correctly — incorrect symmetry degrades reconstruction"
+    ]
+  },
+  "heterogeneous": {
+    "job_id": "heterogeneous",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-refinement/job-heterogeneous-refinement",
+    "description": "Heterogeneous Refinement performs 3D classification by refining multiple 3D references simultaneously and assigning particles to the best-matching class.",
+    "inputs": ["Particles + all Ab-Initio volumes (good and bad)"],
+    "outputs": ["Multiple refined 3D classes + particle assignments"],
+    "parameters": [
+      {
+        "name": "Refinement box size (Voxels)",
+        "official_desc": "Size of the box in voxels for refinement. Smaller is faster on GPU.",
+        "type": "number",
+        "notes": "Same as extraction box size for consistency",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "Input ALL Ab-Initio classes (good and bad) for effective heterogeneity separation",
+      "Only one class is typically selected for downstream high-resolution refinement"
+    ]
+  },
+  "homogeneous": {
+    "job_id": "homogeneous",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-refinement/job-homogeneous-refinement",
+    "description": "Homogeneous Refinement performs high-resolution 3D refinement assuming a single conformation, using gold-standard FSC, per-particle CTF correction, and optional Ewald sphere correction.",
+    "inputs": ["Single class particles + reference volume"],
+    "outputs": ["Half maps A+B, Full map, FSC curve, alignments3D"],
+    "parameters": [],
+    "warnings": [
+      "Gold-standard FSC 0.143 criterion determines reported resolution",
+      "Follow with Non-uniform Refinement for optimal final resolution"
+    ]
+  },
+  "non_uniform": {
+    "job_id": "non_uniform",
+    "source_url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/3d-refinement/job-non-uniform-refinement-new",
+    "description": "Non-uniform Refinement is an advanced refinement method that uses data-driven per-frequency weights instead of a single B-factor for sharpening, producing optimal final density maps especially for flexible regions.",
+    "inputs": ["Best class from Homogeneous + volume + mask"],
+    "outputs": ["Final refined map with local resolution estimation"],
+    "parameters": [
+      {
+        "name": "Dynamic mask use absolute value",
+        "official_desc": "When OFF, the algorithm automatically computes a soft mask excluding solvent noise.",
+        "type": "boolean",
+        "notes": "Keep OFF for standard processing",
+        "version_changes": ""
+      }
+    ],
+    "warnings": [
+      "This is the final push step for resolution — essential after Homogeneous Refinement",
+      "Per-frequency weighting replaces traditional B-factor sharpening"
+    ]
+  }
+}

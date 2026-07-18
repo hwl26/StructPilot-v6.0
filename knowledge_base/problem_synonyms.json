@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "description": "Fault/problem synonym dictionary. Maps fault_ids to Chinese/English keywords and colloquial expressions for problem detection.",
+    "version": 1,
+    "faults_covered": 5
+  },
+  "2d_stripe_noise": {
+    "title_cn": "2D 分类出现条纹类/纯噪声",
+    "fault_id": "2d_stripe_noise",
+    "related_stage": "cp_06",
+    "keywords_cn": ["条纹", "噪声", "看不清", "2D模糊", "2D不好", "分类不好", "条纹类", "全是噪声", "发糊", "糊的", "不清晰", "无特征"],
+    "keywords_en": ["stripe", "noise", "blurry", "blur", "unclear", "no feature", "2d bad", "noisy classes"],
+    "colloquial": ["2D分类出来的全是条纹", "类平均图全是噪点", "分类结果很糊", "看不到蛋白轮廓"],
+    "problem_type": "quality_degradation"
+  },
+  "fsc_oscillation": {
+    "title_cn": "FSC 曲线出现振荡",
+    "fault_id": "fsc_oscillation",
+    "related_stage": "cp_09",
+    "keywords_cn": ["FSC振荡", "振荡", "波动", "FSC不好", "FSC不达标", "分辨率不达标", "分辨率差", "FSC波动", "尖锐振荡", "FSC曲线不好"],
+    "keywords_en": ["fsc oscillation", "fsc oscillate", "fsc fluctuation", "resolution not reached", "fsc bad", "fsc curve"],
+    "colloquial": ["FSC曲线抖", "FSC不光滑", "分辨率达不到", "FSC上下波动"],
+    "problem_type": "parameter_error"
+  },
+  "preferred_orientation": {
+    "title_cn": "取向分布严重偏侧",
+    "fault_id": "preferred_orientation",
+    "related_stage": "cp_09",
+    "keywords_cn": ["取向", "orientation", "优先取向", "偏侧", "偏向", "分布不均匀", "preferred", "取向偏", "方向集中", "各向异性"],
+    "keywords_en": ["preferred orientation", "orientation bias", "anisotropic", "orientation distribution", "uneven orientation"],
+    "colloquial": ["取向图偏", "大部分颗粒朝同一个方向", "取向不均匀", "方向集中"],
+    "problem_type": "data_limitation"
+  },
+  "too_many_junk": {
+    "title_cn": "垃圾类过多或过少",
+    "fault_id": "too_many_junk",
+    "related_stage": "cp_06",
+    "keywords_cn": ["垃圾", "junk", "废类", "差类", "类太多", "太多垃圾", "垃圾太多", "垃圾混入", "垃圾类"],
+    "keywords_en": ["junk", "junk classes", "too many junk", "junk mixed", "trash classes"],
+    "colloquial": ["垃圾类太多", "好类里混了垃圾", "废类太多", "junk太多"],
+    "problem_type": "classification_issue"
+  },
+  "ctf_bad_fit": {
+    "title_cn": "CTF 拟合质量差",
+    "fault_id": "ctf_bad_fit",
+    "related_stage": "cp_03",
+    "keywords_cn": ["CTF拟合", "CTF差", "CTF不好", "CTF质量", "拟合差", "功率谱不好", "CTF fit差", "拟合不佳"],
+    "keywords_en": ["ctf bad fit", "ctf poor", "ctf quality", "bad ctf", "poor ctf fit", "power spectrum bad"],
+    "colloquial": ["CTF拟合不好", "很多照片CTF差", "功率谱对不上", "CTF质量低"],
+    "problem_type": "parameter_error"
+  },
+  "_general_problems": {
+    "memory_error": ["内存", "memory", "OOM", "out of memory", "显存", "GPU内存", "不够", "溢出"],
+    "slow_performance": ["慢", "slow", "太慢", "跑很久", "卡住", "hang", "stuck"],
+    "parameter_confusion": ["怎么设", "多少合适", "什么值", "怎么调", "参数推荐", "不知道设多少"],
+    "result_not_expected": ["不对", "结果不好", "和预期不一样", "有问题", "异常"]
+  }
+}

@@ -1,0 +1,248 @@
+[
+  {
+    "fault_id": "2d_stripe_noise",
+    "fault_keyword": "2D分类模糊",
+    "fault_keywords": ["条纹", "噪声", "看不清", "2D模糊", "2D不好", "分类不好", "条纹类", "全是噪声"],
+    "step": "cp_06",
+    "title_cn": "2D 分类出现条纹类/纯噪声",
+    "symptom_cn": "类别平均值呈条纹状或纯噪声，无清晰蛋白质特征",
+    "severity": "problem",
+    "phenomenon": "2D class图像整体发糊、无清晰蛋白轮廓，或出现条纹状伪影",
+    "questions": [
+      {"id": "q_small_particle", "text_cn": "你的蛋白分子量是否 < 100 kDa？", "impact_cn": "小粒子低 SNR 是条纹类主因——信号太弱算法无法分辨"},
+      {"id": "q_force_max", "text_cn": "Force max over poses/shifts 是否开启？", "impact_cn": "开启会强制对齐导致条纹——边缘化姿态改善低信噪比粒子对齐"},
+      {"id": "q_iterations", "text_cn": "你的 online-EM 迭代数是否 < 20？", "impact_cn": "迭代不足未充分收敛——给算法更多时间"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "关闭 Force max over poses/shifts",
+        "reason_cn": "边缘化姿态改善低信噪比粒子对齐——这是解决条纹类问题的第一步",
+        "trade_off_cn": "计算时间增加 5-6 倍",
+        "source": "CryoSPARC Guide: 2D Classification - Force max over poses/shifts",
+        "rollback_node": []
+      },
+      {
+        "priority": 2,
+        "action_cn": "增加 online-EM 迭代: 20 → 40 或 80",
+        "reason_cn": "给算法更多时间收敛——更多迭代让分类更稳定",
+        "trade_off_cn": "计算时间增加 2-4 倍",
+        "source": "CryoSPARC Guide: 2D Classification - Online-EM iterations",
+        "rollback_node": []
+      },
+      {
+        "priority": 3,
+        "action_cn": "增加 Batchsize per class: 100 → 200-500",
+        "reason_cn": "每次更新类别平均时提供更多信息——大 batch 降低噪声",
+        "trade_off_cn": "内存需求增加",
+        "source": "CryoSPARC Guide: 2D Classification - Batchsize per class",
+        "rollback_node": []
+      },
+      {
+        "priority": 4,
+        "action_cn": "跳过 2D 分类，直接用 Heterogeneous Refinement",
+        "reason_cn": "对小粒子/低 SNR 保留更多好粒子（约 3 倍）——3D 分类比 2D 更有区分力",
+        "trade_off_cn": "计算更慢，需要初始模型",
+        "source": "CryoSPARC Guide: 2D Classification - Recommended alternatives",
+        "rollback_node": []
+      }
+    ],
+    "rollback_node": ["ctf_estimation", "particle_picking"]
+  },
+  {
+    "fault_id": "fsc_oscillation",
+    "fault_keyword": "FSC振荡",
+    "fault_keywords": ["FSC", "fsc", "振荡", "波动", "resolution", "分辨率不达标"],
+    "step": "cp_09",
+    "title_cn": "FSC 曲线出现振荡",
+    "symptom_cn": "FSC 曲线出现多个尖锐振荡，而非平滑下降",
+    "severity": "warning",
+    "phenomenon": "FSC曲线出现多个尖锐振荡，通常由CTF参数错误导致",
+    "questions": [
+      {"id": "q_pixel_size", "text_cn": "像素大小是否正确？（是否来自数据采集时的实际值）", "impact_cn": "像素大小错误是 FSC 振荡最常见原因——直接导致 CTF 计算偏差"},
+      {"id": "q_voltage", "text_cn": "加速电压是否匹配实际显微镜设置？", "impact_cn": "电压错误导致 CTF 拟合偏移，引发 FSC 振荡"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "检查 Import 中的像素大小——确认与数据采集参数一致",
+        "reason_cn": "像素大小错误是 FSC 振荡最常见原因——CTF 函数对像素大小极其敏感",
+        "trade_off_cn": "",
+        "source": "CryoSPARC Guide: FSC sharp oscillation; RELION pixel size docs",
+        "rollback_node": ["data_import"]
+      },
+      {
+        "priority": 2,
+        "action_cn": "确认加速电压和球差值——与显微镜实际设置对照",
+        "reason_cn": "光学参数错误导致 CTF 计算偏差——电压差 20kV 就足以引起明显振荡",
+        "trade_off_cn": "",
+        "source": "CryoSPARC Guide: CTF parameters",
+        "rollback_node": ["data_import"]
+      }
+    ],
+    "rollback_node": ["data_import"]
+  },
+  {
+    "fault_id": "preferred_orientation",
+    "fault_keyword": "取向偏侧",
+    "fault_keywords": ["取向", "orientation", "优先取向", "偏侧", "偏向", "分布不均匀", "preferred"],
+    "step": "cp_09",
+    "title_cn": "取向分布严重偏侧",
+    "symptom_cn": "取向分布图严重偏侧——大部分颗粒集中在某些方向，其他方向几乎没有",
+    "severity": "problem",
+    "phenomenon": "取向分布图严重偏侧，导致各向异性重建，FSC分辨率不达标",
+    "questions": [
+      {"id": "q_sample_type", "text_cn": "样品类型？（膜蛋白在去垢剂胶束中容易优先取向）", "impact_cn": "膜蛋白取向偏侧常见——去垢剂胶束导致颗粒以特定方向插入冰层"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "运行 Orientation Diagnostics 作业量化评估 cFAR 指标",
+        "reason_cn": "cFAR 量化取向偏侧程度——比肉眼判断取向分布图更客观",
+        "trade_off_cn": "",
+        "source": "CryoSPARC Guide: Orientation Diagnostics tutorial",
+        "rollback_node": []
+      },
+      {
+        "priority": 2,
+        "action_cn": "尝试 Heterogeneous Refinement 用多构象改善",
+        "reason_cn": "异质细化中的多构象状态可以部分缓解取向偏侧——不同构象可能在不同方向有信号",
+        "trade_off_cn": "",
+        "source": "CryoSPARC Guide: Heterogeneous Refinement",
+        "rollback_node": []
+      },
+      {
+        "priority": 3,
+        "action_cn": "考虑更换网格类型或优化样品制备（根本解决）",
+        "reason_cn": "取向偏侧的根本原因是物理层面的——网格类型、去垢剂选择、冰层厚度均为影响因素",
+        "trade_off_cn": "需要重新制备样品和采集数据",
+        "source": "Lab Experience",
+        "rollback_node": []
+      }
+    ],
+    "rollback_node": []
+  },
+  {
+    "fault_id": "too_many_junk",
+    "fault_keyword": "垃圾类过多",
+    "fault_keywords": ["垃圾", "junk", "废类", "差类", "类太多", "太多垃圾", "垃圾太多"],
+    "step": "cp_06",
+    "title_cn": "垃圾类过多或过少",
+    "symptom_cn": "2D 分类结果中垃圾类过多（好类被污染）或过少（垃圾混入好类）",
+    "severity": "warning",
+    "phenomenon": "2D分类垃圾类数量不合理，或垃圾类与好类难以区分",
+    "questions": [
+      {"id": "q_icuf", "text_cn": "你的 ICUF（Initial Classification Uncertainty Factor）设置偏高还是偏低？", "impact_cn": "高 ICUF → 早期不确定性多 → 垃圾粒子聚集而非分散到好类"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "增大 ICUF",
+        "reason_cn": "高 ICUF → 早期迭代保持更多不确定性 → 垃圾粒子聚集而非分散到好类中",
+        "trade_off_cn": "高 ICUF 可能阻止小粒子收敛——需要根据粒子大小权衡",
+        "source": "CryoSPARC Guide: 2D Classification - ICUF",
+        "rollback_node": []
+      },
+      {
+        "priority": 2,
+        "action_cn": "增加 2D 类别数",
+        "reason_cn": "更多类别让垃圾粒子有独立空间聚集——而不是被迫挤入好类",
+        "trade_off_cn": "计算时间和内存增加",
+        "source": "CryoSPARC Guide: 2D Classification",
+        "rollback_node": []
+      }
+    ],
+    "rollback_node": []
+  },
+  {
+    "fault_id": "ctf_bad_fit",
+    "fault_keyword": "CTF拟合差",
+    "fault_keywords": ["CTF", "ctf", "拟合", "fit", "CTF质量", "CTF不好", "CTF差"],
+    "step": "cp_03",
+    "title_cn": "CTF 拟合质量差",
+    "symptom_cn": "CTF 估计的功率谱拟合不佳——很多微图被标记为低质量或 CTF fit 分辨率差",
+    "severity": "warning",
+    "phenomenon": "CTF估计的功率谱拟合不佳，很多微图被标记为低质量",
+    "questions": [
+      {"id": "q_defocus_range", "text_cn": "Defocus 搜索范围是否足够宽？", "impact_cn": "范围太小可能遗漏正确的 defocus 值——尤其在 defocus 变化大的数据集"},
+      {"id": "q_amplitude_contrast", "text_cn": "振幅对比度（amplitude contrast）设置是否正确？", "impact_cn": "300kV 通常 0.07-0.1；200kV 通常 0.1-0.15——设置不当影响 CTF 拟合精度"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "扩大 Defocus 搜索范围",
+        "reason_cn": "更宽范围增加找到正确 defocus 值的概率——尤其当数据采集使用了多个 defocus 时",
+        "trade_off_cn": "计算时间略增",
+        "source": "CryoSPARC Guide: Patch CTF Estimation",
+        "rollback_node": []
+      },
+      {
+        "priority": 2,
+        "action_cn": "调整振幅对比度（300kV: 0.07-0.1; 200kV: 0.1-0.15）",
+        "reason_cn": "振幅对比度影响 CTF 包络函数在低频的衰减——需要匹配显微镜条件",
+        "trade_off_cn": "",
+        "source": "CryoSPARC Guide: CTF parameters",
+        "rollback_node": []
+      }
+    ],
+    "rollback_node": []
+  },
+  {
+    "fault_id": "abinitio_bad_model",
+    "fault_keyword": "Ab-initio模型不好",
+    "fault_keywords": ["abinitio", "ab-initio", "初始模型", "3D模型", "不像蛋白", "模型不像", "模型不好", "de novo", "初始模型失败"],
+    "step": "cp_07",
+    "title_cn": "Ab-initio 初始模型质量差",
+    "symptom_cn": "生成的 3D 模型不像蛋白结构——可能出现塌缩、扭曲、对称性错误或整体形状异常",
+    "severity": "problem",
+    "phenomenon": "Ab-initio 生成的 3D 模型没有明显的蛋白质特征，可能呈现为球形、条状、不规则形状，或完全没有可辨认的结构",
+    "questions": [
+      {"id": "q_particle_count", "text_cn": "粒子数量是否足够？（建议至少 5000-10000 个粒子）", "impact_cn": "粒子太少会导致初始模型不稳定——Ab-initio 需要足够的取向覆盖"},
+      {"id": "q_symmetry", "text_cn": "对称性（symmetry）设置是否正确？", "impact_cn": "对称性设置错误会强制模型呈现错误的结构——如用 C6 拟合 C1 蛋白会产生严重伪影"},
+      {"id": "q_mask_size", "text_cn": "Mask diameter 设置是否合理？", "impact_cn": "Mask 过大包含过多噪声，过小截断蛋白结构——都会导致模型质量下降"}
+    ],
+    "solutions": [
+      {
+        "priority": 1,
+        "action_cn": "检查并修正对称性设置",
+        "reason_cn": "对称性是 Ab-initio 最关键的参数——错误的对称性会直接产生伪结构",
+        "trade_off_cn": "",
+        "source": "RELION Guide: Ab-initio - Symmetry; CryoSPARC Guide: Ab-Initio",
+        "rollback_node": []
+      },
+      {
+        "priority": 2,
+        "action_cn": "增加粒子数量——回到 2D 分类精选更多好粒子",
+        "reason_cn": "Ab-initio 需要足够的取向覆盖才能重建稳定的初始模型——至少需要 5000-10000 个高质量粒子",
+        "trade_off_cn": "需要重新运行 2D 分类",
+        "source": "RELION Guide: Ab-initio - Particle requirements",
+        "rollback_node": ["cp_06"]
+      },
+      {
+        "priority": 3,
+        "action_cn": "调整 Mask diameter——略大于预期蛋白直径",
+        "reason_cn": "合适的 mask 大小能排除背景噪声同时保留完整蛋白结构——通常比预期直径大 10-20%",
+        "trade_off_cn": "",
+        "source": "RELION Guide: Ab-initio - Mask diameter",
+        "rollback_node": []
+      },
+      {
+        "priority": 4,
+        "action_cn": "尝试生成多个初始模型（3-5 个），选择最优的",
+        "reason_cn": "Ab-initio 是随机初始化的，不同种子可能产生差异很大的结果——多跑几个取最佳",
+        "trade_off_cn": "计算时间增加",
+        "source": "RELION Guide: Ab-initio - Multiple models",
+        "rollback_node": []
+      },
+      {
+        "priority": 5,
+        "action_cn": "检查是否有严重的取向偏侧——考虑使用外部参考或模板",
+        "reason_cn": "严重取向偏侧会导致 Ab-initio 重建失败——此时需要外部参考引导",
+        "trade_off_cn": "引入参考可能带来 bias",
+        "source": "CryoSPARC Guide: Ab-Initio - Handling preferred orientation",
+        "rollback_node": ["cp_09"]
+      }
+    ],
+    "rollback_node": ["cp_06", "cp_09"]
+  }
+]

@@ -1,0 +1,5 @@
+{"id":"text_progress_001","category":"text","input":"现在流程走到哪一步了？","expected_keywords":["cp_01"],"forbidden_keywords":["Traceback"]}
+{"id":"text_stage_001","category":"text","input":"下一步我应该做什么？","expected_keywords":["cp_01"],"forbidden_keywords":["Traceback"]}
+{"id":"text_relion_001","category":"text","input":"RELION 导入数据后怎么检查？","expected_keywords":["RELION"],"forbidden_keywords":["Traceback"]}
+{"id":"text_cryo_001","category":"text","input":"切换到 cryoSPARC 后给我当前站点建议","expected_keywords":["cp_01"],"forbidden_keywords":["Traceback"]}
+{"id":"text_report_001","category":"text","input":"生成当前流程报告","expected_keywords":["流程"],"forbidden_keywords":["Traceback"]}
