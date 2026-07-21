@@ -4097,7 +4097,7 @@ with tab_chat:
                     if msg.role == "user":
                         render_user_understanding_feedback(msg, f"{i}")
                     elif msg.role == "assistant":
-                        # v5.3 增强：独立 QA 验收流程（在诊断工具外也可见）
+                        # v6.0 增强：独立 QA 验收流程（在诊断工具外也可见）
                         _render_qa_acceptance(msg, i, is_last)
                         render_answer_feedback(msg, f"{i}")
 
@@ -4735,7 +4735,7 @@ with tab_settings:
             st.success("已清除背景图")
 
     if st.button("保存界面设置", use_container_width=True):
-        st.session_state.ui_theme = st_theme
+        # ui_theme 已通过 key="ui_theme" 自动同步到 session_state，无需手动写入
         st.session_state.selected_history_limit = st_hist
         st.session_state.bg_opacity = st_bg_opacity
         # pet_enabled / pet_type / pet_size 已通过 key 实时同步到 session_state

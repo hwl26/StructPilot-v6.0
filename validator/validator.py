@@ -1,5 +1,5 @@
 """
-StructPilot v5.1 - Validation layer.
+StructPilot v6.0 - Validation layer.
 
 Provides lightweight guards for user inputs, checkpoint transitions, and
 response sanity checks.

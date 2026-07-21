@@ -1,4 +1,4 @@
-﻿"""StructPilot v5.1 — 独立性自检脚本（无需 Streamlit / LLM / 联网）。
+﻿"""StructPilot v6.0 — 独立性自检脚本（无需 Streamlit / LLM / 联网）。
 
 验证范围：
   1. 配置层：config/settings + config/screenshot_map 可导入、路径解析正确；
@@ -7,7 +7,7 @@
   4. 官方文档：knowledge_index.json 含 13 条 [官方文档] 条目（B 阶段集成）；
   5. 检索内核：中文 tokenizer 修复 + lexical 去封顶（无 Key 模式命中官方文档）。
 
-运行：cd StructPilot_v4 && python verify_v5.py
+运行：cd StructPilot_v6 && python verify_v5.py
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 print("=" * 64)
-print("StructPilot v5.1 自检")
+print("StructPilot v6.0 自检")
 print("=" * 64)
 
 # ---------- 1. 配置层 ----------

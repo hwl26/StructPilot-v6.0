@@ -1,4 +1,4 @@
-"""StructPilot v5.1 LangGraph orchestration layer."""
+"""StructPilot v6.0 LangGraph orchestration layer."""
 
 from __future__ import annotations
 

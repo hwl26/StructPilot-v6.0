@@ -1,10 +1,10 @@
-# StructPilot v5.1 — Cryo-EM 流程导航 Copilot
+# StructPilot v6.0 — Cryo-EM 流程导航 Copilot
 
 StructPilot 是一个本地可运行的 cryo-EM 单颗粒处理流程导航助手。它按 12 个检查点（cp_01 数据导入到 cp_12 模型构建与验证）引导用户完成处理，提供 SOP、参数建议、故障排查、概念解释、图像/语音输入和可选 LLM 增强。
 
-v5.1 的重点是让回答更可靠、更对应用户问题：回答深度分为简洁、教学、专家；每条新回答会记录生成时的深度和回答焦点；LLM prompt 会按参数建议、质控判断、故障排查、操作指导、决策建议、概念解释、图像/语音证据判断等问题类型调整侧重点。
+v6.0 的重点是让回答更可靠、更对应用户问题：回答深度分为简洁、教学、专家；每条新回答会记录生成时的深度和回答焦点；LLM prompt 会按参数建议、质控判断、故障排查、操作指导、决策建议、概念解释、图像/语音证据判断等问题类型调整侧重点。
 
-## v5.1 主要能力
+## v6.0 主要能力
 
 - **真实回答深度**：简洁、教学、专家三种模式分别控制结构、解释密度、QC 标准、回退路径、证据等级和不确定性。
 - **LLM 回复灵活化**：系统会识别用户问题焦点，避免所有问题都套同一模板；参数问题重参数边界，截图问题重可见证据，故障问题重排查路径。
@@ -71,7 +71,7 @@ http://127.0.0.1:8501/
 
 ```text
 main.py                  Streamlit UI 入口
-version.py               v5.1 版本与显示名
+version.py               v6.0 版本与显示名
 graph/                   LangGraph 编排与运行时状态
 agents/                  Navigator / LLM / Memory / SOP / Expert / SmartQA
 knowledge_base/          检查点、规则、SOP、QA、检索、官方文档
@@ -82,16 +82,16 @@ validator/               输入与参数校验
 tests/                   pytest 自动化测试
 eval_cases/              评测样例
 healthcheck.py           交付前健康检查
-verify_v5.py             v5.1 自检入口
+verify_v5.py             v6.0 自检入口
 start.bat                Windows 启动器
 ```
 
 ## 交付文档
 
-给他人使用时，请优先提交由 `build_release.ps1` 生成的 `dist/StructPilot_v5.1.zip`，并附带：
+给他人使用时，请优先提交由 `build_release.ps1` 生成的 `dist/StructPilot_v6.0.zip`，并附带：
 
 - `DELIVERY_AND_USER_GUIDE_V5.1.md`
 - `CHANGELOG_V5.1.md`
-- `StructPilot_v5.1.zip.sha256`
+- `StructPilot_v6.0.zip.sha256`
 
-内部运行目录名如果仍出现 `StructPilot_v4_runtime`，只表示历史兼容路径，不代表当前软件版本。对外展示版本以 `StructPilot v5.1` 为准。
+内部运行目录名如果仍出现 `StructPilot_v4_runtime`，只表示历史兼容路径，不代表当前软件版本。对外展示版本以 `StructPilot v6.0` 为准。

@@ -1,4 +1,4 @@
-"""StructPilot v5.1 package."""
+"""StructPilot v6.0 package."""
 
 from version import APP_DISPLAY_NAME, APP_VERSION
 

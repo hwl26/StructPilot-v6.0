@@ -1,4 +1,4 @@
-"""StructPilot v5.1 self-check entrypoint."""
+"""StructPilot v6.0 self-check entrypoint."""
 
 from pathlib import Path
 import runpy

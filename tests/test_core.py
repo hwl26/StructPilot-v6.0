@@ -1,4 +1,4 @@
-"""Tests for StructPilot v5.1 core functionality."""
+"""Tests for StructPilot v6.0 core functionality."""
 
 from __future__ import annotations
 

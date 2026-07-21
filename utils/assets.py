@@ -1,4 +1,4 @@
-"""StructPilot v5.1 — 资源 / 截图解析工具。
+"""StructPilot v6.0 — 资源 / 截图解析工具。
 
 相对 V3「直接 relative-to-BASE_DIR」的架构改进：
 - 截图优先从「外部截图根」（上级目录 StructPilot_Visual_UI images）解析，
