@@ -3345,7 +3345,7 @@ with tab_settings:
         st.selectbox("伙伴尺寸", options=list(_pet_size_options.keys()),
                      format_func=lambda x: _pet_size_options.get(x, x),
                      key="pet_size",
-                     disabled=not st.session_state.get("pet_enabled", True),
+                     disabled=not bool(st.session_state.get("pet_enabled", True)),
                      help="也可以右键伙伴在菜单中快速调整大小")
         if st.session_state.get("pet_enabled", True):
             st.caption("+ 右键伙伴可打开设置菜单 · 三连击打开快捷问题面板～")
