@@ -72,23 +72,35 @@ def _render_beginner_params(params: list[dict]) -> None:
 
 
 def _render_qa_result_inline(cp_id: str, card: dict, run_command_fn: Callable) -> None:
-    """执行质检并展示结果卡片。"""
+    """执行质检并展示结果卡片（✨ 含智能经验推送）。"""
     from components.qa_card import render_qa_card, evaluate_qa
+    from components.experience_card import render_experience_card
+    from utils.experience_matcher import find_similar_experiences
 
     result = evaluate_qa(cp_id, card, st.session_state)
     render_qa_card(result)
 
+    # ✨ 质检失败时，智能推送相似经验
     if result.get("status") == "fail":
-        exps = _load_lab_experiences(cp_id)
-        if exps:
+        # 构建查询：质检问题描述
+        issues = result.get("issues", "")
+        query_text = f"{cp_id} {issues}"
+
+        # 查找相似经验（基于关键词匹配）
+        similar_exps = find_similar_experiences(
+            query=query_text,
+            current_step=cp_id,
+            top_k=3,
+            min_similarity=0.15,  # 较低阈值，确保有推荐
+        )
+
+        if similar_exps:
             st.markdown("---")
-            st.markdown("🥇 **课题组有人遇到过类似问题：**")
-            for exp in exps[:2]:
-                with st.expander(f"📌 {exp.get('title', '经验条目')}", expanded=True):
-                    st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
-                    st.markdown(f"**解决**：{exp.get('solution', '')}")
-                    badge = "✅ 已验证" if exp.get("status") == "approved" else "⚠️ 待验证"
-                    st.caption(f"{badge} · {exp.get('author', '')} · {exp.get('date', '')}")
+            st.markdown("### 🥇 课题组有人遇到过类似问题")
+            st.caption(f"为你匹配到 {len(similar_exps)} 条相关经验：")
+
+            for exp, similarity in similar_exps[:2]:  # 最多显示2条
+                render_experience_card(exp, expanded=True)
 
         if st.button("🎓 去教学模式了解原理", key="beginner_to_teaching"):
             st.session_state.app_mode = "teaching"

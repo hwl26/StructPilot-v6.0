@@ -65,3 +65,7 @@ dist/
 # 大文件排除
 assets/background.png
 assets/mascot.png
+# 用户上传的经验截图（运行时生成）
+runtime/experience_images/*.png
+runtime/experience_images/*.jpg
+runtime/experience_images/*.jpeg

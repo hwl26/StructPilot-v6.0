@@ -16,6 +16,7 @@ import streamlit as st
 BASE_DIR = Path(__file__).resolve().parent.parent
 _PRESETS_DIR = BASE_DIR / "runtime" / "presets"
 _LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
+_IMG_DIR = BASE_DIR / "runtime" / "experience_images"
 
 
 def _export_params_csv(current_cp: dict) -> str:
@@ -60,6 +61,37 @@ def _save_preset(preset_name: str, note: str, software: str, cp_id: str, params_
         return True
     except Exception:
         return False
+
+
+def _save_experience_images(uploaded_files: list, cp_id: str) -> list[str]:
+    """保存上传的截图，返回文件名列表"""
+    import datetime
+
+    _IMG_DIR.mkdir(parents=True, exist_ok=True)
+
+    saved_filenames = []
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for idx, img_file in enumerate(uploaded_files[:3]):  # 最多3张
+        # 生成唯一文件名
+        ext = Path(img_file.name).suffix.lower()
+        if ext not in [".png", ".jpg", ".jpeg"]:
+            continue
+
+        filename = f"{cp_id}_{timestamp}_{idx}{ext}"
+
+        # 检查文件大小（最大5MB）
+        file_size = len(img_file.getbuffer())
+        if file_size > 5 * 1024 * 1024:
+            continue
+
+        # 保存到磁盘
+        target_path = _IMG_DIR / filename
+        target_path.write_bytes(img_file.getbuffer())
+
+        saved_filenames.append(filename)
+
+    return saved_filenames
 
 
 def _list_presets() -> list[dict]:
@@ -145,7 +177,7 @@ def _render_preset_manager(current_cp: dict, software: str) -> None:
 
 
 def _render_kb_contribute_panel(current_cp: dict) -> None:
-    """贡献课题组经验入口。"""
+    """贡献课题组经验入口（含截图上传）。"""
     cp_id = current_cp.get("checkpoint_id", "")
     cp_cn = current_cp.get("checkpoint_cn", cp_id)
 
@@ -155,35 +187,80 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
         category = st.selectbox("分类", ["报错解决方案", "参数调优经验", "非常规流程", "软件技巧"])
         symptoms_text = st.text_area("症状描述（遇到了什么问题）", height=70)
         solution = st.text_area("解决方案（怎么解决的）", height=80)
+
+        # ✨ 新增：截图上传
+        st.markdown("**📸 附加截图（可选，有助于他人理解）**")
+        uploaded_files = st.file_uploader(
+            "上传报错截图或结果对比图",
+            type=["png", "jpg", "jpeg"],
+            accept_multiple_files=True,
+            help="最多上传 3 张，每张不超过 5MB",
+            key=f"kb_images_{cp_id}"
+        )
+
+        # 预览上传的图片
+        if uploaded_files:
+            st.caption(f"已选择 {len(uploaded_files)} 张图片（最多保留前3张）：")
+            cols = st.columns(min(len(uploaded_files), 3))
+            for idx, img_file in enumerate(uploaded_files[:3]):
+                with cols[idx]:
+                    st.image(img_file, caption=img_file.name, use_container_width=True)
+
         tags_str = st.text_input("标签（逗号分隔）", placeholder="运动校正, 漂移, B-factor")
         submitted = st.form_submit_button("提交经验")
 
     if submitted:
         if title.strip() and solution.strip():
             try:
+                # ✨ 保存截图
+                image_filenames = []
+                if uploaded_files:
+                    image_filenames = _save_experience_images(uploaded_files, cp_id)
+
                 try:
                     data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
                 except Exception:
                     data = {"entries": [], "meta": {}}
+
+                # ✨ 术语规范化和自动标签提取
+                from utils.terminology import normalize_text, auto_extract_tags
+
+                normalized_title = normalize_text(title)
+                normalized_symptoms = normalize_text(symptoms_text)
+                normalized_solution = normalize_text(solution)
+
+                # 用户手动输入的标签
+                manual_tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+
+                # 自动提取的标签
+                auto_tags = auto_extract_tags(normalized_title, normalized_symptoms, normalized_solution)
+
+                # 合并标签（手动优先，去重）
+                all_tags = list(dict.fromkeys(manual_tags + auto_tags))[:10]  # 最多10个
+
                 import datetime
                 new_entry = {
                     "id": f"lab_{len(data['entries'])+1:03d}",
                     "category": category,
-                    "title": title,
+                    "title": normalized_title,
                     "source": "lab_experience",
                     "author": "用户贡献",
                     "date": datetime.date.today().isoformat(),
-                    "status": "pending",
+                    "status": "pending",  # ✨ 审核状态：待审核
                     "software": "通用",
                     "step": cp_id,
-                    "symptoms": [s.strip() for s in symptoms_text.split("；") if s.strip()],
-                    "symptoms_text": symptoms_text,
-                    "solution": solution,
-                    "tags": [t.strip() for t in tags_str.split(",") if t.strip()],
+                    "symptoms": [s.strip() for s in normalized_symptoms.split("；") if s.strip()],
+                    "symptoms_text": normalized_symptoms,
+                    "solution": normalized_solution,
+                    "tags": all_tags,  # ✨ 合并后的标签
+                    "images": image_filenames,  # ✨ 截图列表
                 }
                 data["entries"].append(new_entry)
                 _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-                st.success("✅ 经验已提交，待管理员审核后生效（目前标注「待验证」，已可检索）")
+
+                img_info = f"（含 {len(image_filenames)} 张截图）" if image_filenames else ""
+                tag_info = f"，自动生成 {len(auto_tags)} 个标签" if auto_tags else ""
+                st.success(f"✅ 经验已提交{img_info}{tag_info}，待管理员审核后生效（目前标注「待验证」，已可检索）")
             except Exception as exc:
                 st.error(f"提交失败：{exc}")
         else:

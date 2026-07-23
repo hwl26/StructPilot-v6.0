@@ -245,22 +245,12 @@ def render_teaching_view(
         _render_quiz(cp_id, questions)
 
     with tab_lab:
+        from components.experience_card import render_experience_card
+
         lab_exps = _load_lab_exps(cp_id)
         if lab_exps:
             for exp in lab_exps:
-                badge = "🥇 已验证" if exp.get("status") == "approved" else "⚠️ 待验证"
-                with st.expander(f"{badge} · {exp.get('title', '')}", expanded=False):
-                    st.markdown(f"**分类**：{exp.get('category', '')}")
-                    symptoms = exp.get("symptoms", [])
-                    if isinstance(symptoms, list):
-                        st.markdown("**症状**：" + "；".join(symptoms))
-                    elif isinstance(symptoms, str):
-                        st.markdown(f"**症状**：{symptoms}")
-                    st.markdown(f"**解决方案**：{exp.get('solution', '')}")
-                    rel_params = exp.get("related_params", {})
-                    if rel_params:
-                        st.markdown(f"**相关参数**：{rel_params}")
-                    st.caption(f"{exp.get('author', '')} · {exp.get('author_role', '')} · {exp.get('date', '')}")
+                render_experience_card(exp, expanded=False)
         else:
             st.info("本步骤暂无课题组经验记录。\n\n遇到问题后可通过「贡献经验」按钮添加。")
 
