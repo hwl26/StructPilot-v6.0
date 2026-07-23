@@ -52,6 +52,9 @@ config/embeddings_cache.json
 config/corpus_cache.json
 config/llm_config.json
 config/ui_settings.json
+# LLM 配置文件（含混淆后的 API Key，确保所有可能路径均被忽略）
+runtime/config/
+**/llm_config.json
 
 # Internal tooling (do not submit)
 .reasonix/
@@ -59,3 +62,6 @@ config/ui_settings.json
 
 # Release artifacts
 dist/
+# 大文件排除
+assets/background.png
+assets/mascot.png

@@ -12,10 +12,12 @@ import json
 import mimetypes
 import os
 import tempfile
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from response_profiles import (
     normalize_response_profile,
@@ -73,6 +75,27 @@ def _split_data_url(data_url: str) -> tuple[str, str]:
     header, payload = data_url.split(";base64,", 1)
     mime = header.removeprefix("data:") or "image/png"
     return mime, payload
+
+
+def _obfuscate(key: str) -> str:
+    """简单混淆 API Key，避免明文存储。非强加密，仅防偶然窥视。"""
+    if not key:
+        return ""
+    return "obf:" + base64.b64encode(key.encode("utf-8")).decode("ascii")
+
+
+def _deobfuscate(stored: str) -> str:
+    """解混淆 API Key。"""
+    if not stored or not stored.startswith("obf:"):
+        return stored  # 向后兼容：旧明文配置直接返回
+    try:
+        return base64.b64decode(stored[4:]).decode("utf-8")
+    except Exception:
+        return ""
+
+
+class LLMTransientError(Exception):
+    """临时性错误（网络超时、连接失败、429/500/502/503），可安全重试。"""
 
 
 class LLMAgent:
@@ -194,6 +217,8 @@ class LLMAgent:
         self.audio_base_url = ""
         self.audio_api_key = ""
         self.audio_enabled = False
+        # SSL 证书校验：默认开启，仅在自签名代理环境下通过环境变量关闭。
+        self.verify_ssl = os.environ.get("STRUCTPILOT_VERIFY_SSL", "true").lower() not in ("false", "0", "no")
         self.reload()
 
     def reload(self) -> None:
@@ -222,6 +247,10 @@ class LLMAgent:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict):
+                    # 还原混淆存储的 API Key（向后兼容旧明文配置）
+                    data["api_key"] = _deobfuscate(data.get("api_key") or "")
+                    data["embedding_api_key"] = _deobfuscate(data.get("embedding_api_key") or "")
+                    data["audio_api_key"] = _deobfuscate(data.get("audio_api_key") or "")
                     return data
             except Exception:
                 continue
@@ -254,6 +283,10 @@ class LLMAgent:
             "audio_base_url": existing.get("audio_base_url", ""),
             "audio_api_key": existing.get("audio_api_key", ""),
         }
+        # 写入前混淆 API Key，避免明文存储
+        data["api_key"] = _obfuscate(data.get("api_key") or "")
+        data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
+        data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         self.reload()
@@ -270,6 +303,10 @@ class LLMAgent:
         data["audio_model"] = self.normalize_audio_model(audio_model)
         data["audio_base_url"] = audio_base_url
         data["audio_api_key"] = audio_api_key
+        # 写入前混淆 API Key，避免明文存储
+        data["api_key"] = _obfuscate(data.get("api_key") or "")
+        data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
+        data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         self.reload()
@@ -286,6 +323,10 @@ class LLMAgent:
         data["embedding_model"] = embedding_model
         data["embedding_base_url"] = embedding_base_url
         data["embedding_api_key"] = embedding_api_key
+        # 写入前混淆 API Key，避免明文存储
+        data["api_key"] = _obfuscate(data.get("api_key") or "")
+        data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
+        data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         self.reload()
@@ -344,7 +385,7 @@ class LLMAgent:
             base = self.base_url.rstrip("/")
             models_url = f"{base}/models"
             headers = {"Authorization": f"Bearer {self.api_key}"}
-            fast_resp = _req.get(models_url, headers=headers, timeout=(10, self.timeout), verify=False)
+            fast_resp = _req.get(models_url, headers=headers, timeout=(10, self.timeout), verify=self.verify_ssl)
             fast_resp.raise_for_status()
             model_list = fast_resp.json().get("data", [])
             model_names = [m.get("id", "") for m in model_list[:5]]
@@ -485,6 +526,45 @@ class LLMAgent:
         blocks.append("请在不编造事实、不改变规则层结论的前提下，改写成自然、清晰、有陪跑感的回复。")
         return "\n\n".join(blocks)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=2, max=10),
+        retry=retry_if_exception_type(LLMTransientError),
+        reraise=True,
+    )
+    def _request_with_retry(
+        self,
+        url: str,
+        headers: Dict[str, str],
+        json_data: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        timeout: float = 60.0,
+        stream: bool = False,
+    ):
+        """执行 requests.post，遇到临时性错误自动指数退避重试。
+
+        重试仅覆盖连接建立阶段；流式响应（stream=True）拿到 response 对象后即返回，
+        后续 iter_lines 由调用方处理，不会触发重复输出。全部重试失败后抛出
+        LLMTransientError，由上层 try/except 降级为 rule_reply。
+        """
+        try:
+            resp = requests.post(
+                url,
+                headers=headers,
+                json=json_data,
+                data=data,
+                files=files,
+                timeout=timeout,
+                stream=stream,
+                verify=self.verify_ssl,
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            raise LLMTransientError(f"Network error: {exc.__class__.__name__}") from exc
+        if resp.status_code in (429, 500, 502, 503):
+            raise LLMTransientError(f"HTTP {resp.status_code}")
+        return resp
+
     def _openai_compatible_rewrite(self, user_text: str, rule_reply: str, context: str = "",
                                    image_paths: Optional[List[str]] = None, references: str = "",
                                    response_profile: str = "teaching") -> str:
@@ -506,12 +586,11 @@ class LLMAgent:
             ],
             "temperature": 0.35,
         }
-        response = requests.post(
+        response = self._request_with_retry(
             endpoint,
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json=payload,
+            json_data=payload,
             timeout=self.timeout,
-            verify=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -540,10 +619,10 @@ class LLMAgent:
             "temperature": temperature,
             "stream": True,
         }
-        response = requests.post(
+        response = self._request_with_retry(
             endpoint,
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json=payload,
+            json_data=payload,
             timeout=self.timeout,
             stream=True,
         )
@@ -600,16 +679,15 @@ class LLMAgent:
             "system": self._system_prompt(response_profile),
             "messages": [{"role": "user", "content": self._rewrite_prompt(user_text, rule_reply, context, references, response_profile)}],
         }
-        response = requests.post(
+        response = self._request_with_retry(
             endpoint,
             headers={
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             },
-            json=payload,
+            json_data=payload,
             timeout=self.timeout,
-            verify=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -631,7 +709,7 @@ class LLMAgent:
             ],
             "generationConfig": {"temperature": 0.35, "maxOutputTokens": 1200},
         }
-        response = requests.post(endpoint, headers={"Content-Type": "application/json"}, json=payload, timeout=self.timeout, verify=False)
+        response = self._request_with_retry(endpoint, headers={"Content-Type": "application/json"}, json_data=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         candidates = data.get("candidates", [])
@@ -660,16 +738,15 @@ class LLMAgent:
             "system": self._system_prompt(response_profile),
             "messages": [{"role": "user", "content": user_content}],
         }
-        response = requests.post(
+        response = self._request_with_retry(
             endpoint,
             headers={
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             },
-            json=payload,
+            json_data=payload,
             timeout=self.timeout,
-            verify=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -693,7 +770,7 @@ class LLMAgent:
             "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"temperature": 0.35, "maxOutputTokens": 1200},
         }
-        response = requests.post(endpoint, headers={"Content-Type": "application/json"}, json=payload, timeout=self.timeout, verify=False)
+        response = self._request_with_retry(endpoint, headers={"Content-Type": "application/json"}, json_data=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         candidates = data.get("candidates", [])
@@ -828,7 +905,7 @@ class LLMAgent:
                 "temperature": 0.3,
             }
             headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=self.timeout, verify=False)
+        response = self._request_with_retry(endpoint, headers=headers, json_data=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         if self.provider in {"anthropic", "claude"}:
@@ -874,10 +951,10 @@ class LLMAgent:
             return []
         endpoint = self.embedding_base_url.rstrip("/") + "/embeddings"
         payload = {"model": self.embedding_model, "input": list(texts)}
-        response = requests.post(
+        response = self._request_with_retry(
             endpoint,
             headers={"Authorization": f"Bearer {self.embedding_api_key}", "Content-Type": "application/json"},
-            json=payload,
+            json_data=payload,
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -894,18 +971,18 @@ class LLMAgent:
         endpoint = self.audio_base_url.rstrip("/") + "/audio/transcriptions"
         mime = mimetypes.guess_type(audio_path)[0] or "application/octet-stream"
         with open(audio_path, "rb") as f:
-            files = {"file": (os.path.basename(audio_path), f, mime)}
-            data = {"model": self.audio_model}
-            if language:
-                data["language"] = language
-            response = requests.post(
-                endpoint,
-                headers={"Authorization": f"Bearer {self.audio_api_key}"},
-                data=data,
-                files=files,
-                timeout=max(self.timeout, 60.0),
-                verify=False,
-            )
+            file_bytes = f.read()
+        files = {"file": (os.path.basename(audio_path), file_bytes, mime)}
+        data = {"model": self.audio_model}
+        if language:
+            data["language"] = language
+        response = self._request_with_retry(
+            endpoint,
+            headers={"Authorization": f"Bearer {self.audio_api_key}"},
+            data=data,
+            files=files,
+            timeout=max(self.timeout, 60.0),
+        )
         response.raise_for_status()
         payload = response.json()
         text = payload.get("text", "") if isinstance(payload, dict) else ""

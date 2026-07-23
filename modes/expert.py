@@ -1,0 +1,216 @@
+"""StructPilot v6.0 — 高级模式渲染层。
+
+复用原有双栏布局，追加：参数导出、预设管理、贡献经验入口。
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import json
+from pathlib import Path
+from typing import Any, Callable
+
+import streamlit as st
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+_PRESETS_DIR = BASE_DIR / "runtime" / "presets"
+_LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
+
+
+def _export_params_csv(current_cp: dict) -> str:
+    """把当前步骤参数导出为 CSV 字符串。"""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["参数名", "推荐值", "默认值", "说明"])
+    for tab in current_cp.get("tabs", []):
+        for p in tab.get("parameters", []):
+            writer.writerow([
+                p.get("name", ""),
+                p.get("recommended_value", ""),
+                p.get("default_value", ""),
+                p.get("description", ""),
+            ])
+    return buf.getvalue()
+
+
+def _export_params_json(current_cp: dict) -> str:
+    out = {}
+    for tab in current_cp.get("tabs", []):
+        for p in tab.get("parameters", []):
+            key = p.get("name", "")
+            if key:
+                out[key] = p.get("recommended_value", p.get("default_value", ""))
+    return json.dumps(out, ensure_ascii=False, indent=2)
+
+
+def _save_preset(preset_name: str, note: str, software: str, cp_id: str, params_json: str) -> bool:
+    try:
+        _PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in preset_name)
+        path = _PRESETS_DIR / f"{safe_name}.json"
+        preset = {
+            "preset_name": preset_name,
+            "note": note,
+            "software": software,
+            "step": cp_id,
+            "params": json.loads(params_json),
+        }
+        path.write_text(json.dumps(preset, ensure_ascii=False, indent=2), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+def _list_presets() -> list[dict]:
+    try:
+        _PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+        result = []
+        for f in _PRESETS_DIR.glob("*.json"):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                d["_filename"] = f.name
+                result.append(d)
+            except Exception:
+                pass
+        return result
+    except Exception:
+        return []
+
+
+def _render_export_panel(current_cp: dict) -> None:
+    """参数导出面板。"""
+    cp_id = current_cp.get("checkpoint_id", "")
+    cp_cn = current_cp.get("checkpoint_cn", cp_id)
+
+    st.markdown("#### 📥 导出当前步骤参数")
+    col_csv, col_json = st.columns(2)
+    with col_csv:
+        csv_data = _export_params_csv(current_cp)
+        st.download_button(
+            "📄 CSV 格式",
+            csv_data,
+            file_name=f"{cp_id}_params.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with col_json:
+        json_data = _export_params_json(current_cp)
+        st.download_button(
+            "📋 JSON 格式",
+            json_data,
+            file_name=f"{cp_id}_params.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+
+
+def _render_preset_manager(current_cp: dict, software: str) -> None:
+    """预设保存/加载面板。"""
+    cp_id = current_cp.get("checkpoint_id", "")
+    json_data = _export_params_json(current_cp)
+
+    st.markdown("#### 💾 预设管理")
+    col_save, col_load = st.columns(2)
+
+    with col_save:
+        st.markdown("**保存为预设**")
+        preset_name = st.text_input("预设名称", key="expert_preset_name",
+                                    placeholder="例：TRPV1膜蛋白标准流程")
+        note = st.text_input("备注（可选）", key="expert_preset_note",
+                              placeholder="适用条件、注意事项")
+        if st.button("💾 保存", key="expert_save_preset", use_container_width=True):
+            if preset_name.strip():
+                ok = _save_preset(preset_name, note, software, cp_id, json_data)
+                if ok:
+                    st.success(f"已保存预设：{preset_name}")
+                else:
+                    st.error("保存失败，请检查运行目录写入权限")
+            else:
+                st.warning("请先输入预设名称")
+
+    with col_load:
+        st.markdown("**加载已有预设**")
+        presets = _list_presets()
+        if presets:
+            names = [p.get("preset_name", p.get("_filename", "")) for p in presets]
+            sel = st.selectbox("选择预设", names, key="expert_load_sel")
+            sel_preset = next((p for p in presets if p.get("preset_name") == sel), None)
+            if sel_preset:
+                st.json(sel_preset.get("params", {}))
+            if st.button("📤 加载到当前步骤", key="expert_load_preset", use_container_width=True):
+                st.info("请手动将上方参数值填入软件（一键导入功能规划中）")
+        else:
+            st.caption("暂无已保存的预设")
+
+
+def _render_kb_contribute_panel(current_cp: dict) -> None:
+    """贡献课题组经验入口。"""
+    cp_id = current_cp.get("checkpoint_id", "")
+    cp_cn = current_cp.get("checkpoint_cn", cp_id)
+
+    st.markdown("#### 💡 贡献课题组经验")
+    with st.form(key=f"kb_contribute_{cp_id}"):
+        title = st.text_input("标题（简短描述问题）", placeholder="例：Motion Correction 报错 local motion too large")
+        category = st.selectbox("分类", ["报错解决方案", "参数调优经验", "非常规流程", "软件技巧"])
+        symptoms_text = st.text_area("症状描述（遇到了什么问题）", height=70)
+        solution = st.text_area("解决方案（怎么解决的）", height=80)
+        tags_str = st.text_input("标签（逗号分隔）", placeholder="运动校正, 漂移, B-factor")
+        submitted = st.form_submit_button("提交经验")
+
+    if submitted:
+        if title.strip() and solution.strip():
+            try:
+                try:
+                    data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {"entries": [], "meta": {}}
+                import datetime
+                new_entry = {
+                    "id": f"lab_{len(data['entries'])+1:03d}",
+                    "category": category,
+                    "title": title,
+                    "source": "lab_experience",
+                    "author": "用户贡献",
+                    "date": datetime.date.today().isoformat(),
+                    "status": "pending",
+                    "software": "通用",
+                    "step": cp_id,
+                    "symptoms": [s.strip() for s in symptoms_text.split("；") if s.strip()],
+                    "symptoms_text": symptoms_text,
+                    "solution": solution,
+                    "tags": [t.strip() for t in tags_str.split(",") if t.strip()],
+                }
+                data["entries"].append(new_entry)
+                _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                st.success("✅ 经验已提交，待管理员审核后生效（目前标注「待验证」，已可检索）")
+            except Exception as exc:
+                st.error(f"提交失败：{exc}")
+        else:
+            st.warning("请至少填写标题和解决方案")
+
+
+def render_expert_view(
+    current_cp: dict,
+    software: str,
+) -> None:
+    """高级模式：在折叠面板中渲染导出/预设/贡献经验功能。"""
+    cp_id = current_cp.get("checkpoint_id", "")
+    cp_cn = current_cp.get("checkpoint_cn", current_cp.get("checkpoint_name", ""))
+
+    st.markdown(f"#### 当前步骤：{cp_cn}")
+
+    # ── 工具栏 ───────────────────────────────────────────────
+    t_export, t_presets, t_contribute = st.tabs(
+        ["📥 导出参数", "💾 预设管理", "💡 贡献经验"]
+    )
+
+    with t_export:
+        _render_export_panel(current_cp)
+
+    with t_presets:
+        _render_preset_manager(current_cp, software)
+
+    with t_contribute:
+        _render_kb_contribute_panel(current_cp)
+

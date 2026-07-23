@@ -1,0 +1,209 @@
+[
+  {
+    "doc_id": "formal_cp_04_7b6ee678",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "particle_picking",
+    "screen_name": "Manual picking, LoG-based auto-picking, Auto-picking / Topaz related workflow",
+    "checkpoint_id": "cp_04",
+    "title_cn": "LoG auto-picking 适合什么场景？",
+    "title_en": "",
+    "summary": "Q: LoG auto-picking 适合什么场景？\nA: LoG auto-picking 是 RELION 的 template-free 颗粒挑选方法，适合：\n1. 早期初始挑选：还没有可靠模板时，用 LoG 生成第一批颗粒进入 2D 分类。\n2. 颗粒形状近似球形或可通过直径描述的场景。\n3. 使用方法：在 Optimisation tab 设置 Min/Max diameter（基于预期颗粒直径，留 20-30% 余量），LoG filter 会响应直径范围内的 blob。\n4. 局限：对非球形或密集分布颗粒效果差；结果通常不应直接视为最终颗粒集，而是用于生成可被 2D 分类进一步清理的初始集合。\n5. 随机检查 micrographs 上 picks 是否落在真实颗粒中心，调整阈值后可全数据集运行。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Autopicking.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ParticlePicking.html; https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html",
+    "ui_keywords": [
+      "Particle diameter",
+      "LoG filter range",
+      "Picking threshold",
+      "Inter-particle distance",
+      "Topaz training set",
+      "Manual picking",
+      "LoG-based auto-picking",
+      "Auto-picking / Topaz related workflow"
+    ],
+    "ui_elements": [
+      "Manual picking",
+      "LoG-based auto-picking",
+      "Auto-picking / Topaz related workflow"
+    ],
+    "action_steps": [
+      "LoG auto-picking 是 RELION 的 template-free 颗粒挑选方法，适合：\n1. 早期初始挑选：还没有可靠模板时，用 LoG 生成第一批颗粒进入 2D 分类。\n2. 颗粒形状近似球形或可通过直径描述的场景。\n3. 使用方法：在 Optimisation tab 设置 Min/Max diameter（基于预期颗粒直径，留 20-30% 余量），LoG filter 会响应直径范围内的 blob。\n4. 局限：对非球形或密集分布颗粒效果差；结果通常不应直接视为最终颗粒集，而是用于生成可被 2D 分类进一步清理的初始集合。\n5. 随机检查 micrographs 上 picks 是否落在真实颗粒中心，调整阈值后可全数据集运行。"
+    ],
+    "qc_checks": [
+      "随机抽查 micrographs 上的 picks 是否落在真实颗粒中心",
+      "假阳性和漏检比例可接受",
+      "颗粒密度不过高也不过低",
+      "挑选结果能支撑后续 2D 分类"
+    ],
+    "common_errors": [
+      "阈值过松导致冰污染、碳边、噪声被大量挑入",
+      "阈值过严导致颗粒数量不足",
+      "颗粒直径估计不准影响 LoG 或 template picking",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_04"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_04_cf5d6531",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "particle_picking",
+    "screen_name": "Manual picking, LoG-based auto-picking, Auto-picking / Topaz related workflow",
+    "checkpoint_id": "cp_04",
+    "title_cn": "Topaz 前需要准备什么训练集？",
+    "title_en": "",
+    "summary": "Q: Topaz 前需要准备什么训练集？\nA: Topaz 训练集准备原则：\n1. 有代表性的训练样本：人工检查过的颗粒坐标或可靠初始 picks（如 LoG 结果经 2D 分类清理后的颗粒）。\n2. 覆盖多样性：不同 micrograph 质量、视野、颗粒外观都要有代表。\n3. 训练集规模：官方 tutorial 用数百到数千颗粒即可。\n4. 避免偏差：如果只来自少数好图或包含大量假阳性，模型会把偏差放大到全数据集。\n5. 保守流程：先用少量人工挑选或 LoG/template-free 结果产生候选 → 2D 分类和人工抽查清理 → 作为 Topaz 训练信号。\n6. RELION 5 集成了 Topaz wrapper，在 GUI 的 Autopicking job 中选择 Topaz 即可。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Autopicking.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ParticlePicking.html; https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html",
+    "ui_keywords": [
+      "Particle diameter",
+      "LoG filter range",
+      "Picking threshold",
+      "Inter-particle distance",
+      "Topaz training set",
+      "Manual picking",
+      "LoG-based auto-picking",
+      "Auto-picking / Topaz related workflow"
+    ],
+    "ui_elements": [
+      "Manual picking",
+      "LoG-based auto-picking",
+      "Auto-picking / Topaz related workflow"
+    ],
+    "action_steps": [
+      "Topaz 训练集准备原则：\n1. 有代表性的训练样本：人工检查过的颗粒坐标或可靠初始 picks（如 LoG 结果经 2D 分类清理后的颗粒）。\n2. 覆盖多样性：不同 micrograph 质量、视野、颗粒外观都要有代表。\n3. 训练集规模：官方 tutorial 用数百到数千颗粒即可。\n4. 避免偏差：如果只来自少数好图或包含大量假阳性，模型会把偏差放大到全数据集。\n5. 保守流程：先用少量人工挑选或 LoG/template-free 结果产生候选 → 2D 分类和人工抽查清理 → 作为 Topaz 训练信号。\n6. RELION 5 集成了 Topaz wrapper，在 GUI 的 Autopicking job 中选择 Topaz 即可。"
+    ],
+    "qc_checks": [
+      "随机抽查 micrographs 上的 picks 是否落在真实颗粒中心",
+      "假阳性和漏检比例可接受",
+      "颗粒密度不过高也不过低",
+      "挑选结果能支撑后续 2D 分类"
+    ],
+    "common_errors": [
+      "阈值过松导致冰污染、碳边、噪声被大量挑入",
+      "阈值过严导致颗粒数量不足",
+      "颗粒直径估计不准影响 LoG 或 template picking",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_04"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_04",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "particle_picking",
+    "screen_name": "Blob Picker / Topaz Train / Topaz Extract / Create Templates / Template Picker",
+    "checkpoint_id": "cp_04",
+    "title_cn": "cryoSPARC 颗粒挑选 — 实验室三方法对比（Blob/Topaz/Template）",
+    "title_en": "",
+    "summary": "实验室标准三方法：Blob Picker（无监督初挑，diameter 用 PyMOL 测定 max=min、separation=0.6、max local maxima=400）→ Topaz Train（深度学习，expected particles≈450、parallel=16、训练集~1000张）→ Topaz Extract；已有 3D 模型后用 Create Templates（50 投影、zeropadding=2）+ Template Picker（max local maxima 100~400）补全取向劣势方向。",
+    "ui_keywords": [
+      "min_particle_diameter",
+      "max_particle_diameter",
+      "min_separation_dist",
+      "max_local_maxima",
+      "expected_particles",
+      "num_parallel_processes",
+      "topaz_executable_path",
+      "num_templates",
+      "zeropadding_factor",
+      "Blob Picker",
+      "Topaz Train",
+      "Topaz Extract",
+      "Create Templates",
+      "Template Picker"
+    ],
+    "ui_elements": [
+      "Blob Picker",
+      "Topaz Train",
+      "Topaz Extract",
+      "Create Templates",
+      "Template Picker"
+    ],
+    "action_steps": [
+      "Blob Picker：Min/Max particle diameter (Å) 用 PyMOL 测定蛋白外接圆直径（max=min）；Min separation dist=0.6 diameters；Maximum number of local maxima=400（视颗粒数量调整）。",
+      "Topaz 训练集准备：从 Blob 结果中用 Curate Exposures 的 Threshold 选约 1000 张好照片 + Select 2D 选出的好颗粒坐标作为 ground truth。",
+      "Topaz Train：Path to Topaz executable=/home/software/miniconda3/envs/topaz/bin/topaz；Number of parallel processes=16；Expected number of particles=450（可调，根据单张 micrograph 颗粒密度，一般 400 起步）。",
+      "Topaz Extract：用训练好的模型在所有原始照片推理输出颗粒坐标（parallel=16）。",
+      "Create Templates：Number of equally-spaced templates=50（生成全方向投影）；Zeropadding factor=2。",
+      "Template Picker：Particle diameter 同 Blob（PyMOL 测定 max=min）；Min separation=0.6；Max local maxima=100~400（劣势取向面设低、优势构象设高）。",
+      "标准路径：Blob 初挑 → 2D(100类,5Å) → Select 2D → Topaz Train → Topaz Extract → Remove Duplicates 合并。",
+      "取向补全路径：标准路径 → Ab-Initio → 识别劣势取向 → Create Templates → Template Picker 补全 → Remove Duplicates。"
+    ],
+    "qc_checks": [
+      "Blob 挑完后做快速 2D（100类 res=5Å），class average 应清晰；大量模糊说明 Blob 参数不合适或 SNR 太低",
+      "Topaz 训练观察 loss 曲线：training 和 validation loss 都持续下降并收敛为理想；validation loss 不降反升=过拟合",
+      "Template Picker 后检查取向分布是否补全（Euler 角分布）",
+      "三方法结果合并前必须过 Remove Duplicates（否则下游 3D 过度拟合、分辨率虚高）"
+    ],
+    "common_errors": [
+      "T02 Topaz 训练过度拟合：training loss 低但 validation loss 升 → 增加训练集多样性/数量（~500→~1000张）、减少训练轮次、检查 GT 质量",
+      "T03 取向分布不均（preferred orientation）：蛋白倾向特定方向吸附 → Template Picker 补全劣势方向、倾斜采集、改冰层条件",
+      "Blob 在低 SNR/小蛋白（<100kDa）场景漏挑 → 改用 Topaz（深度学习对低 SNR 更鲁棒）",
+      "三方法结果直接拼接不去重 → 下游 3D 重建过度拟合、分辨率虚高，必须 Remove Duplicates"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_04"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Autopicking (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Autopicking.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_04",
+    "title_cn": "RELION 颗粒挑选(AutoPick)与提取(Extract)",
+    "title_en": "RELION SPA Tutorial — Autopicking",
+    "summary": "从微图中进行颗粒挑选与提取：先选微图子集，用 LoG 滤波自动挑初选颗粒，提取后做 2D 分类并用自动化神经网络选优类，再用其重训 Topaz 并全图挑选，最后按 FOM 阈值提取颗粒，形成后续处理用的初始数据集。",
+    "action_steps": [
+      "Subset selection：选 micrographs_split1.star（10 张微图）供训练",
+      "AutoPick(LoG)：Min/Max diameter 150/180 A 挑初选坐标",
+      "Extract：Particle box size 256 pix，Rescale 至 64 pix",
+      "Class2D：2D classification 得类平均，Subset selection 自动选类(auto-select)",
+      "AutoPick(Topaz)：先训练 model_epoch10.sav，再全图 picking，particle diameter 180 A",
+      "Extract：按 AutoPick/job011/autopick.star 提取，Use autopick FOM threshold，Minimum -3"
+    ],
+    "qc_checks": [
+      "提取前确认 autopick.star 覆盖所需微图",
+      "坐标缺失微图会 GUI 红警"
+    ],
+    "common_errors": [
+      "Topaz training 须单 MPI process，不并行；picking 可多 MPI",
+      "float16 输出省空间，但非 RELION/CCPEM 程序可能不兼容"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_04",
+      "cp_05",
+      "autopick",
+      "extract",
+      "topaz",
+      "log"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Autopicking.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

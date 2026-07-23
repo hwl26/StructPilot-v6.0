@@ -11,6 +11,7 @@ import mimetypes
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 import inspect
 
@@ -28,16 +29,19 @@ from streamlit_paste_button import paste_image_button
 from graph.app import StructPilotApp
 from graph.state import PipelineState
 from knowledge_base.importer import (
-    KnowledgeDoc, TIER_LABELS, load_knowledge_doc, update_knowledge_index,
-    load_knowledge_index, delete_knowledge_doc, update_doc_status,
+    KnowledgeDoc, TIER_LABELS, load_knowledge_doc,
     doc_from_dict, detect_conflicts, doc_to_text,
+)
+from knowledge_base.paths import (
+    load_sharded_knowledge_index, add_doc_to_sharded_index,
+    delete_doc_from_sharded_index, update_doc_status_in_sharded_index,
 )
 from knowledge_base.corrections import append_correction, load_corrections, make_correction, normalize_query
 from knowledge_base.document_ingest import build_ingest_draft
 from utils.ui_settings import load_ui_settings, save_ui_settings
 from utils.perf_cache import get_cached_app, get_cached_llm_agent, mark_kb_dirty as perf_mark_kb_dirty, clear_app_cache
 from utils.image_lazy import render_lazy_image, generate_thumbnail_data_url, get_cached_image_data_url
-from agent.ui_state_manager import (
+from utils.ui_state_manager import (
     init_ui_state, get_state, set_state,
     get_llm_mode, set_llm_mode, detect_llm_mode, get_mode_label,
     get_chat_display_window, get_older_summary,
@@ -61,94 +65,32 @@ from ui.components import (
     render_stage_workspace, render_parameter_panel, render_image_gallery,
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
-
-
-BASE_DIR = Path(__file__).resolve().parent
-APP_API_VERSION = "v4-response-profile-1"
-RUNTIME_ROOT = Path(
-    os.getenv(
-        "STRUCTPILOT_RUNTIME_DIR",
-        str(BASE_DIR / "runtime"),
-    )
+from ui.styles import (
+    THEMES, _WORKSPACE_CSS, _workspace_theme_css, build_global_styles,
 )
-os.environ.setdefault("STRUCTPILOT_RUNTIME_DIR", str(RUNTIME_ROOT))
+from utils.file_upload import (
+    ALLOWED_IMAGE_MIME_TYPES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS,
+    ALLOWED_AUDIO_EXTENSIONS, ALLOWED_AUDIO_MIME_TYPES, MAX_AUDIO_SIZE,
+    save_uploaded_images, save_pasted_image, save_uploaded_audio,
+    get_image_metadata,
+)
+from utils.image_processing import (
+    image_data_url, run_local_ocr, run_optional_vision_model, parse_bool_env,
+)
 
 
-def ensure_runtime_dir(preferred: Path, fallback_name: str) -> Path:
-    """Return a writable runtime directory from several Windows-friendly locations."""
-    roots = [preferred]
-    if os.getenv("STRUCTPILOT_RUNTIME_DIR"):
-        runtime = Path(os.getenv("STRUCTPILOT_RUNTIME_DIR", ""))
-        roots.append(runtime / "memory" / fallback_name)
-        roots.append(runtime / fallback_name)
-    roots.extend(
-        [
-            BASE_DIR / "runtime" / "memory" / fallback_name,
-            Path.home() / "Documents" / "struct" / "StructPilot_v4_runtime" / "memory" / fallback_name,
-            Path(tempfile.gettempdir()) / "StructPilot_v4" / fallback_name,
-        ]
-    )
-    tried = []
-    for path in roots:
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-            probe = path / ".write_test"
-            probe.write_text("", encoding="utf-8")
-            # 上面的写入成功已经证明该目录可写。探针文件的清理仅作
-            # 尽力而为：沙箱化的 Windows 环境会把 unlink 接管为"安全删除"
-            # （依赖回收站），而回收站可能不可用并抛 OSError —— 这绝不能
-            # 让"可写性校验"失败，否则会误报 PermissionError。
-            try:
-                probe.unlink(missing_ok=True)
-            except OSError:
-                pass
-            return path
-        except OSError as exc:
-            tried.append(f"{path} ({exc})")
-    raise PermissionError("无法创建可写运行目录：" + " | ".join(tried))
+# Runtime paths and shared low-level helpers live in utils.runtime_paths to
+# avoid circular imports (modules under utils/ must never import from main.py).
+from utils.runtime_paths import (
+    BASE_DIR, RUNTIME_ROOT, ensure_runtime_dir,
+    MEMORY_DIR, UPLOAD_DIR, AUDIO_DIR, CACHE_DIR,
+    IMAGE_OCR_CACHE_DIR, AUDIO_CACHE_DIR,
+    GUIDE_CARDS_PATH, CORRECTIONS_PATH, INGEST_ASSET_ROOT,
+    file_sha256, _read_json_cache, _write_json_cache,
+)
 
-
-MEMORY_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory", "memory")
-UPLOAD_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory" / "uploads", "uploads")
-AUDIO_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory" / "audio", "audio")
-CACHE_DIR = ensure_runtime_dir(RUNTIME_ROOT / "cache", "cache")
-IMAGE_OCR_CACHE_DIR = ensure_runtime_dir(CACHE_DIR / "image_ocr", "image_ocr")
-AUDIO_CACHE_DIR = ensure_runtime_dir(CACHE_DIR / "audio_transcripts", "audio_transcripts")
-GUIDE_CARDS_PATH = BASE_DIR / "knowledge_base" / "guides" / "guide_cards.json"
+APP_API_VERSION = "v4-response-profile-1"
 GUIDE_VISUAL_HASH_DISTANCE_THRESHOLD = 42
-CORRECTIONS_PATH = BASE_DIR / "knowledge_base" / "review" / "user_corrections.jsonl"
-INGEST_ASSET_ROOT = BASE_DIR / "assets" / "user_guides"
-
-# ============= File Upload Security Configuration =============
-# 允许的图片 MIME 类型
-ALLOWED_IMAGE_MIME_TYPES = {
-    "image/png",
-    "image/jpeg",
-    "image/jpg",
-    "image/gif",
-    "image/webp",
-    "image/bmp",
-    "image/tiff",
-}
-
-# 最大文件大小：10 MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-# 允许的文件扩展名
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
-ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mp4", ".mpeg", ".mpga", ".webm", ".ogg"}
-ALLOWED_AUDIO_MIME_TYPES = {
-    "audio/mpeg",
-    "audio/mp3",
-    "audio/wav",
-    "audio/x-wav",
-    "audio/mp4",
-    "audio/m4a",
-    "audio/webm",
-    "audio/ogg",
-    "video/mp4",
-}
-MAX_AUDIO_SIZE = 25 * 1024 * 1024
 
 STATUS_LABELS = {
     "pending": ("⚪", "待处理"),
@@ -161,52 +103,6 @@ STATUS_LABELS = {
 
 def make_session_id() -> str:
     return "session_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-
-
-def file_sha256(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _read_json_cache(path: Path) -> dict | None:
-    try:
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else None
-    except Exception:
-        return None
-    return None
-
-
-def _write_json_cache(path: Path, data: dict) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
-def get_image_metadata(path: str) -> dict:
-    """Return safe local image facts for prompts and audit logs."""
-    meta = {"width": None, "height": None, "mode": "", "format": ""}
-    if not path or not os.path.exists(path):
-        return meta
-    try:
-        from PIL import Image
-
-        with Image.open(path) as im:
-            meta.update({
-                "width": int(im.width),
-                "height": int(im.height),
-                "mode": str(im.mode or ""),
-                "format": str(im.format or ""),
-            })
-    except Exception:
-        pass
-    return meta
 
 
 @st.cache_data(show_spinner=False)
@@ -318,29 +214,35 @@ def prewarm_runtime_caches() -> dict:
     except Exception as exc:
         report["errors"].append(f"guide:{exc}")
 
-    old_cp_id = getattr(state, "current_cp_id", "")
-    old_cp_name = getattr(state, "current_cp_name", "")
-    old_action = getattr(state, "action_tag", "")
+    _app = globals().get("app")
+    _state = globals().get("state")
+    if _app is None or _state is None:
+        report["errors"].append("app/state not yet initialized; skipping SOP/RAG prewarm")
+        return report
+
+    old_cp_id = getattr(_state, "current_cp_id", "")
+    old_cp_name = getattr(_state, "current_cp_name", "")
+    old_action = getattr(_state, "action_tag", "")
     try:
-        for cp in app.navigator.checkpoints:
+        for cp in _app.navigator.checkpoints:
             cp_id = cp.get("checkpoint_id")
             if not cp_id:
                 continue
-            state.current_cp_id = cp_id
-            state.current_cp_name = cp.get("checkpoint_cn", "")
-            app.sop.quick_sop(state)
+            _state.current_cp_id = cp_id
+            _state.current_cp_name = cp.get("checkpoint_cn", "")
+            _app.sop.quick_sop(_state)
             report["sop_cards"] += 1
     except Exception as exc:
         report["errors"].append(f"sop:{exc}")
     finally:
-        state.current_cp_id = old_cp_id
-        state.current_cp_name = old_cp_name
-        state.action_tag = old_action
+        _state.current_cp_id = old_cp_id
+        _state.current_cp_name = old_cp_name
+        _state.action_tag = old_action
 
     try:
-        corpus = app.retriever.build_corpus(force_rebuild=True)
+        corpus = _app.retriever.build_corpus(force_rebuild=True)
         report["rag_docs"] = len(corpus or [])
-        hits = app.retriever.search("cryo em motion correction ctf pixel size", top_k=3)
+        hits = _app.retriever.search("cryo em motion correction ctf pixel size", top_k=3)
         report["rag_hits"] = len(hits or [])
     except Exception as exc:
         report["errors"].append(f"rag:{exc}")
@@ -515,9 +417,6 @@ def render_guide_card(card: dict, key_prefix: str = "") -> None:
   margin-bottom: 8px;
 }
 .sp-screen-title { font-weight: 650; color: #334155; }
-.sp-guide-image-wrap { display: block; border-radius: 6px; }
-.sp-hotspot { width: 30px; height: 30px; }
-.sp-hotspot:hover { background: #0f766e; transform: translate(-50%, -50%) scale(1.06); }
 .sp-image-badge { border-radius: 6px; padding: 5px 9px; background: #ffffff; }
 .sp-param-list {
   border: 1px solid #d9e2ef;
@@ -761,103 +660,6 @@ def build_session_report(state: PipelineState, cp_total: int) -> str:
     return "\n".join(lines)
 
 
-def save_uploaded_images(files) -> list:
-    """Persist uploaded files to disk and return image reference dicts.
-
-    Validates file type, size, and extension for security.
-    """
-    refs = []
-    for f in files or []:
-        # Validate file size
-        file_size = len(f.getbuffer())
-        if file_size > MAX_FILE_SIZE:
-            st.warning(f"文件 {f.name} 超过最大限制 {MAX_FILE_SIZE // (1024*1024)}MB，已跳过")
-            continue
-
-        # Validate file extension
-        file_ext = Path(f.name).suffix.lower()
-        if file_ext not in ALLOWED_EXTENSIONS:
-            st.warning(f"文件 {f.name} 类型不支持（仅支持图片格式），已跳过")
-            continue
-
-        # Validate MIME type
-        mime_type = getattr(f, "type", "")
-        if mime_type and mime_type not in ALLOWED_IMAGE_MIME_TYPES:
-            st.warning(f"文件 {f.name} MIME 类型 {mime_type} 不支持，已跳过")
-            continue
-
-        # Secure filename - use timestamp + hash to prevent path traversal
-        safe_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{hashlib.sha256(f.name.encode()).hexdigest()[:8]}{file_ext}"
-        out = UPLOAD_DIR / safe_name
-        out.write_bytes(f.getbuffer())
-        image_meta = get_image_metadata(str(out))
-        refs.append({
-            "image_name": f.name,
-            "image_path": str(out),
-            "mime_type": mime_type,
-            "sha256": file_sha256(str(out)),
-            "source_type": "upload",
-            "created_at": datetime.now().isoformat(),
-            "width": image_meta.get("width"),
-            "height": image_meta.get("height"),
-            "image_format": image_meta.get("format"),
-            "mode": image_meta.get("mode"),
-        })
-    return refs
-
-
-def save_pasted_image(pil_image) -> dict:
-    """Persist a PIL image from clipboard paste and return an image reference dict."""
-    name = f"pasted_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
-    out = UPLOAD_DIR / name
-    pil_image.save(str(out), format="PNG")
-    image_meta = get_image_metadata(str(out))
-    return {
-        "image_name": name,
-        "image_path": str(out),
-        "mime_type": "image/png",
-        "sha256": file_sha256(str(out)),
-        "source_type": "paste",
-        "created_at": datetime.now().isoformat(),
-        "width": image_meta.get("width"),
-        "height": image_meta.get("height"),
-        "image_format": image_meta.get("format"),
-        "mode": image_meta.get("mode"),
-    }
-
-
-def save_uploaded_audio(file) -> str:
-    """Persist one uploaded audio file after size/type checks and return its path."""
-    if file is None:
-        return ""
-    file_size = len(file.getbuffer())
-    if file_size > MAX_AUDIO_SIZE:
-        raise ValueError(f"音频超过最大限制 {MAX_AUDIO_SIZE // (1024 * 1024)}MB")
-    file_ext = Path(file.name).suffix.lower()
-    if file_ext not in ALLOWED_AUDIO_EXTENSIONS:
-        raise ValueError("音频格式不支持")
-    mime_type = getattr(file, "type", "")
-    if mime_type and mime_type not in ALLOWED_AUDIO_MIME_TYPES:
-        raise ValueError(f"音频 MIME 类型 {mime_type} 不支持")
-    safe_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{hashlib.sha256(file.name.encode()).hexdigest()[:8]}{file_ext}"
-    out = AUDIO_DIR / safe_name
-    out.write_bytes(file.getbuffer())
-    return str(out)
-
-
-def describe_image_refs(image_refs: list | None) -> str:
-    """Build a compact text context block for images attached to a user turn."""
-    if not image_refs:
-        return ""
-    lines = ["本轮附带截图/图片，请结合图片和文字描述判断当前 cryo-EM 处理状态。"]
-    for idx, ref in enumerate(image_refs, start=1):
-        name = ref.get("image_name", f"image_{idx}")
-        source = ref.get("source_type", "upload")
-        mime = ref.get("mime_type", "")
-        lines.append(f"图片 {idx}: {name} ({source}, {mime})")
-    return "\n".join(lines)
-
-
 def describe_image_refs(image_refs: list | None) -> str:
     """Build compact image context, including dimensions when available."""
     if not image_refs:
@@ -874,20 +676,6 @@ def describe_image_refs(image_refs: list | None) -> str:
     return "\n".join(lines)
 
 
-@st.cache_data(show_spinner=False)
-def image_data_url(path: str) -> str:
-    """Read a local image file and return a base64 data URL, or '' if missing.
-
-    内嵌为 data URL，避免 Streamlit 静态文件路径限制；文件不存在时安静返回空串。
-    """
-    if not path or not os.path.exists(path):
-        return ""
-    mime = mimetypes.guess_type(path)[0] or "image/png"
-    with open(path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
-
-
 CRITICAL_IMAGE_PARAMS = {
     "pixel_size",
     "accelerating_voltage",
@@ -900,13 +688,6 @@ CRITICAL_IMAGE_PARAMS = {
     "box_size",
     "ctf_fit",
 }
-
-
-def parse_bool_env(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def normalize_param_key(key: str) -> str:
@@ -976,52 +757,6 @@ def extract_params_with_evidence(text: str, source: str, confidence: float, auth
             }
         )
     return candidates
-
-
-@st.cache_data(show_spinner=False)
-def run_local_ocr(path: str) -> dict:
-    """Run local OCR when an OCR engine is installed; never calls network services."""
-    result = {"available": False, "engine": "none", "text": "", "error": ""}
-    if not path or not os.path.exists(path):
-        result["error"] = "image file missing"
-        return result
-    try:
-        digest = file_sha256(path)
-        cache_path = IMAGE_OCR_CACHE_DIR / f"{digest}.json"
-        cached = _read_json_cache(cache_path)
-        if cached:
-            cached["cache_hit"] = True
-            return cached
-    except Exception:
-        digest = ""
-        cache_path = None
-    try:
-        import pytesseract  # type: ignore
-
-        text = pytesseract.image_to_string(path) or ""
-        result.update({"available": True, "engine": "pytesseract", "text": text})
-        result["cache_hit"] = False
-        if cache_path is not None:
-            _write_json_cache(cache_path, result)
-        return result
-    except Exception as exc:
-        result["error"] = str(exc)[:220]
-        result["cache_hit"] = False
-        if cache_path is not None:
-            _write_json_cache(cache_path, result)
-        return result
-
-
-def run_optional_vision_model(ref: dict, user_text: str = "") -> dict:
-    """Optional advisory hook. Vision output is never authoritative for critical params."""
-    if not parse_bool_env("STRUCTPILOT_ENABLE_VISION", False):
-        return {"enabled": False, "available": False, "candidates": [], "error": "disabled"}
-    return {
-        "enabled": True,
-        "available": False,
-        "candidates": [],
-        "error": "vision hook not configured; set up a reviewed local/remote vision adapter before use",
-    }
 
 
 def arbitrate_image_params(candidates: list, current_params: dict | None = None) -> dict:
@@ -1160,24 +895,6 @@ def infer_image_observations(image_refs: list | None, user_text: str = "", curre
         }
         observations.append(observation)
     return observations
-
-
-def format_image_observations(observations: list | None) -> str:
-    if not observations:
-        return ""
-    lines = ["本地结构化截图识别（规则层证据，供模型参考；未做不可见数值猜测）："]
-    for idx, obs in enumerate(observations, start=1):
-        dims = f"{obs.get('width')}x{obs.get('height')}px" if obs.get("width") and obs.get("height") else "unknown-size"
-        params = obs.get("visible_params") or {}
-        param_text = ", ".join(f"{k}={v}" for k, v in params.items()) or "未从文字/文件名中抽取到参数"
-        lines.append(
-            f"图片 {idx}: software={obs.get('software_guess')}, stage={obs.get('stage_guess')}, "
-            f"size={dims}, params=[{param_text}]"
-        )
-        validation = obs.get("validation") or {}
-        if validation.get("concerns"):
-            lines.append(f"参数校验关注点: {'; '.join(validation.get('concerns') or [])}")
-    return "\n".join(lines)
 
 
 def format_image_observations(observations: list | None) -> str:
@@ -1326,12 +1043,19 @@ if "_pending_clear_pet_action" in st.session_state:
 # Performance optimization: initialize centralized UI state manager
 init_ui_state()
 
-THEMES = {
-    "静谧蓝": {"app": "#f7f8fa", "sidebar": "#ffffff", "accent": "#3b82f6", "accent2": "#6366f1", "text": "#1e293b", "sidebar_text": "#475569", "sidebar_border": "#e2e8f0"},
-    "墨竹绿": {"app": "#f7faf8", "sidebar": "#ffffff", "accent": "#059669", "accent2": "#0d9488", "text": "#1a2e22", "sidebar_text": "#475569", "sidebar_border": "#e2e8f0"},
-    "雅致紫": {"app": "#f8f7fc", "sidebar": "#ffffff", "accent": "#7c3aed", "accent2": "#6366f1", "text": "#1e1b2e", "sidebar_text": "#475569", "sidebar_border": "#e2e8f0"},
-    "深邃黑": {"app": "#0f172a", "sidebar": "#1e293b", "accent": "#38bdf8", "accent2": "#818cf8", "text": "#e2e8f0", "sidebar_text": "#94a3b8", "sidebar_border": "#334155"},
-}
+# 三模式架构：app_mode 控制UI层渲染方式（beginner / teaching / expert）
+# 底层12步工作流、知识库、LangGraph 编排完全不受影响
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "beginner"  # 默认入门模式
+if "mode_history" not in st.session_state:
+    st.session_state.mode_history = []  # 记录切换历史
+if "teaching_progress" not in st.session_state:
+    st.session_state.teaching_progress = {}  # 教学进度追踪
+
+# 视图详细程度控制（影响LLM回答和界面展示）
+if "output_detail_level" not in st.session_state:
+    st.session_state.output_detail_level = "详细"  # 简化/详细/完整
+
 if st.session_state.ui_theme not in THEMES:
     st.session_state.ui_theme = "静谧蓝"
 _theme = THEMES.get(st.session_state.ui_theme, THEMES["静谧蓝"])
@@ -1365,1186 +1089,7 @@ _logo_imgs = "".join(
     for idx, u in enumerate((_logo1, _logo2), start=1) if u
 )
 
-st.markdown(
-    f"""
-    <style>
-    @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
-    :root {{
-        color-scheme: {'dark' if _is_dark else 'light'};
-        --sp-accent: {_theme['accent']};
-        --sp-accent2: {_theme['accent2']};
-        --sp-text: {_theme['text']};
-        --sp-sidebar-text: {_theme['sidebar_text']};
-        --sp-sidebar-border: {_theme['sidebar_border']};
-    }}
-
-    .material-icons, [data-testid="stIconMaterial"], .st-emotion-cache-1c9yjad, .st-emotion-cache-1dkvzay, .st-emotion-cache-tu72us {{
-        font-family: 'Material Icons' !important;
-        font-weight: 400 !important;
-        font-style: normal !important;
-        font-size: 24px !important;
-        line-height: 1 !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        display: inline-block !important;
-        white-space: nowrap !important;
-        word-wrap: normal !important;
-        direction: ltr !important;
-        -webkit-font-feature-settings: 'liga' !important;
-        -webkit-font-smoothing: antialiased !important;
-    }}
-
-    .stApp {{ {_app_bg} }}
-
-    /* ===== Fix code tag dark background ===== */
-    code, pre {{
-        background: transparent !important;
-        color: inherit !important;
-        border: none !important;
-        padding: 0 !important;
-    }}
-    div[data-testid="stVerticalBlock"] code {{
-        background: transparent !important;
-    }}
-
-    /* ===== Phase header ===== */
-    .sp-phase-header {{
-        font-size: 0.68rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: {_theme['accent']};
-        padding: 0.6rem 0.5rem 0.2rem 0.5rem;
-        margin-top: 0.3rem;
-        border-bottom: 1px solid {_theme['sidebar_border']};
-    }}
-
-    /* ===== Progress stats ===== */
-    .sp-progress-stats {{
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.72rem;
-        padding: 0.3rem 0.5rem;
-        margin-top: 0.2rem;
-        color: {_theme['sidebar_text']};
-    }}
-    .sp-progress-stats .sp-stat-passed {{ color: #22c55e; font-weight: 500; }}
-    .sp-progress-stats .sp-stat-failed {{ color: #ef4444; font-weight: 500; }}
-    .sp-progress-stats .sp-stat-skipped {{ color: #f59e0b; font-weight: 500; }}
-
-    /* ===== Sidebar — ultra minimal ===== */
-    section[data-testid="stSidebar"] {{
-        background: {_theme['sidebar']} !important;
-        border-right: 1px solid {_theme['sidebar_border']} !important;
-        box-shadow: none !important;
-        padding-top: 1rem !important;
-    }}
-    section[data-testid="stSidebar"] .block-container {{
-        padding-top: 1.2rem !important;
-        padding-bottom: 2rem !important;
-    }}
-    .sp-brand-block {{
-        width: 100%;
-        margin: 0 0 0.6rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid {_theme['sidebar_border']};
-    }}
-    [data-testid="stSidebarUserContent"] .sp-brand-block ~ .sp-brand-block {{
-        display: none !important;
-    }}
-    [data-testid="stSidebarUserContent"] [data-testid="stElementContainer"]:nth-child(n+2):has(.sp-brand-block) {{
-        display: none !important;
-    }}
-    [data-testid="stSidebarUserContent"] [data-testid="stElementContainer"]:nth-child(n+3):has(.sp-mode-indicator) {{
-        display: none !important;
-    }}
-    .sp-brand-bar {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        width: 100%;
-        min-height: 42px;
-        padding: 0;
-        margin: 0;
-    }}
-    .sp-brand-logo {{
-        display: block;
-        height: auto;
-        max-height: 38px;
-        max-width: 46%;
-        object-fit: contain;
-        opacity: 0.9;
-    }}
-    .sp-brand-logo-1 {{ width: 112px; transform: translateY(1px); }}
-    .sp-brand-logo-2 {{ width: 106px; transform: translateY(1px); }}
-    .sp-app-title {{
-        color: {_theme['text']};
-        font-size: 1.08rem;
-        font-weight: 700;
-        line-height: 1.25;
-        margin: 0 0 0.35rem 0;
-    }}
-    .sp-app-subtitle {{
-        color: {_theme['sidebar_text']};
-        font-size: 0.82rem;
-        line-height: 1.35;
-        margin: 0 0 1.25rem 0;
-        opacity: 0.78;
-    }}
-    @media (max-width: 760px) {{
-        .sp-brand-block {{ margin-bottom: 0.5rem; padding-bottom: 0.4rem; }}
-        .sp-brand-bar {{ gap: 10px; min-height: 38px; }}
-        .sp-brand-logo {{ max-height: 34px; max-width: 46%; }}
-        .sp-brand-logo-1 {{ width: 104px; }}
-        .sp-brand-logo-2 {{ width: 98px; }}
-    }}
-    /* Sidebar headings — small, quiet labels */
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2 {{
-        color: {_theme['text']} !important;
-        font-weight: 600 !important;
-        font-size: 1.05rem !important;
-        letter-spacing: -0.01em;
-        margin-bottom: 0.15rem !important;
-    }}
-    section[data-testid="stSidebar"] h3 {{
-        color: {_theme['sidebar_text']} !important;
-        font-weight: 500 !important;
-        font-size: 0.72rem !important;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-top: 1.2rem !important;
-        margin-bottom: 0.4rem !important;
-    }}
-    section[data-testid="stSidebar"] .stMarkdown p {{
-        color: {_theme['sidebar_text']} !important;
-        font-size: 0.82rem !important;
-    }}
-    section[data-testid="stSidebar"] .stCaption,
-    section[data-testid="stSidebar"] small {{
-        color: #94a3b8 !important;
-        font-size: 0.72rem !important;
-    }}
-    section[data-testid="stSidebar"] hr {{
-        border-color: {_theme['sidebar_border']} !important;
-        margin: 0.9rem 0 !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] > div > div {{
-        background: transparent !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        color: {_theme['text']} !important;
-        border-radius: 6px !important;
-        font-size: 0.84rem !important;
-        min-height: 2rem !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] label {{
-        color: {_theme['sidebar_text']} !important;
-        font-weight: 400 !important;
-        font-size: 0.78rem !important;
-    }}
-
-    /* ===== Checkpoint nav buttons — text list, no borders ===== */
-    section[data-testid="stSidebar"] .stButton button {{
-        all: unset !important;
-        display: flex !important;
-        align-items: center !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        text-align: left !important;
-        padding: 0.3rem 0.5rem 0.3rem 0.6rem !important;
-        font-size: 0.82rem !important;
-        font-family: inherit !important;
-        color: {_theme['sidebar_text']} !important;
-        border-left: 2px solid transparent !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        cursor: pointer !important;
-        transition: all 0.12s ease !important;
-        line-height: 1.5 !important;
-        min-height: unset !important;
-        height: auto !important;
-    }}
-    section[data-testid="stSidebar"] .stButton button:hover {{
-        color: {_theme['text']} !important;
-        background: {('#334155' if _is_dark else '#f1f5f9')} !important;
-        border-radius: 0 4px 4px 0 !important;
-    }}
-    /* Current checkpoint — left accent bar + highlight */
-    section[data-testid="stSidebar"] .stButton button[kind="primary"],
-    section[data-testid="stSidebar"] .stButton button[data-testid="baseButton-primary"] {{
-        color: {_theme['text']} !important;
-        font-weight: 600 !important;
-        border-left: 2px solid {_theme['accent']} !important;
-        background: {_theme['accent']}08 !important;
-        border-radius: 0 4px 4px 0 !important;
-    }}
-    section[data-testid="stSidebar"] .stButton button[kind="primary"]:hover,
-    section[data-testid="stSidebar"] .stButton button[data-testid="baseButton-primary"]:hover {{
-        background: {_theme['accent']}12 !important;
-    }}
-    /* Failed checkpoint — subtle red tint */
-    section[data-testid="stSidebar"] .stButton button .fail-icon {{
-        color: #ef4444 !important;
-    }}
-
-    /* Session management buttons — ghost, minimal */
-    section[data-testid="stSidebar"] div[data-testid="stColumn"] .stButton button {{
-        all: unset !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        padding: 0.3rem 0.5rem !important;
-        font-size: 0.78rem !important;
-        font-family: inherit !important;
-        color: {_theme['sidebar_text']} !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        border-radius: 6px !important;
-        background: transparent !important;
-        cursor: pointer !important;
-        transition: all 0.12s ease !important;
-        min-height: unset !important;
-        height: auto !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stColumn"] .stButton button:hover {{
-        border-color: {_theme['accent']} !important;
-        color: {_theme['accent']} !important;
-        background: {_theme['accent']}06 !important;
-    }}
-
-    /* Progress bar — ultra slim */
-    section[data-testid="stSidebar"] div[data-testid="stProgressBar"] {{
-        background: {_theme['sidebar_border']} !important;
-        border-radius: 999px;
-        height: 3px !important;
-        overflow: hidden;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stProgressBar"] > div {{
-        background: {_theme['accent']} !important;
-        border-radius: 999px;
-        height: 3px !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stProgress"] {{
-        font-size: 0.72rem !important;
-        line-height: 1.2 !important;
-        margin-bottom: 0.3rem !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stProgress"] p,
-    section[data-testid="stSidebar"] div[data-testid="stProgress"] label {{
-        font-size: 0.72rem !important;
-        color: #94a3b8 !important;
-        margin: 0 0 0.25rem 0 !important;
-        line-height: 1.2 !important;
-        padding: 0 !important;
-    }}
-
-    /* Metric cards — remove emojis, minimal text */
-    section[data-testid="stSidebar"] div[data-testid="stMetric"] {{
-        background: transparent;
-        border: none;
-        padding: 0.2rem 0 !important;
-        text-align: center;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stMetric"] label {{
-        display: none !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stMetric"] div[data-testid="stMetricValue"] {{
-        color: {_theme['sidebar_text']} !important;
-        font-size: 0.75rem !important;
-        font-weight: 500 !important;
-    }}
-    section[data-testid="stSidebar"] div[data-testid="stMetric"] div[data-testid="stMetricValue"] span {{
-        color: #94a3b8 !important;
-    }}
-
-    /* Text inputs in sidebar — minimal */
-    section[data-testid="stSidebar"] .stTextInput > div > div > input {{
-        background: transparent !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        border-radius: 6px !important;
-        font-size: 0.82rem !important;
-    }}
-    section[data-testid="stSidebar"] .stTextInput label {{
-        display: none !important;
-    }}
-
-    /* Text areas in sidebar — compact for notes */
-    section[data-testid="stSidebar"] .stTextArea > div > div > textarea {{
-        background: transparent !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        border-radius: 6px !important;
-        font-size: 0.78rem !important;
-        min-height: 40px !important;
-        padding: 0.4rem 0.5rem !important;
-        line-height: 1.4 !important;
-    }}
-    section[data-testid="stSidebar"] .stTextArea label {{
-        display: none !important;
-    }}
-
-    /* Sidebar expanders */
-    section[data-testid="stSidebar"] details {{
-        border: none !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        background: transparent !important;
-    }}
-    section[data-testid="stSidebar"] details summary {{
-        padding: 0.3rem 0.5rem !important;
-        font-weight: 400 !important;
-        font-size: 0.78rem !important;
-        color: {_theme['sidebar_text']} !important;
-        border-radius: 6px !important;
-    }}
-    section[data-testid="stSidebar"] details summary:hover {{
-        background: {('#334155' if _is_dark else '#f8fafc')};
-    }}
-    section[data-testid="stSidebar"] details[open] summary {{
-        border-bottom: none;
-    }}
-
-    /* ===== Main Content ===== */
-    .main .block-container {{
-        padding-top: 3.5rem !important;
-        padding-bottom: 6rem !important;
-        max-width: 860px !important;
-        padding-left: 2.5rem !important;
-        padding-right: 2.5rem !important;
-    }}
-
-    /* Tabs — underline minimal */
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 0;
-        background: transparent;
-        padding: 0;
-        border-radius: 0;
-        border: none;
-        border-bottom: 1px solid {_theme['sidebar_border']};
-        margin-bottom: 1.5rem;
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        border-radius: 8px 8px 0 0 !important;
-        padding: 0.65rem 1.25rem !important;
-        font-weight: 500 !important;
-        font-size: 1.05rem !important;
-        color: {_theme['sidebar_text']} !important;
-        transition: all 0.18s ease;
-        border-bottom: 2px solid transparent !important;
-        background: transparent !important;
-    }}
-    .stTabs [data-baseweb="tab"]:hover {{
-        color: {_theme['text']} !important;
-        background: rgba(255,255,255,0.45) !important;
-    }}
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-        background: rgba(255,255,255,0.85) !important;
-        color: {_theme['text']} !important;
-        font-weight: 700 !important;
-        border-bottom: 2px solid {_theme['accent']} !important;
-        box-shadow: 0 0 14px rgba(15,118,110,0.18), 0 -2px 8px rgba(15,118,110,0.08) !important;
-    }}
-
-    /* Quick action buttons — ghost */
-    div[data-testid="stHorizontalBlock"] .stButton button {{
-        all: unset !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 0.4rem 0.8rem !important;
-        font-size: 0.84rem !important;
-        font-family: inherit !important;
-        color: {_theme['sidebar_text']} !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        border-radius: 6px !important;
-        background: transparent !important;
-        cursor: pointer !important;
-        transition: all 0.12s ease !important;
-    }}
-    div[data-testid="stHorizontalBlock"] .stButton button:hover {{
-        border-color: {_theme['accent']} !important;
-        color: {_theme['accent']} !important;
-        background: {_theme['accent']}06 !important;
-    }}
-
-    /* ===== Chat Messages — clean, no card borders ===== */
-    div[data-testid="stChatMessage"] {{
-        background: transparent !important;
-        padding: 0.6rem 0 !important;
-        gap: 0.6rem !important;
-    }}
-    div[data-testid="stChatMessage"] div[data-testid="stChatMessageContent"] {{
-        border-radius: 8px !important;
-        padding: 0.7rem 1rem !important;
-        line-height: 1.65 !important;
-        box-shadow: none !important;
-        font-size: 0.9rem;
-        border: none !important;
-    }}
-    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar-assistant"]) div[data-testid="stChatMessageContent"] {{
-        background: transparent !important;
-    }}
-    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar-user"]) div[data-testid="stChatMessageContent"] {{
-        background: {_theme['accent']}06 !important;
-        border: 1px solid {_theme['accent']}18 !important;
-    }}
-    @supports not (selector(:has(*))) {{
-        div[data-testid="stChatMessage"] div[data-testid="stChatMessageContent"] {{
-            background: transparent !important;
-            border: none !important;
-        }}
-    }}
-    /* Chat avatars */
-    div[data-testid="stChatMessage"] div[data-testid="stChatMessageAvatar"] {{
-        width: 28px !important;
-        height: 28px !important;
-        font-size: 0.8rem !important;
-    }}
-
-    /* Chat input — minimal */
-    div[data-testid="stChatInput"] {{
-        background: {_theme['sidebar']} !important;
-        border-radius: 8px !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        box-shadow: none !important;
-        padding: 0.2rem !important;
-    }}
-    div[data-testid="stChatInput"]:focus-within {{
-        border-color: {_theme['accent']} !important;
-        box-shadow: 0 0 0 2px {_theme['accent']}12;
-    }}
-    div[data-testid="stChatInput"] textarea {{
-        font-size: 0.9rem !important;
-        line-height: 1.5 !important;
-    }}
-
-    /* Dividers — lighter */
-    hr {{
-        border-color: {_theme['sidebar_border']} !important;
-        margin: 1rem 0 !important;
-    }}
-
-    /* Alert boxes — minimal */
-    div[data-testid="stAlert"] {{
-        border-radius: 8px !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        box-shadow: none !important;
-        padding: 0.6rem 0.9rem !important;
-    }}
-
-    /* Expanders / details — minimal */
-    details {{
-        border-radius: 8px !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        box-shadow: none !important;
-        overflow: hidden;
-        background: {_theme['sidebar']} !important;
-    }}
-    details summary {{
-        padding: 0.5rem 0.9rem !important;
-        font-weight: 500 !important;
-        font-size: 0.85rem !important;
-        border-radius: 8px !important;
-        transition: background 0.12s;
-        color: {_theme['text']} !important;
-    }}
-    details summary:hover {{
-        background: {('#334155' if _is_dark else '#f8fafc')};
-    }}
-    details[open] summary {{
-        border-bottom: 1px solid {_theme['sidebar_border']};
-        border-radius: 8px 8px 0 0 !important;
-    }}
-    /* Markdown inside expanders — compact */
-    details .stMarkdown h1,
-    details .stMarkdown h2 {{
-        color: {_theme['text']} !important;
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-        margin-top: 0.8rem !important;
-        margin-bottom: 0.3rem !important;
-        border-bottom: none !important;
-    }}
-    details .stMarkdown h3,
-    details .stMarkdown h4 {{
-        color: {_theme['accent']} !important;
-        font-size: 0.92rem !important;
-        font-weight: 600 !important;
-        margin-top: 0.6rem !important;
-        margin-bottom: 0.2rem !important;
-    }}
-    details .stMarkdown p,
-    details .stMarkdown li {{
-        font-size: 0.87rem !important;
-        line-height: 1.6 !important;
-        color: {_theme['sidebar_text']} !important;
-        margin-bottom: 0.3rem !important;
-    }}
-    details .stMarkdown ul,
-    details .stMarkdown ol {{
-        margin-top: 0.15rem !important;
-        margin-bottom: 0.3rem !important;
-        padding-left: 1.1rem !important;
-    }}
-    details .stMarkdown code {{
-        background: {('#334155' if _is_dark else '#f1f5f9')} !important;
-        color: {_theme['text']} !important;
-        padding: 0.08rem 0.3rem !important;
-        border-radius: 3px !important;
-        font-size: 0.82rem !important;
-    }}
-    details .stMarkdown pre {{
-        background: {('#1e293b' if _is_dark else '#f8fafc')} !important;
-        border-radius: 6px !important;
-        padding: 0.5rem 0.7rem !important;
-        font-size: 0.82rem !important;
-    }}
-    details .stMarkdown strong {{
-        color: {_theme['text']} !important;
-        font-weight: 600 !important;
-    }}
-
-    /* Buttons — general reset */
-    .stButton button {{
-        border-radius: 6px !important;
-        font-weight: 500 !important;
-        transition: all 0.12s ease !important;
-    }}
-
-    /* Form submit buttons */
-    .stFormSubmitButton > button {{
-        background: {_theme['accent']} !important;
-        color: white !important;
-        border: none !important;
-        font-weight: 500 !important;
-        box-shadow: none !important;
-        border-radius: 6px !important;
-    }}
-    .stFormSubmitButton > button:hover {{
-        background: {_theme['accent2']} !important;
-    }}
-
-    /* Inputs */
-    .stTextInput > div > div > input,
-    .stTextArea > div > div > textarea {{
-        border-radius: 6px !important;
-        border: 1px solid {_theme['sidebar_border']} !important;
-        transition: all 0.12s !important;
-        font-size: 0.87rem !important;
-    }}
-    .stTextInput > div > div > input:focus,
-    .stTextArea > div > div > textarea:focus {{
-        border-color: {_theme['accent']} !important;
-        box-shadow: 0 0 0 2px {_theme['accent']}12 !important;
-    }}
-    .stNumberInput > div > div > input {{
-        border-radius: 6px !important;
-    }}
-    .stSelectbox > div > div {{
-        border-radius: 6px !important;
-    }}
-
-    /* Success/info/warning/error boxes */
-    div[data-testid="stSuccess"] {{
-        border-color: {('#166534' if _is_dark else '#86efac')} !important;
-        background: {('#052e16' if _is_dark else '#f0fdf4')} !important;
-        color: {_theme['text']} !important;
-    }}
-    div[data-testid="stError"] {{
-        border-color: {('#991b1b' if _is_dark else '#fca5a5')} !important;
-        background: {('#450a0a' if _is_dark else '#fef2f2')} !important;
-        color: {_theme['text']} !important;
-    }}
-    div[data-testid="stInfo"] {{
-        color: {_theme['text']} !important;
-    }}
-
-    /* Legacy checkpoint classes (kept for compatibility) */
-    .cp-row {{ padding: 4px 8px; border-radius: 6px; margin-bottom: 2px; font-size: 0.84rem; border: 1px solid transparent; }}
-    .cp-current {{ background: {_theme['sidebar']}; border: 1px solid {_theme['accent']}; font-weight: 700; }}
-    .cp-passed {{ color: #16a34a; }}
-    .cp-failed {{ color: #dc2626; }}
-    .cp-skipped {{ color: #d97706; }}
-    .cp-pending {{ color: #94a3b8; }}
-
-    /* Scrollbar — thinner */
-    ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
-    ::-webkit-scrollbar-track {{ background: transparent; }}
-    ::-webkit-scrollbar-thumb {{
-        background: {('rgba(255,255,255,0.15)' if _is_dark else 'rgba(0,0,0,0.08)')};
-        border-radius: 999px;
-    }}
-    ::-webkit-scrollbar-thumb:hover {{
-        background: {('rgba(255,255,255,0.25)' if _is_dark else 'rgba(0,0,0,0.15)')};
-    }}
-
-    /* Header — minimal */
-    .stApp > header {{
-        background: {('rgba(15,23,42,0.8)' if _is_dark else 'rgba(255,255,255,0.8)')} !important;
-        backdrop-filter: blur(8px);
-        box-shadow: none !important;
-        border-bottom: 1px solid {_theme['sidebar_border']} !important;
-    }}
-
-    /* Markdown headings in main area */
-    .main .stMarkdown h2 {{
-        color: {_theme['text']};
-        border-bottom: none;
-        padding-bottom: 0;
-        margin-top: 1.2rem;
-        font-weight: 600;
-        font-size: 1.15rem;
-    }}
-    .main .stMarkdown h3 {{
-        color: {_theme['accent']};
-        margin-top: 0.8rem;
-        font-size: 0.95rem;
-        font-weight: 600;
-    }}
-    .main .stMarkdown p {{
-        color: {_theme['text']} !important;
-        line-height: 1.65;
-    }}
-
-    /* Hide Streamlit branding & footer */
-    #MainMenu {{ visibility: hidden; }}
-    footer {{ visibility: hidden; }}
-
-    /* Desk Pet — interactive companion */
-    .sp-pet {{
-        position: fixed !important;
-        right: 20px;
-        bottom: 20px;
-        z-index: 99999;
-        user-select: none;
-        touch-action: none;
-        transition: transform 0.2s ease;
-    }}
-    .sp-pet:hover .sp-pet-body {{
-        transform: scale(1.08);
-        filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18));
-    }}
-    .sp-pet.sp-dragging {{
-        cursor: grabbing !important;
-        transition: none !important;
-    }}
-    .sp-pet.sp-dragging .sp-pet-body {{
-        animation: none !important;
-        transform: scale(1.1);
-        filter: drop-shadow(0 6px 16px rgba(0,0,0,0.25));
-    }}
-    .sp-pet-body {{
-        width: 80px;
-        height: 80px;
-        cursor: grab;
-        animation: spPetFloat 3s ease-in-out infinite;
-        transition: transform 0.2s ease, filter 0.2s ease;
-    }}
-    .sp-pet-body:active {{
-        cursor: grabbing;
-    }}
-    .sp-pet.sp-happy .sp-pet-body {{
-        animation: spPetJump 0.45s ease-in-out 3;
-    }}
-    .sp-pet.sp-angry .sp-pet-body {{
-        animation: spPetShake 0.12s ease-in-out 8;
-    }}
-    .sp-pet.sp-sleepy .sp-pet-body {{
-        animation: spPetDrowse 2.5s ease-in-out infinite;
-    }}
-    .sp-pet.sp-sleepy .sp-pet-eye-pupil {{
-        animation: spPetSleep 2.5s ease-in-out infinite !important;
-    }}
-    .sp-pet-cheek {{
-        position: absolute;
-        width: 18px;
-        height: 10px;
-        background: #fca5a5;
-        border-radius: 50%;
-        opacity: 0;
-        pointer-events: none;
-        filter: blur(2px);
-        transition: opacity 0.3s ease;
-    }}
-    .sp-pet-cheek-l {{ left: 6px; top: 24px; }}
-    .sp-pet-cheek-r {{ right: 6px; top: 24px; }}
-    .sp-pet.sp-happy .sp-pet-cheek,
-    .sp-pet.sp-angry .sp-pet-cheek {{
-        opacity: 1;
-    }}
-    .sp-pet-zzz {{
-        position: absolute;
-        top: 0px;
-        right: 8px;
-        pointer-events: none;
-        font-size: 14px;
-        font-weight: bold;
-        color: #94a3b8;
-        opacity: 0;
-        transition: opacity 0.5s ease;
-    }}
-    .sp-pet.sp-sleepy .sp-pet-zzz {{
-        opacity: 1;
-        animation: spPetZzz 2s ease-in-out infinite;
-    }}
-    @keyframes spPetFloat {{
-        0%, 100% {{ transform: translateY(0px); }}
-        50% {{ transform: translateY(-8px); }}
-    }}
-    .sp-pet-eye-pupil {{
-        transition: transform 0.12s ease-out;
-        animation: spPetBlink 4s ease-in-out infinite;
-        transform-origin: center;
-    }}
-    @keyframes spPetBlink {{
-        0%, 46%, 54%, 100% {{ transform: scaleY(1); }}
-        50% {{ transform: scaleY(0.08); }}
-    }}
-    @keyframes spPetJump {{
-        0%, 100% {{ transform: translateY(0) scale(1); }}
-        30% {{ transform: translateY(-18px) scale(1.08); }}
-        60% {{ transform: translateY(0) scale(0.95); }}
-    }}
-    @keyframes spPetShake {{
-        0%, 100% {{ transform: translateX(0) rotate(0); }}
-        25% {{ transform: translateX(-5px) rotate(-3deg); }}
-        75% {{ transform: translateX(5px) rotate(3deg); }}
-    }}
-    @keyframes spPetDrowse {{
-        0%, 100% {{ transform: translateY(0) rotate(0deg); }}
-        50% {{ transform: translateY(3px) rotate(4deg); }}
-    }}
-    @keyframes spPetSleep {{
-        0%, 100% {{ transform: scaleY(0.05); }}
-    }}
-    @keyframes spPetZzz {{
-        0% {{ opacity: 0; transform: translateY(0) scale(0.8); }}
-        50% {{ opacity: 1; transform: translateY(-10px) scale(1); }}
-        100% {{ opacity: 0; transform: translateY(-20px) scale(1.3); }}
-    }}
-    .sp-pet-hitarea {{
-        cursor: pointer;
-    }}
-    .sp-pet-hitarea-head {{
-        cursor: pointer;
-    }}
-    .sp-pet-hitarea-tail {{
-        cursor: pointer;
-    }}
-    .sp-pet-bubble {{
-        position: absolute;
-        right: 90px;
-        bottom: 58px;
-        background: {_theme['sidebar']};
-        border: 1px solid {_theme['sidebar_border']};
-        border-radius: 14px;
-        padding: 10px 16px;
-        font-size: 0.8rem;
-        color: {_theme['text']};
-        white-space: nowrap;
-        box-shadow: 0 6px 20px rgba(0,0,0,{0.25 if _is_dark else 0.12});
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease, transform 0.3s ease;
-        transform: translateY(6px) scale(0.95);
-        max-width: 280px;
-        white-space: normal;
-        line-height: 1.5;
-    }}
-    .sp-pet-bubble::after {{
-        content: '';
-        position: absolute;
-        right: -7px;
-        bottom: 18px;
-        width: 0;
-        height: 0;
-        border-left: 7px solid {_theme['sidebar_border']};
-        border-top: 6px solid transparent;
-        border-bottom: 6px solid transparent;
-    }}
-    .sp-pet-bubble::before {{
-        content: '';
-        position: absolute;
-        right: -5px;
-        bottom: 18px;
-        width: 0;
-        height: 0;
-        border-left: 7px solid {_theme['sidebar']};
-        border-top: 6px solid transparent;
-        border-bottom: 6px solid transparent;
-        z-index: 1;
-    }}
-    .sp-pet-bubble.sp-show {{
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }}
-    /* Quick questions panel */
-    .sp-pet-quick-panel {{
-        position: absolute;
-        right: 90px;
-        bottom: 40px;
-        background: {_theme['sidebar']};
-        border: 1px solid {_theme['sidebar_border']};
-        border-radius: 14px;
-        padding: 12px 14px;
-        box-shadow: 0 8px 28px rgba(0,0,0,{0.3 if _is_dark else 0.15});
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(10px) scale(0.95);
-        transition: opacity 0.25s ease, transform 0.25s ease;
-        z-index: 9999;
-        min-width: 220px;
-        max-width: 280px;
-    }}
-    .sp-pet-quick-panel.sp-show {{
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateY(0) scale(1);
-    }}
-    .sp-pet-quick-panel-title {{
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: {_theme['text']};
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }}
-    .sp-pet-quick-panel-close {{
-        margin-left: auto;
-        cursor: pointer;
-        opacity: 0.6;
-        font-size: 0.9rem;
-        padding: 0 4px;
-    }}
-    .sp-pet-quick-panel-close:hover {{
-        opacity: 1;
-    }}
-    .sp-pet-quick-item {{
-        display: block;
-        padding: 7px 10px;
-        margin: 4px 0;
-        background: {_theme['app']};
-        border: 1px solid {_theme['sidebar_border']};
-        border-radius: 8px;
-        font-size: 0.8rem;
-        color: {_theme['text']};
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-decoration: none;
-        line-height: 1.4;
-    }}
-    .sp-pet-quick-item:hover {{
-        background: {_theme['accent']};
-        color: #fff;
-        border-color: {_theme['accent']};
-        transform: translateX(2px);
-    }}
-    .sp-pet-quick-panel::after {{
-        content: '';
-        position: absolute;
-        right: -7px;
-        bottom: 20px;
-        width: 0;
-        height: 0;
-        border-left: 7px solid {_theme['sidebar_border']};
-        border-top: 6px solid transparent;
-        border-bottom: 6px solid transparent;
-    }}
-    .sp-pet-quick-panel::before {{
-        content: '';
-        position: absolute;
-        right: -5px;
-        bottom: 20px;
-        width: 0;
-        height: 0;
-        border-left: 7px solid {_theme['sidebar']};
-        border-top: 6px solid transparent;
-        border-bottom: 6px solid transparent;
-        z-index: 1;
-    }}
-    .sp-pet.sp-wag .sp-pet-tail-group {{
-        animation: spPetWag 0.25s ease-in-out 5;
-    }}
-    @keyframes spPetWag {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        25% {{ transform: rotate(25deg); }}
-        75% {{ transform: rotate(-25deg); }}
-    }}
-    /* Per-pet happy animations */
-    .sp-pet[data-pet="penguin"].sp-happy .sp-pet-tail-group {{
-        animation: spPenguinWing 0.3s ease-in-out 4;
-    }}
-    @keyframes spPenguinWing {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        50% {{ transform: rotate(25deg) translateY(3px); }}
-    }}
-    .sp-pet[data-pet="dog"].sp-happy .sp-pet-tail-group {{
-        animation: spDogTail 0.2s ease-in-out 6;
-    }}
-    @keyframes spDogTail {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        50% {{ transform: rotate(35deg); }}
-    }}
-    .sp-pet[data-pet="robot"].sp-happy .sp-pet-tail-group {{
-        animation: spRobotAntenna 0.3s ease-in-out 5;
-    }}
-    @keyframes spRobotAntenna {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        25% {{ transform: rotate(-15deg); }}
-        75% {{ transform: rotate(15deg); }}
-    }}
-    /* Robot screen glow on happy */
-    .sp-pet[data-pet="robot"].sp-happy .sp-pet-eye-pupil {{
-        animation: spRobotGlow 0.4s ease-in-out 4 !important;
-    }}
-    @keyframes spRobotGlow {{
-        0%, 100% {{ opacity: 0.95; }}
-        50% {{ opacity: 1; filter: brightness(1.8) drop-shadow(0 0 6px #22d3ee); }}
-    }}
-    /* Per-pet idle tail wag */
-    .sp-pet[data-pet="dog"]:not(.sp-dragging):not(.sp-sleepy):hover .sp-pet-tail-group {{
-        animation: spDogTail 0.3s ease-in-out infinite;
-    }}
-    /* Blush positions per pet (cat is set in cat-specific section below) */
-    .sp-pet[data-pet="penguin"] .sp-pet-cheek-l {{ left: 12px; top: 28px; }}
-    .sp-pet[data-pet="penguin"] .sp-pet-cheek-r {{ right: 12px; top: 28px; }}
-    .sp-pet[data-pet="dog"] .sp-pet-cheek-l {{ left: 10px; top: 30px; width:16px; height:9px; }}
-    .sp-pet[data-pet="dog"] .sp-pet-cheek-r {{ right: 10px; top: 30px; width:16px; height:9px; }}
-    .sp-pet[data-pet="robot"] .sp-pet-cheek {{ display: none; }}
-    /* Robot happy: extra button flash */
-    .sp-pet[data-pet="robot"].sp-happy rect[fill="#fbbf24"] {{
-        animation: spRobotLight 0.3s ease-in-out 5;
-    }}
-    @keyframes spRobotLight {{
-        0%, 100% {{ fill: #fbbf24; }}
-        50% {{ fill: #fef08a; filter: drop-shadow(0 0 4px #fbbf24); }}
-    }}
-    /* ===== Cat-specific animations ===== */
-    /* Ear wiggle */
-    .sp-cat-ear-l, .sp-cat-ear-r {{
-        transform-origin: center bottom;
-        transition: transform 0.15s ease;
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-ear-l {{
-        animation: spCatEarL 0.3s ease-in-out 5;
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-ear-r {{
-        animation: spCatEarR 0.3s ease-in-out 5;
-    }}
-    @keyframes spCatEarL {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        50% {{ transform: rotate(-12deg) translateY(-1px); }}
-    }}
-    @keyframes spCatEarR {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        50% {{ transform: rotate(12deg) translateY(-1px); }}
-    }}
-    /* Whisker twitch */
-    .sp-cat-whiskers-l, .sp-cat-whiskers-r {{
-        transition: transform 0.1s ease;
-    }}
-    .sp-pet[data-pet="cat"]:hover .sp-cat-whiskers-l {{
-        animation: spCatWhiskL 2s ease-in-out infinite;
-    }}
-    .sp-pet[data-pet="cat"]:hover .sp-cat-whiskers-r {{
-        animation: spCatWhiskR 2s ease-in-out infinite;
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-whiskers-l {{
-        animation: spCatWhiskL 0.25s ease-in-out 6;
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-whiskers-r {{
-        animation: spCatWhiskR 0.25s ease-in-out 6;
-    }}
-    @keyframes spCatWhiskL {{
-        0%, 100% {{ transform: translateX(0); }}
-        50% {{ transform: translateX(-1.5px); }}
-    }}
-    @keyframes spCatWhiskR {{
-        0%, 100% {{ transform: translateX(0); }}
-        50% {{ transform: translateX(1.5px); }}
-    }}
-    /* Eye close (^_^ happy face) */
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-pupil-l,
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-pupil-r {{
-        opacity: 0;
-        transform: scaleY(0.08);
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-eye-closed-l,
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-eye-closed-r {{
-        opacity: 1 !important;
-    }}
-    /* Sleepy eyes for cat */
-    .sp-pet[data-pet="cat"].sp-sleepy .sp-cat-pupil-l,
-    .sp-pet[data-pet="cat"].sp-sleepy .sp-cat-pupil-r {{
-        animation: spCatSleepyEye 3s ease-in-out infinite !important;
-    }}
-    @keyframes spCatSleepyEye {{
-        0%, 40%, 60%, 100% {{ transform: scaleY(1); opacity:1; }}
-        50% {{ transform: scaleY(0.1); opacity:0.5; }}
-    }}
-    /* Happy: open mouth (meow!) */
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-mouth {{
-        opacity: 0;
-    }}
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-mouth-open {{
-        opacity: 1 !important;
-        animation: spCatMeow 0.4s ease-in-out 3;
-    }}
-    @keyframes spCatMeow {{
-        0%, 100% {{ transform: scaleY(1); }}
-        50% {{ transform: scaleY(1.4); }}
-    }}
-    /* Purr vibration */
-    .sp-pet[data-pet="cat"].sp-purr .sp-pet-body {{
-        animation: spCatPurr 0.12s ease-in-out infinite;
-    }}
-    @keyframes spCatPurr {{
-        0%, 100% {{ transform: translateX(0); }}
-        25% {{ transform: translateX(-0.8px); }}
-        75% {{ transform: translateX(0.8px); }}
-    }}
-    /* Heart float */
-    .sp-pet[data-pet="cat"] .sp-cat-hearts {{
-        pointer-events: none;
-        transition: opacity 0.3s;
-    }}
-    .sp-pet[data-pet="cat"].sp-hearts .sp-cat-hearts {{
-        opacity: 1 !important;
-    }}
-    .sp-cat-heart {{
-        opacity: 0;
-    }}
-    .sp-pet[data-pet="cat"].sp-hearts .sp-cat-heart {{
-        animation: spCatHeartFloat 1.2s ease-out forwards;
-    }}
-    .sp-pet[data-pet="cat"].sp-hearts .sp-cat-h1 {{ animation-delay: 0s; }}
-    .sp-pet[data-pet="cat"].sp-hearts .sp-cat-h2 {{ animation-delay: 0.15s; }}
-    .sp-pet[data-pet="cat"].sp-hearts .sp-cat-h3 {{ animation-delay: 0.3s; }}
-    @keyframes spCatHeartFloat {{
-        0% {{ opacity: 0; transform: translateY(0) scale(0.3); }}
-        20% {{ opacity: 1; transform: translateY(-5px) scale(1.1); }}
-        100% {{ opacity: 0; transform: translateY(-35px) scale(0.6); }}
-    }}
-    /* Cat tail: slower S-curve sway on idle */
-    .sp-pet[data-pet="cat"]:not(.sp-dragging):not(.sp-happy):not(.sp-angry):not(.sp-wag):hover .sp-pet-tail-group {{
-        animation: spCatTailSway 1.8s ease-in-out infinite;
-    }}
-    @keyframes spCatTailSway {{
-        0%, 100% {{ transform: rotate(-5deg); }}
-        50% {{ transform: rotate(15deg); }}
-    }}
-    /* Happy tail: curl */
-    .sp-pet[data-pet="cat"].sp-happy .sp-pet-tail-group {{
-        animation: spCatTailHappy 0.4s ease-in-out 5;
-    }}
-    @keyframes spCatTailHappy {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        50% {{ transform: rotate(-25deg) translateY(-3px); }}
-    }}
-    /* Angry tail: thrash */
-    .sp-pet[data-pet="cat"].sp-angry .sp-pet-tail-group {{
-        animation: spCatTailThrash 0.1s ease-in-out 10;
-    }}
-    @keyframes spCatTailThrash {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        25% {{ transform: rotate(18deg); }}
-        75% {{ transform: rotate(-18deg); }}
-    }}
-    /* Paw wave on body click */
-    .sp-pet[data-pet="cat"].sp-wave .sp-cat-paw-l {{
-        animation: spCatPawWave 0.3s ease-in-out 3;
-        transform-origin: 22px 56px;
-    }}
-    @keyframes spCatPawWave {{
-        0%, 100% {{ transform: rotate(0deg) translateY(0); }}
-        50% {{ transform: rotate(-25deg) translateY(-4px); }}
-    }}
-    /* Cat cheek/blush adjusted for new face */
-    .sp-pet[data-pet="cat"] .sp-pet-cheek-l {{ left: 10px; top: 34px; }}
-    .sp-pet[data-pet="cat"] .sp-pet-cheek-r {{ right: 10px; top: 34px; }}
-    /* Forehead stripe subtle shimmer */
-    .sp-pet[data-pet="cat"].sp-happy .sp-cat-forehead {{
-        animation: spCatStripeShimmer 0.5s ease-in-out 3;
-    }}
-    @keyframes spCatStripeShimmer {{
-        0%, 100% {{ stroke: #cbd5e1; }}
-        50% {{ stroke: #fda4af; }}
-    }}
-    .sp-pet-drag-hint {{
-        position: absolute;
-        bottom: -4px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 0.6rem;
-        color: #cbd5e1;
-        opacity: 0;
-        transition: opacity 0.3s;
-        white-space: nowrap;
-        pointer-events: none;
-    }}
-    .sp-pet:hover .sp-pet-drag-hint {{
-        opacity: 1;
-    }}
-    .sp-pet-hint-btn {{
-        position: absolute;
-        top: -12px;
-        left: -16px;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: {_theme['accent']};
-        color: #fff;
-        font-size: 20px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        z-index: 25;
-        animation: sp-hint-bounce 1.2s ease-in-out infinite;
-        transition: transform 0.2s;
-    }}
-    .sp-pet-hint-btn::after {{
-        content: '';
-        position: absolute;
-        bottom: -4px;
-        right: 4px;
-        width: 12px;
-        height: 12px;
-        background: {_theme['accent']};
-        transform: rotate(45deg);
-        border-radius: 2px;
-    }}
-    .sp-pet-hint-btn:hover {{
-        transform: scale(1.3) rotate(-5deg);
-    }}
-    @keyframes sp-hint-bounce {{
-        0%, 100% {{ transform: translateY(0) scale(1); }}
-        50% {{ transform: translateY(-6px) scale(1.1); }}
-    }}
-    .sp-pet.sp-happy .sp-pet-body {{
-        animation: spPetHappyJump 0.5s ease;
-    }}
-    @keyframes spPetHappyJump {{
-        0%, 100% {{ transform: translateY(0) scale(1); }}
-        30% {{ transform: translateY(-15px) scale(1.08); }}
-        60% {{ transform: translateY(-5px) scale(1.03); }}
-    }}
-    .sp-pet.sp-wag .sp-pet-body {{
-        animation: spPetWiggle 0.35s ease-in-out 3;
-    }}
-    @keyframes spPetWiggle {{
-        0%, 100% {{ transform: rotate(0deg); }}
-        25% {{ transform: rotate(-6deg) translateX(-4px); }}
-        75% {{ transform: rotate(6deg) translateX(4px); }}
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown(build_global_styles(_theme, _is_dark, _app_bg), unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
 # App & state bootstrap
@@ -2611,6 +1156,57 @@ def capture_state_safely(target_state: PipelineState, success_message: str = "")
     if success_message:
         st.session_state.last_feedback = success_message
     return True
+
+
+def trim_chat_history(state: PipelineState, max_messages: int = 50) -> None:
+    """Trim chat history to prevent session_state bloat.
+
+    When the number of messages exceeds ``max_messages``, older messages are
+    summarized into a compact archive (persisted in ``st.session_state``) and
+    dropped from ``state.messages``. Only the most recent ``max_messages``
+    entries are kept, which is far more than LangGraph needs for context
+    (``_build_context`` reads the last 10, ``_update_session_summary`` the
+    last 6).
+
+    The archived summary is re-injected into ``state.session_summary`` on every
+    call so it stays visible to ``_build_context`` even after
+    ``_update_session_summary`` overwrites the field during a reply turn.
+
+    Idempotent: repeated calls with an unchanged state have no extra effect.
+    """
+    archived = st.session_state.get("_archived_chat_summary", "")
+
+    if len(state.messages) <= max_messages:
+        # Re-inject archived summary if _update_session_summary overwrote it.
+        if archived and archived not in (state.session_summary or ""):
+            base = state.session_summary or ""
+            state.session_summary = (archived + "\n\n" + base).strip() if base else archived
+        return
+
+    # Keep only the most recent max_messages entries.
+    old_messages = state.messages[:-max_messages]
+    recent_messages = state.messages[-max_messages:]
+
+    # Build compact text snippets for the messages being archived.
+    old_texts = []
+    for msg in old_messages:
+        role = getattr(msg, "role", "unknown")
+        content = getattr(msg, "content", str(msg))[:200]
+        old_texts.append(f"[{role}] {content}")
+
+    new_block = "--- 早期对话 ---\n" + "\n".join(old_texts)
+    new_archived = (archived + "\n\n" + new_block).strip() if archived else new_block
+    # Cap the archive so it cannot grow without bound across many trims.
+    st.session_state._archived_chat_summary = new_archived[-2000:]
+
+    # Surface the archive in session_summary for _build_context / SQLite persistence.
+    old_summary = state.session_summary or ""
+    if old_summary:
+        state.session_summary = (st.session_state._archived_chat_summary + "\n\n" + old_summary)[-2000:]
+    else:
+        state.session_summary = st.session_state._archived_chat_summary
+
+    state.messages = recent_messages
 
 
 def explain_connection_result(result: str, label: str = "LLM", base_url: str = "") -> str:
@@ -2718,6 +1314,12 @@ def inject_smart_scroll() -> None:
                     }} else {{
                         pane.scrollTop = Math.min(saved.top || 0, pane.scrollHeight - pane.clientHeight);
                         showBadge(pane);
+                    }}
+                }} else if (target === 'step_workspace') {{
+                    const ws = doc.getElementById('sp-work-area');
+                    if (ws) {{
+                        ws.scrollIntoView({{behavior:'smooth', block:'start'}});
+                        removeBadge();
                     }}
                 }} else if (saved && !saved.atBottom) {{
                     pane.scrollTop = Math.min(saved.top || 0, pane.scrollHeight - pane.clientHeight);
@@ -2907,6 +1509,7 @@ if "state" not in st.session_state:
     st.session_state.state = restored or PipelineState(session_id=latest_sid or make_session_id())
 
 state: PipelineState = st.session_state.state
+trim_chat_history(state)
 st.session_state.setdefault("_sp_scroll_target", "none")
 cp_total = len(app.navigator.checkpoints) or 12
 cp_progress = len(state.completed) / cp_total if cp_total else 0
@@ -3001,7 +1604,7 @@ def run_command(
 
     def _stream_sink(chunk: str) -> None:
         _accum["text"] += chunk
-        _stream_box.markdown(_accum["text"] + "▌", unsafe_allow_html=True)
+        _stream_box.markdown(_accum["text"] + "▌")
 
     new_state = app.handle(
         state,
@@ -3024,6 +1627,13 @@ def run_command(
     st.session_state.state = new_state
     capture_state_safely(new_state)
     progress.update(label="识别、检索和回答已完成", state="complete", expanded=False)
+
+    # LLM 降级提示：仅当 LLM 实际调用失败时提醒用户（排除规则模式等有意降级）
+    _last_msg = new_state.messages[-1] if new_state.messages else None
+    _trace = getattr(_last_msg, "metadata", {}).get("qa_trace", {}) if _last_msg else {}
+    if _trace.get("fallback") and str(_trace.get("fallback_reason", "")).startswith("llm_error"):
+        _reason = _trace.get("fallback_reason", "未知原因")
+        st.warning(f"⚠️ LLM 调用失败（{_reason}），已使用本地规则回复。请在设置页检查 API 配置。")
 
 
 def switch_checkpoint(cp_id: str) -> None:
@@ -3105,6 +1715,29 @@ with st.sidebar:
         state.add_message("assistant", f"已切换到 {_selected_sw} 陪跑模式。", action_tag="software_switch")
         st.rerun()
 
+    # 三模式切换器
+    st.markdown("### 交互模式")
+    _mode_options = {
+        "beginner": "🌱 入门模式",
+        "teaching": "🎓 教学模式",
+        "expert": "⚙️ 高级模式",
+    }
+    _mode_labels = list(_mode_options.values())
+    _current_mode = st.session_state.app_mode
+    _mode_idx = list(_mode_options.keys()).index(_current_mode)
+    _selected_mode_label = st.selectbox(
+        "选择模式",
+        options=_mode_labels,
+        index=_mode_idx,
+        key="mode_selector",
+        help="入门：傻瓜式SOP；教学：原理卡片+测验；高级：参数导出+预设",
+    )
+    _new_mode = [k for k, v in _mode_options.items() if v == _selected_mode_label][0]
+    if _new_mode != _current_mode:
+        st.session_state.mode_history.append((_current_mode, _new_mode))
+        st.session_state.app_mode = _new_mode
+        st.rerun()
+
     st.markdown("### 流程进度")
     st.progress(cp_progress, text=f"{len(state.completed)}/{cp_total} · {cp_progress:.0%}")
 
@@ -3116,6 +1749,17 @@ with st.sidebar:
         f'</div>'
     )
     st.markdown(_stats_html, unsafe_allow_html=True)
+
+    # 入门模式：显示定制化流程提示
+    if st.session_state.app_mode == "beginner" and st.session_state.get("onboarding_completed"):
+        workflow = st.session_state.get("recommended_workflow", {})
+        if workflow:
+            total_steps = len(workflow.get("steps", []))
+            skip_count = len(workflow.get("skip_steps", []))
+            st.caption(
+                f"📌 定制流程：{total_steps} 步（跳过 {skip_count} 步）  \n"
+                f"目标：{st.session_state.user_profile.get('goal', '未知')}"
+            )
 
     sidebar_checkpoints = sorted(app.navigator.checkpoints, key=lambda item: item.get("order", 999))
     current_idx = next((i for i, cp in enumerate(sidebar_checkpoints) if cp.get("checkpoint_id") == state.current_cp_id), -1)
@@ -3160,6 +1804,14 @@ with st.sidebar:
                     _, status_label = STATUS_LABELS.get(status, ("", status))
                     icon = status_icons.get(status, "○")
                     stage_name = cp.get("checkpoint_cn") or cp.get("checkpoint_name") or "checkpoint"
+
+                    # 入门模式：检查是否在跳过列表中
+                    is_skipped_in_workflow = False
+                    if st.session_state.app_mode == "beginner" and st.session_state.get("onboarding_completed"):
+                        skip_steps = st.session_state.get("recommended_workflow", {}).get("skip_steps", [])
+                        if cid in skip_steps:
+                            is_skipped_in_workflow = True
+                            icon = "⊗"  # 跳过标记（st.button 不渲染 Markdown，⊗ 图标已足够）
 
                     # 当前步骤使用实心圆点强调
                     if is_current:
@@ -3258,204 +1910,6 @@ with st.sidebar:
 # UI: workspace CSS + output mode + quick questions
 # --------------------------------------------------------------------------- #
 
-_WORKSPACE_CSS = """
-<style>
-/* ===== StructPilot Visual Token System ===== */
-:root {
-    --sp-primary: #2563EB;
-    --sp-primary-light: #EFF6FF;
-    --sp-success: #16A34A;
-    --sp-success-light: #F0FDF4;
-    --sp-warning: #D97706;
-    --sp-warning-light: #FFFBEB;
-    --sp-danger: #DC2626;
-    --sp-danger-light: #FEF2F2;
-    --sp-text-primary: #0F172A;
-    --sp-text-secondary: #334155;
-    --sp-text-tertiary: #475569;
-    --sp-border: #E2E8F0;
-    --sp-bg-page: #F8FAFC;
-    --sp-bg-card: #FFFFFF;
-    --sp-space-1: 4px;
-    --sp-space-2: 8px;
-    --sp-space-3: 12px;
-    --sp-space-4: 16px;
-    --sp-space-6: 24px;
-    --sp-space-8: 32px;
-    --sp-radius-sm: 4px;
-    --sp-radius: 8px;
-    --sp-radius-lg: 10px;
-    --sp-radius-full: 999px;
-}
-
-/* ===== 全局字体：14px 基准 ===== */
-.main .block-container { font-size: 14px !important; }
-p, div, span, li { font-size: 14px !important; }
-h1 { font-size: 26px !important; }
-h2 { font-size: 22px !important; }
-h3 { font-size: 18px !important; }
-h4 { font-size: 16px !important; }
-
-/* ===== Step 状态行（紧凑单行） ===== */
-.sp-step-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-space-2);
-    padding: 6px 0;
-    font-size: 14px;
-}
-.sp-step-label {
-    font-weight: 600;
-    color: var(--sp-text-primary);
-}
-.sp-step-progress {
-    font-size: 12px;
-    color: var(--sp-text-tertiary);
-    background: var(--sp-bg-page);
-    padding: 2px 8px;
-    border-radius: var(--sp-radius-full);
-}
-.sp-step-badge {
-    font-size: 12px;
-    padding: 2px 8px;
-    border-radius: var(--sp-radius-sm);
-    font-weight: 500;
-}
-.sp-step-badge.sw {
-    background: #d1fae5;
-    color: #0f766e;
-}
-.sp-step-badge.ph {
-    background: var(--sp-bg-page);
-    color: var(--sp-text-secondary);
-}
-
-/* ===== 工作区头部（居中步骤名 + 两侧导航） ===== */
-.sp-ws-title {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-space-2);
-    padding: var(--sp-space-2) 0;
-    text-align: center;
-}
-.sp-ws-step-name {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--sp-text-primary);
-    line-height: 1.2;
-}
-.sp-ws-status { font-size: 1.25rem; }
-.sp-ws-gate {
-    font-size: 12px;
-    color: var(--sp-warning);
-    font-weight: 600;
-    background: var(--sp-warning-light);
-    padding: 2px 8px;
-    border-radius: var(--sp-radius-full);
-}
-
-.sp-ws-depth-label {
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    color: var(--sp-text-secondary) !important;
-    line-height: 32px !important;
-    padding-left: 2px;
-}
-
-/* ===== 回答深度选项卡（Segmented Control）视觉强化 ===== */
-[data-testid="stSegmentedControl"] {
-    background: rgba(255, 255, 255, 0.65) !important;
-    border-radius: 10px !important;
-    padding: 2px !important;
-}
-[data-testid="stSegmentedControl"] button {
-    font-size: 1.05rem !important;
-    font-weight: 500 !important;
-    border-radius: 8px !important;
-    color: var(--sp-text-secondary) !important;
-    transition: all 0.15s ease !important;
-}
-[data-testid="stSegmentedControl"] button:hover {
-    background: rgba(22, 163, 74, 0.08) !important;
-    color: var(--sp-success) !important;
-}
-[data-testid="stSegmentedControl"] button[aria-selected="true"] {
-    background: var(--sp-success) !important;
-    color: #ffffff !important;
-    font-weight: 600 !important;
-    box-shadow: 0 0 14px rgba(22, 163, 74, 0.35) !important;
-}
-
-button[kind="primary"] {
-    background: var(--sp-success) !important;
-    border-color: var(--sp-success) !important;
-    font-weight: 600 !important;
-    min-height: 36px !important;
-}
-button[kind="primary"]:hover {
-    background: #15803d !important;
-    border-color: #15803d !important;
-}
-button[kind="secondary"] {
-    background: #ffffff !important;
-    border: 1px solid var(--sp-border) !important;
-    color: var(--sp-text-primary) !important;
-    font-weight: 600 !important;
-    min-height: 36px !important;
-}
-button[kind="secondary"]:hover {
-    border-color: #93c5fd !important;
-    color: var(--sp-primary) !important;
-    background: var(--sp-primary-light) !important;
-}
-
-/* ===== 工作区导航按钮额外强调 ===== */
-button[kind="primary"]:has-text("下一步"),
-button[kind="secondary"]:has-text("上一步") {
-    font-weight: 700 !important;
-    min-height: 38px !important;
-}
-
-/* ===== 超宽屏适配 ===== */
-@media (min-width: 1920px) {
-    .main .block-container {
-        max-width: 1680px !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-    }
-}
-
-/* ===== 响应式：平板 ===== */
-@media (max-width: 1024px) {
-    .sp-ws-title {
-        padding: var(--sp-space-1) 0;
-    }
-    .sp-ws-step-name {
-        font-size: 16px;
-    }
-}
-
-/* ===== 响应式：手机 ===== */
-@media (max-width: 768px) {
-    .main .block-container {
-        padding-left: 8px !important;
-        padding-right: 8px !important;
-    }
-    button {
-        min-height: 44px !important;
-    }
-    .sp-step-bar {
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-    .sp-step-badge {
-        font-size: 11px;
-    }
-}
-</style>
-"""
-
 # Quick questions per checkpoint (used in chat tab)
 _QUICK_QUESTIONS: dict[str, list[tuple[str, str]]] = {
     "cp_01": [
@@ -3531,25 +1985,68 @@ def _get_current_checkpoint_data(app: StructPilotApp, state: PipelineState) -> d
 
 
 def _render_output_mode_toggle(compact: bool = False) -> str:
-    """Render a compact response-depth selector."""
-    from agent.ui_state_manager import get_output_mode, set_output_mode
+    """Render view detail level selector (影响LLM回答详细程度和界面展示)."""
+    from utils.ui_state_manager import get_output_mode, set_output_mode
 
-    current = normalize_response_profile(get_output_mode())
-    selected = st.segmented_control(
-        "回答深度",
-        options=list(PROFILE_LABELS),
-        default=current,
-        format_func=lambda value: PROFILE_LABELS[value],
-        key="response_depth_selector",
-        label_visibility="collapsed" if compact else "visible",
-        help="选择本轮新回答的结构和专业深度；不会改变历史回答。",
-    )
-    selected = normalize_response_profile(selected or current)
-    if selected != current:
-        set_output_mode(selected)
-    if not compact:
-        st.caption(PROFILE_DESCRIPTIONS[selected])
-    return selected
+    # 新版：三级视图切换
+    view_options = {
+        "简化": {
+            "icon": "⚡",
+            "desc": "简洁回答，只给结论",
+            "profile": "concise",
+        },
+        "详细": {
+            "icon": "📖",
+            "desc": "完整解释，包含原理",
+            "profile": "standard",
+        },
+        "完整": {
+            "icon": "🔬",
+            "desc": "全部细节+参数+公式",
+            "profile": "comprehensive",
+        },
+    }
+
+    current_level = st.session_state.output_detail_level
+
+    if compact:
+        # 紧凑模式：segmented_control
+        selected = st.segmented_control(
+            "当前视图",
+            options=list(view_options.keys()),
+            default=current_level,
+            format_func=lambda x: f"{view_options[x]['icon']} {x}",
+            key="view_detail_selector",
+            label_visibility="collapsed",
+            help="调节LLM回答的详细程度和界面信息密度",
+        )
+    else:
+        # 完整模式：带说明的选择器
+        st.markdown("**回答详细程度**")
+        cols = st.columns(3)
+        selected = current_level
+
+        for i, (level, opt) in enumerate(view_options.items()):
+            with cols[i]:
+                is_current = (level == current_level)
+                if st.button(
+                    f"{opt['icon']} **{level}**\n\n{opt['desc']}",
+                    key=f"view_{level}",
+                    use_container_width=True,
+                    type="primary" if is_current else "secondary",
+                ):
+                    selected = level
+
+    # 保存状态并同步到 output_mode
+    if selected != current_level:
+        st.session_state.output_detail_level = selected
+        # 同步到原有的 output_mode 系统
+        set_output_mode(view_options[selected]["profile"])
+        st.rerun()
+
+    # 返回当前profile（保持向后兼容）
+    return view_options[current_level]["profile"]
+
 
 
 def _render_quick_questions(state: PipelineState, key_prefix: str = "qq") -> None:
@@ -3622,12 +2119,23 @@ def _render_summary_cards(checkpoint: dict, state: PipelineState) -> None:
 # Main area: tabs
 # --------------------------------------------------------------------------- #
 st.markdown(_WORKSPACE_CSS, unsafe_allow_html=True)
+st.markdown(_workspace_theme_css(_theme, _is_dark), unsafe_allow_html=True)
 
 if st.session_state.last_feedback:
     st.info(st.session_state.last_feedback)
     st.session_state.last_feedback = ""
 
-tab_chat, tab_report, tab_settings = st.tabs(["对话陪跑", "报告导出", "设置"])
+# 动态Tab：根据模式决定显示哪些Tab
+_app_mode = st.session_state.get("app_mode", "beginner")
+if _app_mode in ["beginner", "teaching"]:
+    # 入门/教学模式：只显示对话和设置
+    tab_labels = ["对话陪跑", "设置"]
+    tab_chat, tab_settings = st.tabs(tab_labels)
+    tab_report = None  # 不显示报告导出
+else:
+    # 高级模式/原v6：显示全部Tab
+    tab_labels = ["对话陪跑", "报告导出", "设置"]
+    tab_chat, tab_report, tab_settings = st.tabs(tab_labels)
 
 # ----- Tab 1: chat ----- #
 with tab_chat:
@@ -3799,6 +2307,8 @@ with tab_chat:
                 path = str(ref.get("image_path") or "")
                 with cols[idx % len(cols)]:
                     if path and os.path.exists(path):
+                        # 保留 st.image：此处需要 use_column_width=True 填充列宽，
+                        # render_lazy_image 仅支持固定 width 参数，迁移会改变渲染效果。
                         st.image(path, caption=ref.get("image_name") or f"图片 {idx + 1}", use_column_width=True)
                     else:
                         st.caption(f"图片不可用：{ref.get('image_name') or idx + 1}")
@@ -3850,7 +2360,7 @@ with tab_chat:
     st.markdown(step_bar_html, unsafe_allow_html=True)
 
     # 读取当前回答深度，供后续对话生成使用
-    from agent.ui_state_manager import get_output_mode
+    from utils.ui_state_manager import get_output_mode
     _output_mode = normalize_response_profile(get_output_mode())
 
     # --- 2. 快速操作按钮（精简：完成 + 更多 + 回答深度） ---
@@ -3897,1260 +2407,1387 @@ with tab_chat:
                 st.session_state._sp_scroll_target = "chat_bottom"
                 st.rerun()
 
-    # 回答深度选择器（放置到快速操作区右侧，适配箭头目标位置）
-    with (qd if _is_first_use else qc):
-        _render_output_mode_toggle(compact=True)
+    # 回答深度选择器（仅在高级模式/原v6模式下显示）
+    # 入门模式和教学模式有固定呈现方式，不需要视图切换
+    _app_mode = st.session_state.get("app_mode", "beginner")
+    _show_view_switcher = (_app_mode not in ["beginner", "teaching"])
+
+    if _show_view_switcher:
+        with (qd if _is_first_use else qc):
+            _render_output_mode_toggle(compact=True)
+    elif not _is_first_use:
+        # 入门/教学模式下，右侧留空或显示提示
+        with qc:
+            st.caption("💬 当前模式有固定呈现")
 
     # 智能滚动锚点：切换步骤 / 新提问后整页定位到此处
     st.markdown('<span id="sp-work-area"></span>', unsafe_allow_html=True)
 
-    # --- 4. Two-column layout: workspace + chat ---
-    _ws_col, _chat_col = st.columns([0.30, 0.70], gap="small")
+    # ====================================================================
+    # 三模式路由：根据 app_mode 渲染不同界面
+    # ====================================================================
+    _current_cp = _get_current_checkpoint_data(app, state)
+    _app_mode = st.session_state.app_mode
 
-    # ===== Left column: Stage workspace =====
-    with _ws_col:
-        _current_cp = _get_current_checkpoint_data(app, state)
+    if _app_mode == "beginner":
+        # 入门模式：单栏简化布局
+        from modes import render_beginner_view
+        render_beginner_view(_current_cp, state, app, run_command)
 
-        # 详细工作区（Step 导航 + 内容）
-        try:
-            workspace_container = st.container(height=420, border=False)
-        except TypeError:
-            workspace_container = st.container(border=False)
+    elif _app_mode == "teaching":
+        # 教学模式：单栏教学卡片+测验
+        from modes import render_teaching_view
+        render_teaching_view(_current_cp, state, app)
 
-        with workspace_container:
-            render_stage_workspace(
-                _current_cp,
-                state.software,
-                state,
-                app,
-                on_switch=switch_checkpoint,
-                key_prefix="ws_main",
-            )
-            if st.session_state.get("_extracted_cards"):
-                st.divider()
-                render_suppressed_cards(key_prefix="ws_extracted")
+    if _app_mode == "expert":
+        # 高级模式和默认：保留原有双栏布局（workspace + chat）
+        # --- 4. Two-column layout: workspace + chat ---
+        _ws_col, _chat_col = st.columns([0.30, 0.70], gap="small")
 
-    # ===== Right column: Chat history =====
-    with _chat_col:
-        # 准备搜索和定位所需的变量（在折叠区之前定义，供下方使用）
-        _stage_opts = ["全部"] + [
-            cp.get("checkpoint_id")
-            for cp in sorted(app.navigator.checkpoints, key=lambda c: c.get("order", 999))
-        ]
-        _cp_labels = {
-            cp.get("checkpoint_id"): f"{cp.get('checkpoint_id')} · {cp.get('checkpoint_cn') or cp.get('checkpoint_name', '')}"
-            for cp in app.navigator.checkpoints
-        }
+        # ===== Left column: Stage workspace =====
+        with _ws_col:
+            _current_cp = _get_current_checkpoint_data(app, state)
 
-        # --- A. 固定高度、内部可滚动的聊天容器 ---
-        # height= 需要 Streamlit >= 1.38；旧版本回退到无高度容器（仍可用，只是不固定高度）
-        # 初始化搜索和定位的默认值
-        _chat_q = ""
-        _stage_filter = "全部"
-        _show_diagnostics = False
+            # 详细工作区（Step 导航 + 内容）
+            try:
+                workspace_container = st.container(height=420, border=False)
+            except TypeError:
+                workspace_container = st.container(border=False)
 
-        try:
-            scroll_pane = st.container(height=420, border=True)
-        except TypeError:
-            scroll_pane = st.container(border=True)
-        with scroll_pane:
-            st.markdown('<div id="chat-scroll-pane"></div>', unsafe_allow_html=True)
+            with workspace_container:
+                render_stage_workspace(
+                    _current_cp,
+                    state.software,
+                    state,
+                    app,
+                    on_switch=switch_checkpoint,
+                    key_prefix="ws_main",
+                )
+                if st.session_state.get("_extracted_cards"):
+                    st.divider()
+                    render_suppressed_cards(key_prefix="ws_extracted")
 
-            # Top anchor + jump-to-latest
-            st.markdown(
-                '<div id="chat-top"></div>'
-                '<a href="#chat-bottom" style="text-decoration:none;font-size:0.8rem;color:#64748b;">跳到最新</a>',
-                unsafe_allow_html=True,
-            )
+                # P2-10: 预加载下一检查点的图片（后台线程，不阻塞 UI）
+                try:
+                    from utils.image_lazy import preload_next_step_images
+                    _preload_cp_id = _current_cp.get("checkpoint_id", "") if isinstance(_current_cp, dict) else ""
+                    if _preload_cp_id:
+                        _preload_checkpoints = app.navigator.checkpoints if hasattr(app, "navigator") else []
+                        _preload_guide_cards = load_guide_cards()
+                        threading.Thread(
+                            target=preload_next_step_images,
+                            args=(_preload_cp_id, _preload_checkpoints, _preload_guide_cards),
+                            daemon=True,
+                        ).start()
+                except Exception:
+                    pass  # 预加载失败不影响主流程
 
-            # --- B./C. 搜索框与步骤定位已移到外部折叠区 ---
-            # 使用 session_state 来获取搜索和过滤条件
-            _chat_q = st.session_state.get("chat_search_query", "")
-            _stage_filter = st.session_state.get("chat_stage_filter", "全部")
-            _show_diagnostics = st.session_state.get("show_diagnostics", False)
+        # ===== Right column: Chat history =====
+        with _chat_col:
+            # 准备搜索和定位所需的变量（在折叠区之前定义，供下方使用）
+            _stage_opts = ["全部"] + [
+                cp.get("checkpoint_id")
+                for cp in sorted(app.navigator.checkpoints, key=lambda c: c.get("order", 999))
+            ]
+            _cp_labels = {
+                cp.get("checkpoint_id"): f"{cp.get('checkpoint_id')} · {cp.get('checkpoint_cn') or cp.get('checkpoint_name', '')}"
+                for cp in app.navigator.checkpoints
+            }
 
-            def _msg_stage(m):
-                """从消息 metadata 推断其所属步骤（checkpoint_id）。"""
-                md = getattr(m, "metadata", None) or {}
-                cp = md.get("checkpoint_id") or ""
-                if not cp:
-                    nq = md.get("normalized_query") or {}
-                    if isinstance(nq, dict):
-                        cp = nq.get("checkpoint_id") or ""
-                return cp
+            # --- A. 固定高度、内部可滚动的聊天容器 ---
+            # height= 需要 Streamlit >= 1.38；旧版本回退到无高度容器（仍可用，只是不固定高度）
+            # 初始化搜索和定位的默认值
+            _chat_q = ""
+            _stage_filter = "全部"
+            _show_diagnostics = False
 
-            _q = (_chat_q or "").strip().lower()
-            _filtering = bool(_q) or (_stage_filter != "全部")
+            try:
+                scroll_pane = st.container(height=420, border=True)
+            except TypeError:
+                scroll_pane = st.container(border=True)
+            with scroll_pane:
+                st.markdown('<div id="chat-scroll-pane"></div>', unsafe_allow_html=True)
 
-            if _filtering:
-                # 在全部历史消息上做关键词 / 步骤过滤，不再走窗口折叠
-                shown = list(state.messages)
-                if _stage_filter != "全部":
-                    _ctx = ""
-                    _kept = []
-                    for _m in shown:
-                        _c = _msg_stage(_m)
-                        if _c:
-                            _ctx = _c
-                        if _ctx == _stage_filter:
-                            _kept.append(_m)
-                    shown = _kept
-                if _q:
-                    shown = [m for m in shown if _q in (getattr(m, "content", "") or "").lower()]
-                older_messages = []
-            else:
-                history_limit = int(st.session_state.selected_history_limit)
-                shown, older_messages = get_chat_display_window(state.messages, history_limit)
-                if len(state.messages) > history_limit:
-                    st.caption(f"显示最近 {history_limit} 条（共 {len(state.messages)} 条）。可在「设置」中调整条数。")
+                # Top anchor + jump-to-latest
+                st.markdown(
+                    '<div id="chat-top"></div>'
+                    '<a href="#chat-bottom" style="text-decoration:none;font-size:0.8rem;color:#64748b;">跳到最新</a>',
+                    unsafe_allow_html=True,
+                )
 
-    
-            # Folded older messages
-            if older_messages:
-                older_summary = get_older_summary(older_messages)
-                with st.expander(older_summary, expanded=False):
-                    for oi, omsg in enumerate(older_messages):
-                        with st.chat_message(omsg.role):
-                            content = getattr(omsg, "content", "")
-                            if len(content) > 200:
-                                first_line = content.lstrip("#").strip().splitlines()[0][:60] if content.strip() else ""
-                                st.caption(f"{first_line}…" if first_line else "(空消息)")
-                            else:
-                                st.markdown(content)
-    
-            if not shown:
+                # --- B./C. 搜索框与步骤定位已移到外部折叠区 ---
+                # 使用 session_state 来获取搜索和过滤条件
+                _chat_q = st.session_state.get("chat_search_query", "")
+                _stage_filter = st.session_state.get("chat_stage_filter", "全部")
+                _show_diagnostics = st.session_state.get("show_diagnostics", False)
+
+                def _msg_stage(m):
+                    """从消息 metadata 推断其所属步骤（checkpoint_id）。"""
+                    md = getattr(m, "metadata", None) or {}
+                    cp = md.get("checkpoint_id") or ""
+                    if not cp:
+                        nq = md.get("normalized_query") or {}
+                        if isinstance(nq, dict):
+                            cp = nq.get("checkpoint_id") or ""
+                    return cp
+
+                _q = (_chat_q or "").strip().lower()
+                _filtering = bool(_q) or (_stage_filter != "全部")
+
                 if _filtering:
-                    st.warning("未找到匹配的对话记录，试着换关键词或切换步骤。")
+                    # 在全部历史消息上做关键词 / 步骤过滤，不再走窗口折叠
+                    shown = list(state.messages)
+                    if _stage_filter != "全部":
+                        _ctx = ""
+                        _kept = []
+                        for _m in shown:
+                            _c = _msg_stage(_m)
+                            if _c:
+                                _ctx = _c
+                            if _ctx == _stage_filter:
+                                _kept.append(_m)
+                        shown = _kept
+                    if _q:
+                        shown = [m for m in shown if _q in (getattr(m, "content", "") or "").lower()]
+                    older_messages = []
                 else:
-                    st.info("还没有对话。点上方「开始」或在下方输入框开始陪跑。")
+                    history_limit = int(st.session_state.selected_history_limit)
+                    shown, older_messages = get_chat_display_window(state.messages, history_limit)
+                    if len(state.messages) > history_limit:
+                        st.caption(f"显示最近 {history_limit} 条（共 {len(state.messages)} 条）。可在「设置」中调整条数。")
 
-            st.session_state._extracted_cards = []
-            st.session_state._workspace_guide_cards = []
     
-            for i, msg in enumerate(shown):
-                is_last = i == len(shown) - 1
-                if is_last:
-                    st.markdown(
-                        '<div id="latest-message" style="scroll-margin-top: 1rem;"></div>',
-                        unsafe_allow_html=True,
-                    )
-                with st.chat_message(msg.role):
-                    action_tag = getattr(msg, "action_tag", "") or ""
-                    is_sop = "sop" in action_tag or "stage_guide" in action_tag
-                    guide_card = getattr(msg, "metadata", {}).get("guide_card") if msg.role == "assistant" else None
-                    _content_len = len(getattr(msg, "content", "") or "")
-                    _meta_keys = list((getattr(msg, "metadata", {}) or {}).keys())
-                    if st.session_state.get("show_diagnostics", False):
-                        st.caption(f"🐛 DEBUG [{i}] role={msg.role}, tag={action_tag}, content_len={_content_len}, meta_keys={_meta_keys}, is_sop={is_sop}, has_guide_card={bool(guide_card)}")
-
-                    # --- B域优化：guide_card 存入 session_state 供工作区消费，不在聊天区内嵌截图 ---
-                    if guide_card and msg.role == "assistant":
-                        _gc_list = st.session_state.get("_workspace_guide_cards", [])
-                        _gc_list.append({"card": guide_card, "action_tag": action_tag, "msg_idx": i})
-                        st.session_state._workspace_guide_cards = _gc_list
-
-                    # --- B域优化 v2：SOP 长文本迁移至工作区，聊天区仅显示摘要 ---
-                    if msg.role == "assistant" and guide_card and is_sop:
-                        # 提取 SOP 全文供工作区 📋 SOP tab 消费
-                        _sop_full = msg.content or ""
-                        if _sop_full:
-                            st.session_state["_workspace_sop_full"] = _sop_full
-                            st.session_state["_workspace_sop_cp_id"] = checkpoint_id_from_metadata(msg)
-
-                        # 聊天区仅显示精简摘要（2-3行）
-                        _nav_line = ""
-                        if "\n---" in _sop_full:
-                            _nav_line = _sop_full.split("\n---")[0].strip()
-                        elif "\n" in _sop_full:
-                            _nav_line = _sop_full.split("\n")[0].strip()
-                        else:
-                            _nav_line = _sop_full[:120]
-
-                        st.markdown(f"📋 **{(_nav_line or '已切换步骤')}**")
-                        st.caption("👈 完整 SOP 流程、参数说明和截图请查看左侧「📋 SOP」面板")
-                        render_qa_trace(msg, f"trace_{i}_guide")
-                        render_answer_feedback(msg, f"{i}_guide")
-                        continue
-
-                    if msg.role == "assistant":
-                        # 助手回答：文本卡（judgment/explanation/steps/decision/qc/log）保留在聊天；
-                        # screenshot + params 卡被抑制，数据累积到 st.session_state._extracted_cards
-                        # 供工作区「💡 课题组经验」区展示。
-                        render_answer_cards(
-                            msg.content,
-                            getattr(msg, "metadata", None),
-                            normalize_response_profile(
-                                (getattr(msg, "metadata", None) or {}).get("response_profile", "teaching")
-                            ),
-                            is_last,
-                            f"card_{i}",
-                            suppress_types=["screenshot", "params"],
-                        )
-                        # 注意：guide_card 不再在聊天中回退渲染（已存入 _workspace_guide_cards）
-                        # 注意：image_refs 不再在聊天内联渲染（图片应在工作区查看）
+                # Folded older messages
+                if older_messages:
+                    older_summary = get_older_summary(older_messages)
+                    with st.expander(older_summary, expanded=False):
+                        for oi, omsg in enumerate(older_messages):
+                            with st.chat_message(omsg.role):
+                                content = getattr(omsg, "content", "")
+                                if len(content) > 200:
+                                    first_line = content.lstrip("#").strip().splitlines()[0][:60] if content.strip() else ""
+                                    st.caption(f"{first_line}…" if first_line else "(空消息)")
+                                else:
+                                    st.markdown(content)
+    
+                if not shown:
+                    if _filtering:
+                        st.warning("未找到匹配的对话记录，试着换关键词或切换步骤。")
                     else:
-                        # 用户消息：纯文本
-                        st.markdown(msg.content)
-                        render_user_multimodal_evidence(msg)
+                        st.info("还没有对话。点上方「开始」或在下方输入框开始陪跑。")
 
-                    render_qa_trace(msg, f"trace_{i}")
-                    if msg.role == "user":
-                        render_user_understanding_feedback(msg, f"{i}")
-                    elif msg.role == "assistant":
-                        # v6.0 增强：独立 QA 验收流程（在诊断工具外也可见）
-                        _render_qa_acceptance(msg, i, is_last)
-                        render_answer_feedback(msg, f"{i}")
+                st.session_state._extracted_cards = []
+                st.session_state._workspace_guide_cards = []
+    
+                for i, msg in enumerate(shown):
+                    is_last = i == len(shown) - 1
+                    if is_last:
+                        st.markdown(
+                            '<div id="latest-message" style="scroll-margin-top: 1rem;"></div>',
+                            unsafe_allow_html=True,
+                        )
+                    with st.chat_message(msg.role):
+                        action_tag = getattr(msg, "action_tag", "") or ""
+                        is_sop = "sop" in action_tag or "stage_guide" in action_tag
+                        guide_card = getattr(msg, "metadata", {}).get("guide_card") if msg.role == "assistant" else None
+                        _content_len = len(getattr(msg, "content", "") or "")
+                        _meta_keys = list((getattr(msg, "metadata", {}) or {}).keys())
+                        if st.session_state.get("show_diagnostics", False):
+                            st.caption(f"🐛 DEBUG [{i}] role={msg.role}, tag={action_tag}, content_len={_content_len}, meta_keys={_meta_keys}, is_sop={is_sop}, has_guide_card={bool(guide_card)}")
 
-            # Bottom anchor + back-to-top
+                        # --- B域优化：guide_card 存入 session_state 供工作区消费，不在聊天区内嵌截图 ---
+                        if guide_card and msg.role == "assistant":
+                            _gc_list = st.session_state.get("_workspace_guide_cards", [])
+                            _gc_list.append({"card": guide_card, "action_tag": action_tag, "msg_idx": i})
+                            st.session_state._workspace_guide_cards = _gc_list
+
+                        # --- B域优化 v2：SOP 长文本迁移至工作区，聊天区仅显示摘要 ---
+                        if msg.role == "assistant" and guide_card and is_sop:
+                            # 提取 SOP 全文供工作区 📋 SOP tab 消费
+                            _sop_full = msg.content or ""
+                            if _sop_full:
+                                st.session_state["_workspace_sop_full"] = _sop_full
+                                st.session_state["_workspace_sop_cp_id"] = checkpoint_id_from_metadata(msg)
+
+                            # 聊天区仅显示精简摘要（2-3行）
+                            _nav_line = ""
+                            if "\n---" in _sop_full:
+                                _nav_line = _sop_full.split("\n---")[0].strip()
+                            elif "\n" in _sop_full:
+                                _nav_line = _sop_full.split("\n")[0].strip()
+                            else:
+                                _nav_line = _sop_full[:120]
+
+                            st.markdown(f"📋 **{(_nav_line or '已切换步骤')}**")
+                            st.caption("👈 完整 SOP 流程、参数说明和截图请查看左侧「📋 SOP」面板")
+                            render_qa_trace(msg, f"trace_{i}_guide")
+                            render_answer_feedback(msg, f"{i}_guide")
+                            continue
+
+                        if msg.role == "assistant":
+                            # 助手回答：文本卡（judgment/explanation/steps/decision/qc/log）保留在聊天；
+                            # screenshot + params 卡被抑制，数据累积到 st.session_state._extracted_cards
+                            # 供工作区「💡 课题组经验」区展示。
+                            render_answer_cards(
+                                msg.content,
+                                getattr(msg, "metadata", None),
+                                normalize_response_profile(
+                                    (getattr(msg, "metadata", None) or {}).get("response_profile", "teaching")
+                                ),
+                                is_last,
+                                f"card_{i}",
+                                suppress_types=["screenshot", "params"],
+                            )
+                            # 注意：guide_card 不再在聊天中回退渲染（已存入 _workspace_guide_cards）
+                            # 注意：image_refs 不再在聊天内联渲染（图片应在工作区查看）
+                        else:
+                            # 用户消息：纯文本
+                            st.markdown(msg.content)
+                            render_user_multimodal_evidence(msg)
+
+                        render_qa_trace(msg, f"trace_{i}")
+                        if msg.role == "user":
+                            render_user_understanding_feedback(msg, f"{i}")
+                        elif msg.role == "assistant":
+                            # v6.0 增强：独立 QA 验收流程（在诊断工具外也可见）
+                            _render_qa_acceptance(msg, i, is_last)
+                            render_answer_feedback(msg, f"{i}")
+
+                # Bottom anchor + back-to-top
+                st.markdown(
+                    '<div id="chat-bottom"></div>'
+                    '<a href="#chat-top" style="text-decoration:none;font-size:0.8rem;color:#64748b;">回到顶部</a>',
+                    unsafe_allow_html=True,
+                )
+
+
+            # --- 紧凑工具栏（搜索/定位/诊断/沉淀 收入 popover，不占垂直空间） ---
+            _tc1, _tc2, _tc3, _tc4 = st.columns([1, 1, 1, 1])
+            with _tc1:
+                with st.popover("🔍 搜索", use_container_width=True):
+                    st.text_input("搜索历史对话", key="chat_search_query")
+            with _tc2:
+                with st.popover("📍 定位", use_container_width=True):
+                    st.selectbox(
+                        "定位到步骤",
+                        options=_stage_opts,
+                        index=0,
+                        format_func=lambda cid: _cp_labels.get(cid, cid),
+                        key="chat_stage_filter",
+                    )
+            with _tc3:
+                with st.popover("🔧 诊断", use_container_width=True):
+                    st.toggle(
+                        "显示诊断信息与审核工具",
+                        value=False,
+                        key="show_diagnostics",
+                        help="显示运行引擎、耗时、RAG 命中、理解纠正和回答审核入口。",
+                    )
+            with _tc4:
+                with st.popover("💾 沉淀", use_container_width=True):
+                    if state.messages:
+                        _last_assistant_msg = next(
+                            (m for m in reversed(state.messages) if m.role == "assistant"), None
+                        )
+                        if _last_assistant_msg:
+                            if st.button("沉淀经验", key="distill_btn", use_container_width=True,
+                                         help="把最新一条 AI 回答抽取成知识条目，存入知识库供后续检索"):
+                                _msgs = state.messages
+                                _last_idx = next(
+                                    (i for i, m in reversed(list(enumerate(_msgs))) if m.role == "assistant"), -1
+                                )
+                                if _last_idx > 0 and _msgs[_last_idx - 1].role == "user":
+                                    _pair = _msgs[_last_idx - 1: _last_idx + 1]
+                                else:
+                                    _user_idx = next(
+                                        (i for i in range(_last_idx - 1, max(0, _last_idx - 5), -1)
+                                         if _msgs[i].role == "user"), -1
+                                    )
+                                    if _user_idx >= 0:
+                                        _pair = [_msgs[_user_idx], _msgs[_last_idx]]
+                                    else:
+                                        _pair = [_msgs[_last_idx]]
+
+                                snippet = "\n\n".join(f"{m.role}: {m.content}" for m in _pair)
+
+                                context_info = []
+                                if state.current_cp_id:
+                                    context_info.append(f"checkpoint: {state.current_cp_id}")
+                                if state.software:
+                                    context_info.append(f"software: {state.software}")
+                                if state.params:
+                                    key_params = list(state.params.items())[:5]
+                                    context_info.append(f"params: {dict(key_params)}")
+
+                                if context_info:
+                                    snippet = f"[Context: {'; '.join(context_info)}]\n\n{snippet}"
+
+                                draft = app.llm.extract_knowledge_doc(snippet)
+                                draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                                draft.setdefault("checkpoint_id", state.current_cp_id or "")
+                                draft.setdefault("software", state.software or "")
+                                st.session_state.distill_draft = draft
+                                st.rerun()
+                    else:
+                        st.caption("暂无对话可沉淀")
+
+            if st.session_state.get("chat_stage_filter") != "全部":
+                st.session_state._sp_scroll_target = "chat_bottom"
+
+            if st.session_state.get("distill_draft"):
+                draft = st.session_state.distill_draft
+                with st.form("distill_form"):
+                    st.markdown("**预览并编辑这条经验，确认后写入知识库：**")
+                    st.caption("💡 「草稿」仅个人可用；选「共享到课题组」会升级为正式 SOP，所有成员均可检索到")
+                    d_doc_id = st.text_input("doc_id", value=draft.get("doc_id", ""))
+                    d_title = st.text_input("标题 title_cn", value=draft.get("title_cn", ""))
+                    d_cp = st.text_input("关联检查点", value=draft.get("checkpoint_id", ""))
+                    d_summary = st.text_area("摘要 summary", value=draft.get("summary", ""), height=100)
+
+                    def _join(v):
+                        return "\n".join(v) if isinstance(v, list) else (v or "")
+
+                    d_steps = st.text_area("操作步骤（每行一条）", value=_join(draft.get("action_steps")), height=80)
+                    d_qc = st.text_area("质控要点（每行一条）", value=_join(draft.get("qc_checks")), height=70)
+                    d_err = st.text_area("常见陷阱（每行一条）", value=_join(draft.get("common_errors")), height=70)
+                    d_tags = st.text_input("标签 tags（逗号分隔）", value=", ".join(draft.get("tags", []) if isinstance(draft.get("tags"), list) else []))
+                    _dc1, _dc2 = st.columns(2)
+                    with _dc1:
+                        d_tier = st.selectbox("权重", options=["note", "sop"], format_func=lambda x: TIER_LABELS.get(x, x), index=0)
+                    with _dc2:
+                        d_status = st.selectbox("状态", options=["draft", "formal_ready"],
+                                                format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用", index=0)
+                    # 共享到课题组：一键设为 sop + formal_ready
+                    d_share = st.checkbox(
+                        "📤 共享到课题组（升级为正式 SOP，所有成员可检索）",
+                        value=False,
+                        help="勾选后本条经验将标记为「正式SOP」并立即生效，无需额外审核"
+                    )
+                    fc1, fc2 = st.columns(2)
+                    submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
+                    cancelled = fc2.form_submit_button("取消", use_container_width=True)
+                if submitted:
+                    def _lines(s):
+                        return [x.strip() for x in (s or "").splitlines() if x.strip()]
+
+                    # 若勾选「共享到课题组」，强制覆盖为 sop + formal_ready
+                    final_tier = "sop" if d_share else d_tier
+                    final_status = "formal_ready" if d_share else d_status
+
+                    doc = KnowledgeDoc(
+                        doc_id=d_doc_id.strip() or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                        software=draft.get("software", ""),
+                        checkpoint_id=d_cp.strip(),
+                        title_cn=d_title.strip(),
+                        summary=d_summary.strip(),
+                        action_steps=_lines(d_steps),
+                        qc_checks=_lines(d_qc),
+                        common_errors=_lines(d_err),
+                        tags=[x.strip() for x in d_tags.split(",") if x.strip()],
+                        tier=final_tier,
+                        status=final_status,
+                        source="distill",
+                        imported_at=datetime.now().isoformat(timespec="seconds"),
+                    )
+                    add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                    app.retriever.invalidate_corpus_cache()
+                    st.session_state.distill_draft = None
+                    status_label = "正式可用（已共享到课题组）" if d_share else ("正式可用" if final_status == "formal_ready" else "草稿（待审核）")
+                    # 改动4：写入成功后显示可见性提示，告知用户在哪里查看记录
+                    st.session_state.last_feedback = (
+                        f"✅ 已沉淀经验：{doc.doc_id}（{TIER_LABELS.get(final_tier, final_tier)} / {status_label}）"
+                        f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看并审核所有沉淀记录"
+                    )
+                    st.rerun()
+                if cancelled:
+                    st.session_state.distill_draft = None
+                    st.rerun()
+
+
+        st.session_state.setdefault("pending_pasted", [])
+        st.session_state.setdefault("last_pasted_sig", "")
+        st.session_state.setdefault("voice_transcript", "")
+        st.session_state.setdefault("_temp_voice_transcript", None)
+
+        if st.session_state.get("_temp_voice_transcript") is not None:
+            st.session_state.voice_transcript = st.session_state._temp_voice_transcript
+            st.session_state._temp_voice_transcript = None
+
+        # ---- 语音输入（折叠面板，默认收起） ----
+        with st.expander("🎤 语音输入", expanded=bool(st.session_state.get("voice_transcript", ""))):
+            st.caption(app.llm.audio_status_text())
+            recorded_voice = None
+            if hasattr(st, "audio_input"):
+                use_mic = st.checkbox("启用麦克风录音（需浏览器授权）", key="enable_mic_recording", value=False)
+                if use_mic:
+                    st.caption("💡 录音结束后自动转写；如提示错误请授权麦克风，或使用下方文件上传")
+                    st.info(
+                        "🔊 **麦克风权限授权指引**：\n"
+                        "- Chrome/Edge：点击浏览器地址栏左侧的「🔒」图标，在「权限」中允许麦克风\n"
+                        "- Firefox：点击地址栏左侧的「🔒」图标 → 「麦克风」→ 选择「允许」\n"
+                        "- 如果提示已拒绝，请在浏览器设置中搜索「麦克风」并允许此网站访问\n"
+                        "- 授权后刷新页面，录音按钮会显示为蓝色可点击状态"
+                    )
+                    try:
+                        recorded_voice = st.audio_input("点击开始录音")
+                    except Exception as exc:
+                        recorded_voice = None
+                        st.error(f"麦克风录音初始化失败：{exc}\n\n请检查：\n1. 浏览器是否已授权麦克风权限\n2. 是否有其他程序占用了麦克风\n3. 或使用下方「上传语音文件」功能")
+            uploaded_voice = st.file_uploader(
+                "上传语音文件（上传后自动转写）",
+                type=["mp3", "wav", "m4a", "mp4", "mpeg", "mpga", "webm", "ogg"],
+                key="voice_input_uploader",
+            )
+            voice_file = recorded_voice or uploaded_voice
+
+            def _stable_sig(f):
+                if f is None:
+                    return ""
+                try:
+                    sz = getattr(f, "size", 0) or 0
+                    nm = getattr(f, "name", "") or ""
+                    return f"{nm}:{sz}"
+                except Exception:
+                    return ""
+
+            def _is_valid_audio(f):
+                if f is None:
+                    return False
+                try:
+                    sz = getattr(f, "size", 0) or 0
+                    return sz > 500
+                except Exception:
+                    return False
+
+            valid_voice = voice_file if _is_valid_audio(voice_file) else None
+            if valid_voice is not None and app.llm.audio_enabled:
+                cur_sig = _stable_sig(valid_voice)
+                if cur_sig and st.session_state.get("_last_voice_sig") != cur_sig:
+                    st.session_state._last_voice_sig = cur_sig
+                    try:
+                        with st.status("正在读取并转写语音…", expanded=True) as voice_status:
+                            voice_status.write("正在保存音频...")
+                            audio_path = save_uploaded_audio(valid_voice)
+                            voice_status.write("语音上传完成，正在检查识别缓存…")
+                            audio_digest = file_sha256(audio_path)
+                            audio_cache_key = hashlib.sha256(
+                                f"{audio_digest}:{app.llm.audio_model}:zh".encode("utf-8")
+                            ).hexdigest()
+                            audio_cache_path = AUDIO_CACHE_DIR / f"{audio_cache_key}.json"
+                            cached_audio = _read_json_cache(audio_cache_path)
+                            if cached_audio and cached_audio.get("text"):
+                                transcript = str(cached_audio.get("text", ""))
+                                voice_status.write("已命中相同音频的转写缓存。")
+                            else:
+                                voice_status.write("正在调用语音识别模型…")
+                                transcript = app.llm.transcribe_audio(audio_path, language="zh")
+                                _write_json_cache(
+                                    audio_cache_path,
+                                    {
+                                        "text": transcript,
+                                        "audio_sha256": audio_digest,
+                                        "model": app.llm.audio_model,
+                                        "language": "zh",
+                                        "created_at": datetime.now().isoformat(),
+                                    },
+                                )
+                            voice_status.update(label="语音转写完成，请核对文本", state="complete", expanded=False)
+                        st.session_state._temp_voice_transcript = transcript
+                        st.session_state.last_feedback = "✅ 语音已自动转写，可编辑后发送或追加到输入框。"
+                        st.rerun()
+                    except Exception as exc:
+                        st.session_state.last_feedback = f"语音转写失败：{exc}"
+                        st.session_state._last_voice_sig = f"failed:{cur_sig}"
+
+            vc1, vc3 = st.columns([1, 1])
+            with vc1:
+                if st.button("🔄 重新转写", use_container_width=True, disabled=voice_file is None or not app.llm.audio_enabled):
+                    st.session_state._last_voice_sig = None
+                    st.rerun()
+            with vc3:
+                if st.button("🗑️ 清空", use_container_width=True):
+                    st.session_state._temp_voice_transcript = None
+                    st.session_state._last_voice_sig = None
+                    st.rerun()
+
+            if not app.llm.audio_enabled:
+                st.warning("请先在「设置」里配置语音转写模型和 API Key。")
+
+            # 调试信息（开发模式可见）
+            if st.session_state.get("show_diagnostics", False):
+                transcript_val = st.session_state.get("voice_transcript", "")
+                st.caption(f"DEBUG: voice_transcript = '{transcript_val}' (len={len(transcript_val)})")
+
+            voice_text = st.text_area(
+                "转写文本（可编辑后发送或填入输入框）",
+                height=70,
+                key="voice_transcript",
+                placeholder="转写结果会出现在这里；可以直接编辑修正术语，然后发送或追加到输入框与手打文字合并。",
+            )
+
+            # 提示用户按钮状态
+            if not voice_text.strip():
+                st.caption("⚠️ 转写文本为空，「填入输入框」和「直接发送」按钮不可用。请先上传语音文件并等待转写完成。")
+            if voice_text.strip():
+                if st.button("✅ 直接发送（含已粘贴的截图）", use_container_width=True, type="primary"):
+                    image_refs = []
+                    for img in st.session_state.pending_pasted:
+                        image_refs.append(save_pasted_image(img))
+                    st.session_state.pending_pasted = []
+                    st.session_state.last_pasted_sig = ""
+                    st.session_state._temp_voice_transcript = None
+                    st.session_state._last_voice_sig = None
+                    run_command(
+                        voice_text.strip(),
+                        image_refs,
+                        input_metadata={"input_modality": "voice", "transcript_reviewed": True},
+                        response_profile=_output_mode,
+                    )
+                    st.session_state._sp_scroll_target = "chat_bottom"
+                    st.rerun()
+                st.caption("💡 或点「📝 填入输入框」把文字追加到底部输入框，继续手打补充、附加文件后一起发送")
+
+        # ---- JS：将转写文本注入到主 chat_input（必须在 expander 外部，确保始终执行） ----
+        if st.session_state.get("_inject_voice_text"):
+            inject_text = st.session_state._inject_voice_text
+            st.session_state._inject_voice_text = ""
+            escaped = json.dumps(inject_text, ensure_ascii=False)
+            js_code = f"""
+            (function() {{
+                var attempts = 0;
+                var maxAttempts = 40;
+                var injectedText = {escaped};
+                function tryInject() {{
+                    attempts++;
+                    var chatArea = document.querySelector('[data-testid="stChatInputTextArea"]');
+                    if (!chatArea) {{
+                        if (attempts < maxAttempts) setTimeout(tryInject, 200);
+                        return;
+                    }}
+                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                    var currentVal = chatArea.value || '';
+                    var newVal = currentVal ? (currentVal + (currentVal.endsWith(' ') ? '' : ' ') + injectedText) : injectedText;
+                    nativeSetter.call(chatArea, newVal);
+                    chatArea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    chatArea.focus();
+                    chatArea.setSelectionRange(newVal.length, newVal.length);
+                }}
+                setTimeout(tryInject, 300);
+            }})();
+            """
+            js_b64 = base64.b64encode(js_code.encode('utf-8')).decode('ascii')
             st.markdown(
-                '<div id="chat-bottom"></div>'
-                '<a href="#chat-top" style="text-decoration:none;font-size:0.8rem;color:#64748b;">回到顶部</a>',
+                f'<img src="data:," style="display:none!important;width:0!important;height:0!important;" onerror="eval(atob(\'{js_b64}\'))">',
                 unsafe_allow_html=True,
             )
 
-
-        # --- 紧凑工具栏（搜索/定位/诊断/沉淀 收入 popover，不占垂直空间） ---
-        _tc1, _tc2, _tc3, _tc4 = st.columns([1, 1, 1, 1])
-        with _tc1:
-            with st.popover("🔍 搜索", use_container_width=True):
-                st.text_input("搜索历史对话", key="chat_search_query")
-        with _tc2:
-            with st.popover("📍 定位", use_container_width=True):
-                st.selectbox(
-                    "定位到步骤",
-                    options=_stage_opts,
-                    index=0,
-                    format_func=lambda cid: _cp_labels.get(cid, cid),
-                    key="chat_stage_filter",
-                )
-        with _tc3:
-            with st.popover("🔧 诊断", use_container_width=True):
-                st.toggle(
-                    "显示诊断信息与审核工具",
-                    value=False,
-                    key="show_diagnostics",
-                    help="显示运行引擎、耗时、RAG 命中、理解纠正和回答审核入口。",
-                )
-        with _tc4:
-            with st.popover("💾 沉淀", use_container_width=True):
-                if state.messages:
-                    _last_assistant_msg = next(
-                        (m for m in reversed(state.messages) if m.role == "assistant"), None
-                    )
-                    if _last_assistant_msg:
-                        if st.button("沉淀经验", key="distill_btn", use_container_width=True,
-                                     help="把最新一条 AI 回答抽取成知识条目，存入知识库供后续检索"):
-                            _msgs = state.messages
-                            _last_idx = next(
-                                (i for i, m in reversed(list(enumerate(_msgs))) if m.role == "assistant"), -1
-                            )
-                            if _last_idx > 0 and _msgs[_last_idx - 1].role == "user":
-                                _pair = _msgs[_last_idx - 1: _last_idx + 1]
-                            else:
-                                _user_idx = next(
-                                    (i for i in range(_last_idx - 1, max(0, _last_idx - 5), -1)
-                                     if _msgs[i].role == "user"), -1
-                                )
-                                if _user_idx >= 0:
-                                    _pair = [_msgs[_user_idx], _msgs[_last_idx]]
-                                else:
-                                    _pair = [_msgs[_last_idx]]
-
-                            snippet = "\n\n".join(f"{m.role}: {m.content}" for m in _pair)
-
-                            context_info = []
-                            if state.current_cp_id:
-                                context_info.append(f"checkpoint: {state.current_cp_id}")
-                            if state.software:
-                                context_info.append(f"software: {state.software}")
-                            if state.params:
-                                key_params = list(state.params.items())[:5]
-                                context_info.append(f"params: {dict(key_params)}")
-
-                            if context_info:
-                                snippet = f"[Context: {'; '.join(context_info)}]\n\n{snippet}"
-
-                            draft = app.llm.extract_knowledge_doc(snippet)
-                            draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-                            draft.setdefault("checkpoint_id", state.current_cp_id or "")
-                            draft.setdefault("software", state.software or "")
-                            st.session_state.distill_draft = draft
-                            st.rerun()
-                else:
-                    st.caption("暂无对话可沉淀")
-
-        if st.session_state.get("chat_stage_filter") != "全部":
-            st.session_state._sp_scroll_target = "chat_bottom"
-
-        if st.session_state.get("distill_draft"):
-            draft = st.session_state.distill_draft
-            with st.form("distill_form"):
-                st.markdown("**预览并编辑这条经验，确认后写入知识库：**")
-                st.caption("💡 「草稿」仅个人可用；选「共享到课题组」会升级为正式 SOP，所有成员均可检索到")
-                d_doc_id = st.text_input("doc_id", value=draft.get("doc_id", ""))
-                d_title = st.text_input("标题 title_cn", value=draft.get("title_cn", ""))
-                d_cp = st.text_input("关联检查点", value=draft.get("checkpoint_id", ""))
-                d_summary = st.text_area("摘要 summary", value=draft.get("summary", ""), height=100)
-
-                def _join(v):
-                    return "\n".join(v) if isinstance(v, list) else (v or "")
-
-                d_steps = st.text_area("操作步骤（每行一条）", value=_join(draft.get("action_steps")), height=80)
-                d_qc = st.text_area("质控要点（每行一条）", value=_join(draft.get("qc_checks")), height=70)
-                d_err = st.text_area("常见陷阱（每行一条）", value=_join(draft.get("common_errors")), height=70)
-                d_tags = st.text_input("标签 tags（逗号分隔）", value=", ".join(draft.get("tags", []) if isinstance(draft.get("tags"), list) else []))
-                _dc1, _dc2 = st.columns(2)
-                with _dc1:
-                    d_tier = st.selectbox("权重", options=["note", "sop"], format_func=lambda x: TIER_LABELS.get(x, x), index=0)
-                with _dc2:
-                    d_status = st.selectbox("状态", options=["draft", "formal_ready"],
-                                            format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用", index=0)
-                # 共享到课题组：一键设为 sop + formal_ready
-                d_share = st.checkbox(
-                    "📤 共享到课题组（升级为正式 SOP，所有成员可检索）",
-                    value=False,
-                    help="勾选后本条经验将标记为「正式SOP」并立即生效，无需额外审核"
-                )
-                fc1, fc2 = st.columns(2)
-                submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
-                cancelled = fc2.form_submit_button("取消", use_container_width=True)
-            if submitted:
-                def _lines(s):
-                    return [x.strip() for x in (s or "").splitlines() if x.strip()]
-
-                # 若勾选「共享到课题组」，强制覆盖为 sop + formal_ready
-                final_tier = "sop" if d_share else d_tier
-                final_status = "formal_ready" if d_share else d_status
-
-                doc = KnowledgeDoc(
-                    doc_id=d_doc_id.strip() or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                    software=draft.get("software", ""),
-                    checkpoint_id=d_cp.strip(),
-                    title_cn=d_title.strip(),
-                    summary=d_summary.strip(),
-                    action_steps=_lines(d_steps),
-                    qc_checks=_lines(d_qc),
-                    common_errors=_lines(d_err),
-                    tags=[x.strip() for x in d_tags.split(",") if x.strip()],
-                    tier=final_tier,
-                    status=final_status,
-                    source="distill",
-                    imported_at=datetime.now().isoformat(timespec="seconds"),
-                )
-                index_path = BASE_DIR / "knowledge_base" / "knowledge_index.json"
-                update_knowledge_index(doc, str(index_path))
-                app.retriever.invalidate_corpus_cache()
-                st.session_state.distill_draft = None
-                status_label = "正式可用（已共享到课题组）" if d_share else ("正式可用" if final_status == "formal_ready" else "草稿（待审核）")
-                # 改动4：写入成功后显示可见性提示，告知用户在哪里查看记录
-                st.session_state.last_feedback = (
-                    f"✅ 已沉淀经验：{doc.doc_id}（{TIER_LABELS.get(final_tier, final_tier)} / {status_label}）"
-                    f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看并审核所有沉淀记录"
-                )
-                st.rerun()
-            if cancelled:
-                st.session_state.distill_draft = None
+        # ---- 截图粘贴（紧凑单行） ----
+        paste_col1, paste_col2 = st.columns([1, 8])
+        with paste_col1:
+            paste_result = paste_image_button(label="📋 粘贴", key="chat_paste_btn", errors="ignore")
+        with paste_col2:
+            if not st.session_state.pending_pasted:
+                st.caption("Ctrl+V 粘贴截图，或下方输入框拖拽文件")
+        if paste_result is not None and paste_result.image_data is not None:
+            sig = hashlib.sha256(paste_result.image_data.tobytes()).hexdigest()
+            if sig != st.session_state.last_pasted_sig:
+                st.session_state.last_pasted_sig = sig
+                st.session_state.pending_pasted.append(paste_result.image_data)
                 st.rerun()
 
-
-    st.session_state.setdefault("pending_pasted", [])
-    st.session_state.setdefault("last_pasted_sig", "")
-    st.session_state.setdefault("voice_transcript", "")
-    st.session_state.setdefault("_temp_voice_transcript", None)
-
-    if st.session_state.get("_temp_voice_transcript") is not None:
-        st.session_state.voice_transcript = st.session_state._temp_voice_transcript
-        st.session_state._temp_voice_transcript = None
-
-    # ---- 语音输入（折叠面板，默认收起） ----
-    with st.expander("🎤 语音输入", expanded=bool(st.session_state.get("voice_transcript", ""))):
-        st.caption(app.llm.audio_status_text())
-        recorded_voice = None
-        if hasattr(st, "audio_input"):
-            use_mic = st.checkbox("启用麦克风录音（需浏览器授权）", key="enable_mic_recording", value=False)
-            if use_mic:
-                st.caption("💡 录音结束后自动转写；如提示错误请授权麦克风，或使用下方文件上传")
-                st.info(
-                    "🔊 **麦克风权限授权指引**：\n"
-                    "- Chrome/Edge：点击浏览器地址栏左侧的「🔒」图标，在「权限」中允许麦克风\n"
-                    "- Firefox：点击地址栏左侧的「🔒」图标 → 「麦克风」→ 选择「允许」\n"
-                    "- 如果提示已拒绝，请在浏览器设置中搜索「麦克风」并允许此网站访问\n"
-                    "- 授权后刷新页面，录音按钮会显示为蓝色可点击状态"
-                )
-                try:
-                    recorded_voice = st.audio_input("点击开始录音")
-                except Exception as exc:
-                    recorded_voice = None
-                    st.error(f"麦克风录音初始化失败：{exc}\n\n请检查：\n1. 浏览器是否已授权麦克风权限\n2. 是否有其他程序占用了麦克风\n3. 或使用下方「上传语音文件」功能")
-        uploaded_voice = st.file_uploader(
-            "上传语音文件（上传后自动转写）",
-            type=["mp3", "wav", "m4a", "mp4", "mpeg", "mpga", "webm", "ogg"],
-            key="voice_input_uploader",
-        )
-        voice_file = recorded_voice or uploaded_voice
-
-        def _stable_sig(f):
-            if f is None:
-                return ""
-            try:
-                sz = getattr(f, "size", 0) or 0
-                nm = getattr(f, "name", "") or ""
-                return f"{nm}:{sz}"
-            except Exception:
-                return ""
-
-        def _is_valid_audio(f):
-            if f is None:
-                return False
-            try:
-                sz = getattr(f, "size", 0) or 0
-                return sz > 500
-            except Exception:
-                return False
-
-        valid_voice = voice_file if _is_valid_audio(voice_file) else None
-        if valid_voice is not None and app.llm.audio_enabled:
-            cur_sig = _stable_sig(valid_voice)
-            if cur_sig and st.session_state.get("_last_voice_sig") != cur_sig:
-                st.session_state._last_voice_sig = cur_sig
-                try:
-                    with st.status("正在读取并转写语音…", expanded=True) as voice_status:
-                        audio_path = save_uploaded_audio(valid_voice)
-                        voice_status.write("语音上传完成，正在检查识别缓存…")
-                        audio_digest = file_sha256(audio_path)
-                        audio_cache_key = hashlib.sha256(
-                            f"{audio_digest}:{app.llm.audio_model}:zh".encode("utf-8")
-                        ).hexdigest()
-                        audio_cache_path = AUDIO_CACHE_DIR / f"{audio_cache_key}.json"
-                        cached_audio = _read_json_cache(audio_cache_path)
-                        if cached_audio and cached_audio.get("text"):
-                            transcript = str(cached_audio.get("text", ""))
-                            voice_status.write("已命中相同音频的转写缓存。")
-                        else:
-                            voice_status.write("正在调用语音识别模型…")
-                            transcript = app.llm.transcribe_audio(audio_path, language="zh")
-                            _write_json_cache(
-                                audio_cache_path,
-                                {
-                                    "text": transcript,
-                                    "audio_sha256": audio_digest,
-                                    "model": app.llm.audio_model,
-                                    "language": "zh",
-                                    "created_at": datetime.now().isoformat(),
-                                },
-                            )
-                        voice_status.update(label="语音转写完成，请核对文本", state="complete", expanded=False)
-                    st.session_state._temp_voice_transcript = transcript
-                    st.session_state.last_feedback = "✅ 语音已自动转写，可编辑后发送或追加到输入框。"
+        if st.session_state.pending_pasted:
+            _pc = st.columns(min(len(st.session_state.pending_pasted) + 1, 5))
+            for i, img in enumerate(st.session_state.pending_pasted):
+                _pc[i % len(_pc)].image(img, width=80)
+            with _pc[-1]:
+                if st.button("🗑️ 清空截图", key="clear_pasted", use_container_width=True):
+                    st.session_state.pending_pasted = []
                     st.rerun()
-                except Exception as exc:
-                    st.session_state.last_feedback = f"语音转写失败：{exc}"
-                    st.session_state._last_voice_sig = f"failed:{cur_sig}"
 
-        vc1, vc3 = st.columns([1, 1])
-        with vc1:
-            if st.button("🔄 重新转写", use_container_width=True, disabled=voice_file is None or not app.llm.audio_enabled):
-                st.session_state._last_voice_sig = None
-                st.rerun()
-        with vc3:
-            if st.button("🗑️ 清空", use_container_width=True):
-                st.session_state._temp_voice_transcript = None
-                st.session_state._last_voice_sig = None
-                st.rerun()
-
-        if not app.llm.audio_enabled:
-            st.warning("请先在「设置」里配置语音转写模型和 API Key。")
-
-        # 调试信息（开发模式可见）
-        if st.session_state.get("show_diagnostics", False):
-            transcript_val = st.session_state.get("voice_transcript", "")
-            st.caption(f"DEBUG: voice_transcript = '{transcript_val}' (len={len(transcript_val)})")
-
-        voice_text = st.text_area(
-            "转写文本（可编辑后发送或填入输入框）",
-            height=70,
-            key="voice_transcript",
-            placeholder="转写结果会出现在这里；可以直接编辑修正术语，然后发送或追加到输入框与手打文字合并。",
-        )
-
-        # 提示用户按钮状态
-        if not voice_text.strip():
-            st.caption("⚠️ 转写文本为空，「填入输入框」和「直接发送」按钮不可用。请先上传语音文件并等待转写完成。")
-        if voice_text.strip():
-            if st.button("✅ 直接发送（含已粘贴的截图）", use_container_width=True, type="primary"):
-                image_refs = []
-                for img in st.session_state.pending_pasted:
-                    image_refs.append(save_pasted_image(img))
-                st.session_state.pending_pasted = []
-                st.session_state.last_pasted_sig = ""
-                st.session_state._temp_voice_transcript = None
-                st.session_state._last_voice_sig = None
+        chat_value = st.chat_input("输入：开始 / 完成 / 报错 / box size 怎么设…", accept_file="multiple")
+        if chat_value:
+            text = (chat_value.text or "").strip()
+            files = chat_value.files or []
+            with st.spinner("正在保存图片..."):
+                image_refs = save_uploaded_images(files)
+            for img in st.session_state.pending_pasted:
+                image_refs.append(save_pasted_image(img))
+            st.session_state.pending_pasted = []
+            st.session_state.last_pasted_sig = ""
+            send_text = text or ("[图片消息]" if image_refs else "")
+            if send_text:
                 run_command(
-                    voice_text.strip(),
+                    send_text,
                     image_refs,
-                    input_metadata={"input_modality": "voice", "transcript_reviewed": True},
+                    input_metadata={"input_modality": "image" if image_refs else "text"},
                     response_profile=_output_mode,
                 )
                 st.session_state._sp_scroll_target = "chat_bottom"
                 st.rerun()
-            st.caption("💡 或点「📝 填入输入框」把文字追加到底部输入框，继续手打补充、附加文件后一起发送")
 
-    # ---- JS：将转写文本注入到主 chat_input（必须在 expander 外部，确保始终执行） ----
-    if st.session_state.get("_inject_voice_text"):
-        inject_text = st.session_state._inject_voice_text
-        st.session_state._inject_voice_text = ""
-        escaped = json.dumps(inject_text, ensure_ascii=False)
-        js_code = f"""
-        (function() {{
-            var attempts = 0;
-            var maxAttempts = 40;
-            var injectedText = {escaped};
-            function tryInject() {{
-                attempts++;
-                var chatArea = document.querySelector('[data-testid="stChatInputTextArea"]');
-                if (!chatArea) {{
-                    if (attempts < maxAttempts) setTimeout(tryInject, 200);
-                    return;
-                }}
-                var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-                var currentVal = chatArea.value || '';
-                var newVal = currentVal ? (currentVal + (currentVal.endsWith(' ') ? '' : ' ') + injectedText) : injectedText;
-                nativeSetter.call(chatArea, newVal);
-                chatArea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                chatArea.focus();
-                chatArea.setSelectionRange(newVal.length, newVal.length);
-            }}
-            setTimeout(tryInject, 300);
-        }})();
-        """
-        js_b64 = base64.b64encode(js_code.encode('utf-8')).decode('ascii')
-        st.markdown(
-            f'<img src="data:," style="display:none!important;width:0!important;height:0!important;" onerror="eval(atob(\'{js_b64}\'))">',
-            unsafe_allow_html=True,
+        # 智能整页滚动：根据本次 rerun 的触发源定位到最佳位置
+        inject_smart_scroll()
+
+# ----- Tab 2: report (仅高级模式) ----- #
+if tab_report is not None:
+    with tab_report:
+        st.markdown("### 流程报告")
+        st.markdown(app.navigator.generate_report(state))
+        st.divider()
+        report_text = build_session_report(state, cp_total)
+        st.download_button(
+            "导出实验记录报告（.md）",
+            data=report_text,
+            file_name=f"StructPilot_Experiment_Record_{state.session_id}.md",
+            mime="text/markdown",
+            use_container_width=True,
         )
-
-    # ---- 截图粘贴（紧凑单行） ----
-    paste_col1, paste_col2 = st.columns([1, 8])
-    with paste_col1:
-        paste_result = paste_image_button(label="📋 粘贴", key="chat_paste_btn", errors="ignore")
-    with paste_col2:
-        if not st.session_state.pending_pasted:
-            st.caption("Ctrl+V 粘贴截图，或下方输入框拖拽文件")
-    if paste_result is not None and paste_result.image_data is not None:
-        sig = hashlib.sha256(paste_result.image_data.tobytes()).hexdigest()
-        if sig != st.session_state.last_pasted_sig:
-            st.session_state.last_pasted_sig = sig
-            st.session_state.pending_pasted.append(paste_result.image_data)
+        if st.button("保存当前会话", use_container_width=True):
+            capture_state_safely(state)
+            st.session_state.last_feedback = "当前会话已保存到本地 SQLite。"
             st.rerun()
-
-    if st.session_state.pending_pasted:
-        _pc = st.columns(min(len(st.session_state.pending_pasted) + 1, 5))
-        for i, img in enumerate(st.session_state.pending_pasted):
-            _pc[i % len(_pc)].image(img, width=80)
-        with _pc[-1]:
-            if st.button("🗑️ 清空截图", key="clear_pasted", use_container_width=True):
-                st.session_state.pending_pasted = []
-                st.rerun()
-
-    chat_value = st.chat_input("输入：开始 / 完成 / 报错 / box size 怎么设…", accept_file="multiple")
-    if chat_value:
-        text = (chat_value.text or "").strip()
-        files = chat_value.files or []
-        image_refs = save_uploaded_images(files)
-        for img in st.session_state.pending_pasted:
-            image_refs.append(save_pasted_image(img))
-        st.session_state.pending_pasted = []
-        st.session_state.last_pasted_sig = ""
-        send_text = text or ("[图片消息]" if image_refs else "")
-        if send_text:
-            run_command(
-                send_text,
-                image_refs,
-                input_metadata={"input_modality": "image" if image_refs else "text"},
-                response_profile=_output_mode,
-            )
-            st.session_state._sp_scroll_target = "chat_bottom"
-            st.rerun()
-
-    # 智能整页滚动：根据本次 rerun 的触发源定位到最佳位置
-    inject_smart_scroll()
-
-# ----- Tab 2: report ----- #
-with tab_report:
-    st.markdown("### 流程报告")
-    st.markdown(app.navigator.generate_report(state))
-    st.divider()
-    report_text = build_session_report(state, cp_total)
-    st.download_button(
-        "导出实验记录报告（.md）",
-        data=report_text,
-        file_name=f"StructPilot_Experiment_Record_{state.session_id}.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
-    if st.button("保存当前会话", use_container_width=True):
-        capture_state_safely(state)
-        st.session_state.last_feedback = "当前会话已保存到本地 SQLite。"
-        st.rerun()
 
 # ----- Tab 3: settings ----- #
 with tab_settings:
-    st.markdown("### LLM 设置")
-    cfg = app.llm.load_config()
-    provider_options = {
-        "不启用": {"provider": "none", "model": "", "base_url": ""},
-        "OpenAI": {"provider": "openai", "model": "gpt-4o-mini", "base_url": "https://api.openai.com/v1"},
-        "DeepSeek": {"provider": "openai_compatible", "model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
-        "OpenRouter": {"provider": "openai_compatible", "model": "openai/gpt-4o-mini", "base_url": "https://openrouter.ai/api/v1"},
-        "Ollama 本地模型": {"provider": "openai_compatible", "model": "llama3.1", "base_url": "http://localhost:11434/v1"},
-        "自定义 OpenAI-compatible API": {"provider": "openai_compatible", "model": cfg.get("model", app.llm.model), "base_url": cfg.get("base_url", app.llm.base_url)},
-        "Anthropic / Claude（需兼容代理）": {"provider": "anthropic", "model": "claude-3-5-sonnet-latest", "base_url": "https://api.anthropic.com/v1"},
-        "Google Gemini（原生）": {"provider": "gemini", "model": "gemini-1.5-pro", "base_url": "https://generativelanguage.googleapis.com/v1beta"},
-    }
-    provider_options_list = list(provider_options.keys())
-    current_provider = cfg.get("provider", app.llm.provider)
-    current_base_url = (cfg.get("base_url") or app.llm.base_url or "").lower()
-    default_index = 0
-    if current_provider and current_provider != "none":
-        for idx, (name, opts) in enumerate(provider_options.items()):
-            if opts.get("provider") == current_provider:
-                opt_base = (opts.get("base_url") or "").lower()
-                if current_provider == "openai_compatible":
-                    if opt_base and current_base_url and opt_base == current_base_url:
+    # 入门/教学模式：只显示简化的界面设置和数据清除
+    if _app_mode in ["beginner", "teaching"]:
+        st.markdown("### 🎨 界面设置")
+
+        st_theme_simple = st.selectbox(
+            "主题风格",
+            options=list(THEMES.keys()),
+            index=list(THEMES.keys()).index(st.session_state.get("ui_theme", "静谧蓝"))
+                  if st.session_state.get("ui_theme", "静谧蓝") in THEMES else 0,
+            key="ui_theme_simple",
+            help="切换主题会实时生效"
+        )
+
+        col_pet1, col_pet2 = st.columns(2)
+        with col_pet1:
+            st_pet_simple = st.toggle(
+                "桌宠陪伴（右下角小动物）",
+                value=st.session_state.get("pet_enabled", True),
+                key="pet_enabled_simple",
+                help="在右下角显示一只可爱的科研伙伴"
+            )
+
+        with col_pet2:
+            if st_pet_simple:
+                pet_type_options = {
+                    "penguin": "🐧 冷冻企鹅",
+                    "cat": "🐱 科研小猫",
+                    "dog": "🐶 实验小狗",
+                }
+                current_pet = st.session_state.get("pet_type", "penguin")
+                sel_pet_simple = st.selectbox(
+                    "桌宠类型",
+                    options=list(pet_type_options.keys()),
+                    format_func=lambda x: pet_type_options[x],
+                    index=list(pet_type_options.keys()).index(current_pet) if current_pet in pet_type_options else 0,
+                    key="pet_type_simple",
+                )
+            else:
+                sel_pet_simple = st.session_state.get("pet_type", "penguin")
+
+        if st.button("保存界面设置", use_container_width=True, type="primary"):
+            st.session_state.ui_theme = st_theme_simple
+            st.session_state.pet_enabled = st_pet_simple
+            st.session_state.pet_type = sel_pet_simple
+            save_ui_settings(
+                ui_theme=st_theme_simple,
+                pet_enabled=st_pet_simple,
+                pet_type=sel_pet_simple,
+            )
+            st.success("✅ 界面设置已保存")
+            st.rerun()
+
+        st.divider()
+        st.markdown("### 🔄 数据管理")
+
+        if st.button("清除会话数据（重置问卷）", use_container_width=True):
+            # 清除问卷完成标记，让用户重新回答问卷
+            st.session_state.onboarding_completed = False
+            st.session_state.user_profile = {}
+            st.session_state.recommended_workflow = {}
+            st.session_state.onboarding_step = 1
+            st.success("✅ 会话数据已清除，刷新页面重新开始")
+
+        st.caption("💡 点击上方按钮后刷新页面，即可重新填写需求问卷")
+
+        st.divider()
+        st.markdown("### ⚙️ 需要更多高级功能？")
+        st.info(
+            "LLM 配置、知识库管理等功能在「**高级模式**」中提供。\n\n"
+            "点击左侧边栏的「选择模式」切换到「高级模式」查看完整功能。"
+        )
+
+    # 高级模式：显示完整设置（LLM、向量检索、知识库等）
+    else:
+        st.markdown("### LLM 设置")
+        cfg = app.llm.load_config()
+        provider_options = {
+            "不启用": {"provider": "none", "model": "", "base_url": ""},
+            "OpenAI": {"provider": "openai", "model": "gpt-4o-mini", "base_url": "https://api.openai.com/v1"},
+            "DeepSeek": {"provider": "openai_compatible", "model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
+            "OpenRouter": {"provider": "openai_compatible", "model": "openai/gpt-4o-mini", "base_url": "https://openrouter.ai/api/v1"},
+            "Ollama 本地模型": {"provider": "openai_compatible", "model": "llama3.1", "base_url": "http://localhost:11434/v1"},
+            "自定义 OpenAI-compatible API": {"provider": "openai_compatible", "model": cfg.get("model", app.llm.model), "base_url": cfg.get("base_url", app.llm.base_url)},
+            "Anthropic / Claude（需兼容代理）": {"provider": "anthropic", "model": "claude-3-5-sonnet-latest", "base_url": "https://api.anthropic.com/v1"},
+            "Google Gemini（原生）": {"provider": "gemini", "model": "gemini-1.5-pro", "base_url": "https://generativelanguage.googleapis.com/v1beta"},
+        }
+        provider_options_list = list(provider_options.keys())
+        current_provider = cfg.get("provider", app.llm.provider)
+        current_base_url = (cfg.get("base_url") or app.llm.base_url or "").lower()
+        default_index = 0
+        if current_provider and current_provider != "none":
+            for idx, (name, opts) in enumerate(provider_options.items()):
+                if opts.get("provider") == current_provider:
+                    opt_base = (opts.get("base_url") or "").lower()
+                    if current_provider == "openai_compatible":
+                        if opt_base and current_base_url and opt_base == current_base_url:
+                            default_index = idx
+                            break
+                        if name == "自定义 OpenAI-compatible API":
+                            default_index = idx
+                    else:
                         default_index = idx
                         break
-                    if name == "自定义 OpenAI-compatible API":
-                        default_index = idx
-                else:
-                    default_index = idx
-                    break
-    service_name = st.selectbox("服务商", options=provider_options_list, index=default_index)
-    preset = provider_options[service_name]
-    fcol1, fcol2 = st.columns(2)
-    with fcol1:
-        llm_model = st.text_input("Model", value=preset.get("model") or cfg.get("model", app.llm.model or ""))
-        llm_timeout = st.number_input("Timeout 秒", min_value=5, max_value=180, value=int(cfg.get("timeout", app.llm.timeout or 30)), step=5)
-    with fcol2:
-        llm_base_url = st.text_input("Base URL", value=preset.get("base_url") or cfg.get("base_url", app.llm.base_url or ""))
-        llm_api_key = st.text_input("API Key", value=cfg.get("api_key", app.llm.api_key or ""), type="password")
-    if service_name == "OpenAI":
-        llm_provider = "openai_compatible"
-    else:
-        llm_provider = preset["provider"]
-    lc1, lc2 = st.columns(2)
-    with lc1:
-        if st.button("保存 LLM 配置", use_container_width=True):
-            app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
-            # Performance: clear cached app/LLM so next rerun picks up new config
-            clear_app_cache()
-            set_llm_mode(detect_llm_mode(bool(app.llm.enabled)))
-            st.success("LLM 配置已保存")
-            st.rerun()
-    with lc2:
-        if st.button("测试 LLM 连接", use_container_width=True):
-            app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
-            result = explain_connection_result(app.llm.test_connection(), "LLM", llm_base_url)
-            if "成功" in result or "ok" in result.lower():
-                st.success(result)
-            else:
-                st.error(result)
-
-    st.divider()
-    st.markdown("### 向量检索（RAG embedding）")
-    st.caption("配置后，对话会按你的问题检索相关站点/经验要点喂给模型。留空则关闭检索，对话照常运行。")
-    emb_cfg = app.llm.load_config()
-    ec1, ec2 = st.columns(2)
-    with ec1:
-        emb_model = st.text_input("Embedding Model", value=emb_cfg.get("embedding_model", ""),
-                                  placeholder="如 BAAI/bge-m3")
-        emb_base_url = st.text_input("Embedding Base URL", value=emb_cfg.get("embedding_base_url", ""),
-                                     placeholder="留空复用主 LLM Base URL")
-    with ec2:
-        emb_api_key = st.text_input("Embedding API Key", value=emb_cfg.get("embedding_api_key", ""),
-                                    type="password", placeholder="留空复用主 LLM API Key")
-        emb_status = "已启用" if app.llm.embedding_enabled else "未启用"
-        st.text_input("Embedding 状态", value=emb_status, disabled=True)
-    eb1, eb2 = st.columns(2)
-    with eb1:
-        if st.button("保存 Embedding 配置", use_container_width=True):
-            app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
-                                          embedding_api_key=emb_api_key)
-            # Performance: clear RAG cache so new embeddings take effect
-            clear_app_cache()
-            st.success("Embedding 配置已保存")
-            st.rerun()
-    with eb2:
-        if st.button("测试 Embedding 连接", use_container_width=True):
-            app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
-                                          embedding_api_key=emb_api_key)
-            app.llm.reload()
-            if not emb_model.strip():
-                result = "向量检索未启用：请先填写 Embedding 模型。"
-                st.error(result)
-            else:
-                result = explain_connection_result(app.llm.test_embedding_connection(), "向量检索", emb_base_url or llm_base_url)
-                if "成功" in result:
+        service_name = st.selectbox("服务商", options=provider_options_list, index=default_index)
+        preset = provider_options[service_name]
+        fcol1, fcol2 = st.columns(2)
+        with fcol1:
+            llm_model = st.text_input("Model", value=preset.get("model") or cfg.get("model", app.llm.model or ""))
+            llm_timeout = st.number_input("Timeout 秒", min_value=5, max_value=180, value=int(cfg.get("timeout", app.llm.timeout or 30)), step=5)
+        with fcol2:
+            llm_base_url = st.text_input("Base URL", value=preset.get("base_url") or cfg.get("base_url", app.llm.base_url or ""))
+            llm_api_key = st.text_input("API Key", value=cfg.get("api_key", app.llm.api_key or ""), type="password")
+        if service_name == "OpenAI":
+            llm_provider = "openai_compatible"
+        else:
+            llm_provider = preset["provider"]
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            if st.button("保存 LLM 配置", use_container_width=True):
+                app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
+                # Performance: clear cached app/LLM so next rerun picks up new config
+                clear_app_cache()
+                set_llm_mode(detect_llm_mode(bool(app.llm.enabled)))
+                st.success("LLM 配置已保存")
+                st.rerun()
+        with lc2:
+            if st.button("测试 LLM 连接", use_container_width=True):
+                app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
+                result = explain_connection_result(app.llm.test_connection(), "LLM", llm_base_url)
+                if "成功" in result or "ok" in result.lower():
                     st.success(result)
                 else:
                     st.error(result)
-    if st.button("重建检索缓存", use_container_width=True,
-                 help="清空 embeddings_cache.json 和语料缓存，下次检索时重新计算所有向量。"):
-        app.retriever.clear_cache()
-        app.retriever.invalidate_corpus_cache()
-        st.success("检索缓存已清空，将在下次提问时重建")
-    if st.button("预热 SOP / 图文指导 / RAG", use_container_width=True,
-                 help="提前加载阶段 SOP、guide 截图和检索语料，减少第一次点击后的等待。"):
-        with st.spinner("正在预热本地缓存..."):
-            warm = prewarm_runtime_caches()
-        if warm.get("errors"):
-            st.warning(
-                "预热完成，但有部分警告："
-                f"图文指导卡片 {warm.get('guide_cards', 0)} 条，"
-                f"指导图片 {warm.get('guide_images', 0)} 张，"
-                f"SOP 卡片 {warm.get('sop_cards', 0)} 条，"
-                f"知识库文档 {warm.get('rag_docs', 0)} 条，"
-                f"errors={'; '.join(warm.get('errors', []))}"
-            )
-        else:
-            st.success(
-                f"预热完成：图文指导卡片 {warm.get('guide_cards', 0)} 条，"
-                f"指导图片 {warm.get('guide_images', 0)} 张，"
-                f"SOP 卡片 {warm.get('sop_cards', 0)} 条，"
-                f"知识库文档 {warm.get('rag_docs', 0)} 条，"
-                f"本次预热检索命中 {warm.get('rag_hits', 0)} 条。"
-            )
-
-    st.divider()
-    st.markdown("### 语音转写")
-    st.caption("配置后，可在对话页把录音或音频文件转成可编辑文本，再确认发送。")
-    audio_cfg = app.llm.load_config()
-    audio_model_value = app.llm.normalize_audio_model(audio_cfg.get("audio_model") or app.llm.audio_model or "")
-    ac1, ac2 = st.columns(2)
-    with ac1:
-        audio_model = st.text_input(
-            "Audio Model",
-            value=audio_model_value,
-            placeholder="如 FunAudioLLM/SenseVoiceSmall",
-            help="硅基流动 /audio/transcriptions 接口模型：FunAudioLLM/SenseVoiceSmall。若少写最后一个 l，保存时会自动纠正。",
-        )
-        audio_base_url = st.text_input(
-            "Audio Base URL",
-            value=audio_cfg.get("audio_base_url", ""),
-            placeholder="留空复用主 LLM Base URL",
-        )
-    with ac2:
-        audio_api_key = st.text_input(
-            "Audio API Key",
-            value=audio_cfg.get("audio_api_key", ""),
-            type="password",
-            placeholder="留空复用主 LLM API Key",
-        )
-        st.text_input("语音状态", value=app.llm.audio_status_text(), disabled=True)
-    ab1, ab2 = st.columns(2)
-    with ab1:
-        if st.button("保存语音转写配置", use_container_width=True):
-            normalized_audio_model = app.llm.normalize_audio_model(audio_model)
-            app.llm.save_audio_config(
-                audio_model=normalized_audio_model,
-                audio_base_url=audio_base_url,
-                audio_api_key=audio_api_key,
-            )
-            if normalized_audio_model != audio_model.strip():
-                st.success(f"语音转写配置已保存，模型名已自动纠正为：{normalized_audio_model}")
-            else:
-                st.success("语音转写配置已保存")
-    with ab2:
-        if st.button("测试语音连接", use_container_width=True):
-            normalized_audio_model = app.llm.normalize_audio_model(audio_model) or app.llm.audio_model
-            app.llm.save_audio_config(
-                audio_model=normalized_audio_model,
-                audio_base_url=audio_base_url,
-                audio_api_key=audio_api_key,
-            )
-            app.llm.reload()
-            if not normalized_audio_model.strip():
-                result = "语音转写未启用：请先填写 Audio Model。"
-                st.error(result)
-            else:
-                result = explain_connection_result(app.llm.test_audio_connection(), "语音转写", audio_base_url or llm_base_url)
-                if "成功" in result:
-                    st.success(result)
-                else:
+    
+        st.divider()
+        st.markdown("### 向量检索（RAG embedding）")
+        st.caption("配置后，对话会按你的问题检索相关站点/经验要点喂给模型。留空则关闭检索，对话照常运行。")
+        emb_cfg = app.llm.load_config()
+        ec1, ec2 = st.columns(2)
+        with ec1:
+            emb_model = st.text_input("Embedding Model", value=emb_cfg.get("embedding_model", ""),
+                                      placeholder="如 BAAI/bge-m3")
+            emb_base_url = st.text_input("Embedding Base URL", value=emb_cfg.get("embedding_base_url", ""),
+                                         placeholder="留空复用主 LLM Base URL")
+        with ec2:
+            emb_api_key = st.text_input("Embedding API Key", value=emb_cfg.get("embedding_api_key", ""),
+                                        type="password", placeholder="留空复用主 LLM API Key")
+            emb_status = "已启用" if app.llm.embedding_enabled else "未启用"
+            st.text_input("Embedding 状态", value=emb_status, disabled=True)
+        eb1, eb2 = st.columns(2)
+        with eb1:
+            if st.button("保存 Embedding 配置", use_container_width=True):
+                app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
+                                              embedding_api_key=emb_api_key)
+                # Performance: clear RAG cache so new embeddings take effect
+                clear_app_cache()
+                st.success("Embedding 配置已保存")
+                st.rerun()
+        with eb2:
+            if st.button("测试 Embedding 连接", use_container_width=True):
+                app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
+                                              embedding_api_key=emb_api_key)
+                app.llm.reload()
+                if not emb_model.strip():
+                    result = "向量检索未启用：请先填写 Embedding 模型。"
                     st.error(result)
-
-    st.divider()
-    st.markdown("### 界面设置")
-    st_theme = st.selectbox("主题风格", options=list(THEMES.keys()), key="ui_theme",
-                           help="切换主题会实时生效，保存后会写入配置文件")
-    st_hist = st.slider("对话显示条数", min_value=3, max_value=50, value=int(st.session_state.selected_history_limit), step=1)
-    st_pet = st.toggle("桌宠陪伴（右下角小动物）", key="pet_enabled",
-                       help="在右下角显示一只可爱的科研伙伴，摸头、摸身体、拽尾巴有不同反应，还可以拖动哦～")
-    _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "AI助手"}
-    # 确保 session_state 中的 pet_type 合法（防止旧配置或异常值导致空白选项）
-    if st.session_state.get("pet_type", "penguin") not in _pet_options:
-        st.session_state.pet_type = "penguin"
-    st_pet_type = st.selectbox("选择伙伴", options=list(_pet_options.keys()),
-                                format_func=lambda x: _pet_options.get(x, x),
-                                key="pet_type",
-                                disabled=not st.session_state.get("pet_enabled", True),
-                                help="冷冻企鹅最配冷冻电镜哦！")
-    _pet_size_options = {"48": "小号 (48px)", "64": "中号 (64px)", "80": "大号 (80px)"}
-    _cur_pet_size = str(st.session_state.get("pet_size", 64))
-    if _cur_pet_size not in _pet_size_options:
-        _cur_pet_size = "64"
-    st.selectbox("伙伴尺寸", options=list(_pet_size_options.keys()),
-                 format_func=lambda x: _pet_size_options.get(x, x),
-                 key="pet_size",
-                 disabled=not st.session_state.get("pet_enabled", True),
-                 help="也可以右键伙伴在菜单中快速调整大小")
-    if st.session_state.get("pet_enabled", True):
-        st.caption("+ 右键伙伴可打开设置菜单 · 三连击打开快捷问题面板～")
-
-    st.markdown("**背景图**")
-    bg_file = st.file_uploader("上传背景图（PNG/JPG）", type=["png", "jpg", "jpeg"], key="bg_image_uploader")
-    if bg_file is not None:
-        # Validate background image
-        file_size = len(bg_file.getbuffer())
-        if file_size > MAX_FILE_SIZE:
-            st.error(f"背景图超过最大限制 {MAX_FILE_SIZE // (1024*1024)}MB")
-        else:
-            file_ext = Path(bg_file.name).suffix.lower()
-            if file_ext not in {".png", ".jpg", ".jpeg"}:
-                st.error("背景图仅支持 PNG/JPG 格式")
+                else:
+                    result = explain_connection_result(app.llm.test_embedding_connection(), "向量检索", emb_base_url or llm_base_url)
+                    if "成功" in result:
+                        st.success(result)
+                    else:
+                        st.error(result)
+        if st.button("重建检索缓存", use_container_width=True,
+                     help="清空 embeddings_cache.json 和语料缓存，下次检索时重新计算所有向量。"):
+            app.retriever.clear_cache()
+            app.retriever.invalidate_corpus_cache()
+            st.success("检索缓存已清空，将在下次提问时重建")
+        if st.button("预热 SOP / 图文指导 / RAG", use_container_width=True,
+                     help="提前加载阶段 SOP、guide 截图和检索语料，减少第一次点击后的等待。"):
+            with st.spinner("正在预热本地缓存..."):
+                warm = prewarm_runtime_caches()
+            if warm.get("errors"):
+                st.warning(
+                    "预热完成，但有部分警告："
+                    f"图文指导卡片 {warm.get('guide_cards', 0)} 条，"
+                    f"指导图片 {warm.get('guide_images', 0)} 张，"
+                    f"SOP 卡片 {warm.get('sop_cards', 0)} 条，"
+                    f"知识库文档 {warm.get('rag_docs', 0)} 条，"
+                    f"errors={'; '.join(warm.get('errors', []))}"
+                )
             else:
-                bg_dir = BASE_DIR / "assets"
-                bg_dir.mkdir(parents=True, exist_ok=True)
-                # Use secure filename
-                safe_name = f"background_{hashlib.sha256(bg_file.name.encode()).hexdigest()[:8]}{file_ext}"
-                bg_out = bg_dir / safe_name
-                bg_out.write_bytes(bg_file.getbuffer())
-                st.session_state.bg_image = str(bg_out)
-                st.caption(f"已上传：{bg_out.name}")
-    st_bg_opacity = st.slider("背景遮罩浓度", min_value=0.0, max_value=1.0, value=float(st.session_state.bg_opacity), step=0.02,
-                              help="数值越大白色遮罩越浓、文字越清晰；数值越小背景图越明显。建议 0.1~0.2。")
-    if st.session_state.bg_image:
-        if st.button("清除背景图", key="clear_bg"):
-            st.session_state.bg_image = ""
-            save_ui_settings(bg_image="")
-            st.success("已清除背景图")
-
-    if st.button("保存界面设置", use_container_width=True):
-        # ui_theme 已通过 key="ui_theme" 自动同步到 session_state，无需手动写入
-        st.session_state.selected_history_limit = st_hist
-        st.session_state.bg_opacity = st_bg_opacity
-        # pet_enabled / pet_type / pet_size 已通过 key 实时同步到 session_state
-        _final_pet_enabled = bool(st.session_state.get("pet_enabled", True))
-        _final_pet_type = st.session_state.get("pet_type", "penguin")
-        _final_pet_size = int(st.session_state.get("pet_size", 64))
-        if _final_pet_type not in _pet_options:
+                st.success(
+                    f"预热完成：图文指导卡片 {warm.get('guide_cards', 0)} 条，"
+                    f"指导图片 {warm.get('guide_images', 0)} 张，"
+                    f"SOP 卡片 {warm.get('sop_cards', 0)} 条，"
+                    f"知识库文档 {warm.get('rag_docs', 0)} 条，"
+                    f"本次预热检索命中 {warm.get('rag_hits', 0)} 条。"
+                )
+    
+        st.divider()
+        st.markdown("### 语音转写")
+        st.caption("配置后，可在对话页把录音或音频文件转成可编辑文本，再确认发送。")
+        audio_cfg = app.llm.load_config()
+        audio_model_value = app.llm.normalize_audio_model(audio_cfg.get("audio_model") or app.llm.audio_model or "")
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            audio_model = st.text_input(
+                "Audio Model",
+                value=audio_model_value,
+                placeholder="如 FunAudioLLM/SenseVoiceSmall",
+                help="硅基流动 /audio/transcriptions 接口模型：FunAudioLLM/SenseVoiceSmall。若少写最后一个 l，保存时会自动纠正。",
+            )
+            audio_base_url = st.text_input(
+                "Audio Base URL",
+                value=audio_cfg.get("audio_base_url", ""),
+                placeholder="留空复用主 LLM Base URL",
+            )
+        with ac2:
+            audio_api_key = st.text_input(
+                "Audio API Key",
+                value=audio_cfg.get("audio_api_key", ""),
+                type="password",
+                placeholder="留空复用主 LLM API Key",
+            )
+            st.text_input("语音状态", value=app.llm.audio_status_text(), disabled=True)
+        ab1, ab2 = st.columns(2)
+        with ab1:
+            if st.button("保存语音转写配置", use_container_width=True):
+                normalized_audio_model = app.llm.normalize_audio_model(audio_model)
+                app.llm.save_audio_config(
+                    audio_model=normalized_audio_model,
+                    audio_base_url=audio_base_url,
+                    audio_api_key=audio_api_key,
+                )
+                if normalized_audio_model != audio_model.strip():
+                    st.success(f"语音转写配置已保存，模型名已自动纠正为：{normalized_audio_model}")
+                else:
+                    st.success("语音转写配置已保存")
+        with ab2:
+            if st.button("测试语音连接", use_container_width=True):
+                normalized_audio_model = app.llm.normalize_audio_model(audio_model) or app.llm.audio_model
+                app.llm.save_audio_config(
+                    audio_model=normalized_audio_model,
+                    audio_base_url=audio_base_url,
+                    audio_api_key=audio_api_key,
+                )
+                app.llm.reload()
+                if not normalized_audio_model.strip():
+                    result = "语音转写未启用：请先填写 Audio Model。"
+                    st.error(result)
+                else:
+                    result = explain_connection_result(app.llm.test_audio_connection(), "语音转写", audio_base_url or llm_base_url)
+                    if "成功" in result:
+                        st.success(result)
+                    else:
+                        st.error(result)
+    
+        st.divider()
+        st.markdown("### 界面设置")
+        st_theme = st.selectbox("主题风格", options=list(THEMES.keys()), key="ui_theme",
+                               help="切换主题会实时生效，保存后会写入配置文件")
+        st_hist = st.slider("对话显示条数", min_value=3, max_value=50, value=int(st.session_state.selected_history_limit), step=1)
+        st_pet = st.toggle("桌宠陪伴（右下角小动物）", key="pet_enabled",
+                           help="在右下角显示一只可爱的科研伙伴，摸头、摸身体、拽尾巴有不同反应，还可以拖动哦～")
+        _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "AI助手"}
+        # 确保 session_state 中的 pet_type 合法（防止旧配置或异常值导致空白选项）
+        if st.session_state.get("pet_type", "penguin") not in _pet_options:
             st.session_state.pet_type = "penguin"
-            _final_pet_type = "penguin"
-        save_ui_settings(ui_theme=st_theme, history_limit=int(st_hist),
-                         bg_image=st.session_state.bg_image, bg_opacity=float(st_bg_opacity),
-                         pet_enabled=_final_pet_enabled, pet_type=_final_pet_type,
-                         pet_size=_final_pet_size)
-        st.success("界面设置已保存")
-
-    st.divider()
-    st.markdown("### 📚 知识文档导入")
-    _col_k1, _col_k2 = st.columns([1, 1])
-    with _col_k1:
-        _import_tier = st.selectbox(
-            "文档权重",
-            options=["sop", "note"],
-            format_func=lambda x: TIER_LABELS.get(x, x),
-            index=1,
-            key="knowledge_import_tier",
-            help="正式SOP=高权重（实验室标准流程），个人笔记=中权重（个人经验）"
-        )
-    with _col_k2:
-        _import_status = st.selectbox(
-            "初始状态",
-            options=["formal_ready", "draft"],
-            format_func=lambda x: "正式可用" if x == "formal_ready" else "草稿（待审核）",
-            index=0,
-            key="knowledge_import_status",
-            help="草稿在检索时降权50%，且不参与正式SOP生成"
-        )
-    knowledge_file = st.file_uploader("上传知识文档（YAML/JSON）", type=["yaml", "yml", "json"], key="knowledge_doc_uploader")
-    if knowledge_file is not None and st.button("📥 导入知识文档", use_container_width=True):
-        file_size = len(knowledge_file.getbuffer())
-        if file_size > MAX_FILE_SIZE:
-            st.error(f"知识文档超过最大限制 {MAX_FILE_SIZE // (1024*1024)}MB")
-        else:
-            file_ext = Path(knowledge_file.name).suffix.lower()
-            if file_ext not in {".yaml", ".yml", ".json"}:
-                st.error("知识文档仅支持 YAML/JSON 格式")
+        st_pet_type = st.selectbox("选择伙伴", options=list(_pet_options.keys()),
+                                    format_func=lambda x: _pet_options.get(x, x),
+                                    key="pet_type",
+                                    disabled=not st.session_state.get("pet_enabled", True),
+                                    help="冷冻企鹅最配冷冻电镜哦！")
+        _pet_size_options = {"48": "小号 (48px)", "64": "中号 (64px)", "80": "大号 (80px)"}
+        _cur_pet_size = str(st.session_state.get("pet_size", 64))
+        if _cur_pet_size not in _pet_size_options:
+            _cur_pet_size = "64"
+        st.selectbox("伙伴尺寸", options=list(_pet_size_options.keys()),
+                     format_func=lambda x: _pet_size_options.get(x, x),
+                     key="pet_size",
+                     disabled=not st.session_state.get("pet_enabled", True),
+                     help="也可以右键伙伴在菜单中快速调整大小")
+        if st.session_state.get("pet_enabled", True):
+            st.caption("+ 右键伙伴可打开设置菜单 · 三连击打开快捷问题面板～")
+    
+        st.markdown("**背景图**")
+        bg_file = st.file_uploader("上传背景图（PNG/JPG）", type=["png", "jpg", "jpeg"], key="bg_image_uploader")
+        if bg_file is not None:
+            # Validate background image
+            file_size = len(bg_file.getbuffer())
+            if file_size > MAX_FILE_SIZE:
+                st.error(f"背景图超过最大限制 {MAX_FILE_SIZE // (1024*1024)}MB")
             else:
-                safe_name = f"knowledge_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{file_ext}"
-                tmp_path = UPLOAD_DIR / safe_name
-                tmp_path.write_bytes(knowledge_file.getbuffer())
-                try:
-                    doc = load_knowledge_doc(str(tmp_path))
-                    doc.tier = _import_tier
-                    doc.status = _import_status
-                    doc.source = "import"
-                    doc.imported_at = datetime.now().isoformat(timespec="seconds")
-                    index_path = BASE_DIR / "knowledge_base" / "knowledge_index.json"
-                    update_knowledge_index(doc, str(index_path))
-                    tier_label = TIER_LABELS.get(doc.tier, doc.tier)
-                    status_label = "正式可用" if doc.status == "formal_ready" else "草稿"
-                    st.success(f"已导入：{doc.doc_id}（{tier_label} / {status_label}）")
-                    app.retriever.invalidate_corpus_cache()
-                    # Performance: mark KB dirty so perf_cache clears on next access
-                    st.session_state._kb_dirty = True
-                    perf_mark_kb_dirty()
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"导入失败：{exc}")
-                finally:
-                    if tmp_path.exists():
-                        tmp_path.unlink()
-
-    with st.expander("图文操作文档导入", expanded=False):
-        st.caption("支持文本/Markdown/JSON/YAML 和截图批次。系统先生成草稿，人工确认后才进入知识库。")
-        op_doc = st.file_uploader(
-            "上传操作文档或主截图",
-            type=["txt", "md", "markdown", "json", "yaml", "yml", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
-            key="operation_doc_uploader",
-        )
-        op_images = st.file_uploader(
-            "补充截图",
-            type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
-            accept_multiple_files=True,
-            key="operation_doc_images",
-        )
-        ic1, ic2 = st.columns(2)
-        with ic1:
-            ingest_tier = st.selectbox("草稿权重", options=["note", "sop"], format_func=lambda x: TIER_LABELS.get(x, x), key="operation_ingest_tier")
-        with ic2:
-            ingest_status = st.selectbox(
-                "草稿状态",
-                options=["draft", "formal_ready"],
-                format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用",
-                key="operation_ingest_status",
+                file_ext = Path(bg_file.name).suffix.lower()
+                if file_ext not in {".png", ".jpg", ".jpeg"}:
+                    st.error("背景图仅支持 PNG/JPG 格式")
+                else:
+                    with st.spinner("正在处理背景图..."):
+                        bg_dir = BASE_DIR / "assets"
+                        bg_dir.mkdir(parents=True, exist_ok=True)
+                        # Use secure filename
+                        safe_name = f"background_{hashlib.sha256(bg_file.name.encode()).hexdigest()[:8]}{file_ext}"
+                        bg_out = bg_dir / safe_name
+                        bg_out.write_bytes(bg_file.getbuffer())
+                        st.session_state.bg_image = str(bg_out)
+                        st.caption(f"已上传：{bg_out.name}")
+        st_bg_opacity = st.slider("背景遮罩浓度", min_value=0.0, max_value=1.0, value=float(st.session_state.bg_opacity), step=0.02,
+                                  help="数值越大白色遮罩越浓、文字越清晰；数值越小背景图越明显。建议 0.1~0.2。")
+        if st.session_state.bg_image:
+            if st.button("清除背景图", key="clear_bg"):
+                st.session_state.bg_image = ""
+                save_ui_settings(bg_image="")
+                st.success("已清除背景图")
+    
+        if st.button("保存界面设置", use_container_width=True):
+            # ui_theme 已通过 key="ui_theme" 自动同步到 session_state，无需手动写入
+            st.session_state.selected_history_limit = st_hist
+            st.session_state.bg_opacity = st_bg_opacity
+            # pet_enabled / pet_type / pet_size 已通过 key 实时同步到 session_state
+            _final_pet_enabled = bool(st.session_state.get("pet_enabled", True))
+            _final_pet_type = st.session_state.get("pet_type", "penguin")
+            _final_pet_size = int(st.session_state.get("pet_size", 64))
+            if _final_pet_type not in _pet_options:
+                st.session_state.pet_type = "penguin"
+                _final_pet_type = "penguin"
+            save_ui_settings(ui_theme=st_theme, history_limit=int(st_hist),
+                             bg_image=st.session_state.bg_image, bg_opacity=float(st_bg_opacity),
+                             pet_enabled=_final_pet_enabled, pet_type=_final_pet_type,
+                             pet_size=_final_pet_size)
+            st.success("界面设置已保存")
+    
+        st.divider()
+        st.markdown("### 📚 知识文档导入")
+        _col_k1, _col_k2 = st.columns([1, 1])
+        with _col_k1:
+            _import_tier = st.selectbox(
+                "文档权重",
+                options=["sop", "note"],
+                format_func=lambda x: TIER_LABELS.get(x, x),
+                index=1,
+                key="knowledge_import_tier",
+                help="正式SOP=高权重（实验室标准流程），个人笔记=中权重（个人经验）"
             )
-        if op_doc is not None and st.button("生成可审核草稿", use_container_width=True):
-            file_size = len(op_doc.getbuffer()) + sum(len(img.getbuffer()) for img in (op_images or []))
-            if file_size > MAX_FILE_SIZE * 5:
-                st.error(f"图文材料总大小超过最大限制 {MAX_FILE_SIZE * 5 // (1024*1024)}MB")
+        with _col_k2:
+            _import_status = st.selectbox(
+                "初始状态",
+                options=["formal_ready", "draft"],
+                format_func=lambda x: "正式可用" if x == "formal_ready" else "草稿（待审核）",
+                index=0,
+                key="knowledge_import_status",
+                help="草稿在检索时降权50%，且不参与正式SOP生成"
+            )
+        knowledge_file = st.file_uploader("上传知识文档（YAML/JSON）", type=["yaml", "yml", "json"], key="knowledge_doc_uploader")
+        if knowledge_file is not None and st.button("📥 导入知识文档", use_container_width=True):
+            file_size = len(knowledge_file.getbuffer())
+            if file_size > MAX_FILE_SIZE:
+                st.error(f"知识文档超过最大限制 {MAX_FILE_SIZE // (1024*1024)}MB")
             else:
-                source_ext = Path(op_doc.name).suffix.lower()
-                safe_source = UPLOAD_DIR / f"opdoc_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{source_ext}"
-                safe_source.write_bytes(op_doc.getbuffer())
-                image_paths = []
-                try:
-                    for idx, image_file in enumerate(op_images or [], start=1):
-                        image_ext = Path(image_file.name).suffix.lower()
-                        tmp_img = UPLOAD_DIR / f"opdoc_img_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{idx}{image_ext}"
-                        tmp_img.write_bytes(image_file.getbuffer())
-                        image_paths.append(tmp_img)
-                    draft = build_ingest_draft(
-                        safe_source,
-                        INGEST_ASSET_ROOT,
-                        default_software=state.software,
-                        tier=ingest_tier,
-                        status=ingest_status,
-                        extra_image_paths=image_paths,
-                    )
-                    st.session_state.operation_ingest_draft = draft.to_dict()
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"草稿生成失败：{exc}")
-                finally:
-                    for path in [safe_source] + image_paths:
+                file_ext = Path(knowledge_file.name).suffix.lower()
+                if file_ext not in {".yaml", ".yml", ".json"}:
+                    st.error("知识文档仅支持 YAML/JSON 格式")
+                else:
+                    with st.spinner("正在导入知识文档..."):
+                        safe_name = f"knowledge_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{file_ext}"
+                        tmp_path = UPLOAD_DIR / safe_name
+                        tmp_path.write_bytes(knowledge_file.getbuffer())
                         try:
-                            if path.exists():
-                                path.unlink()
+                            doc = load_knowledge_doc(str(tmp_path))
+                            doc.tier = _import_tier
+                            doc.status = _import_status
+                            doc.source = "import"
+                            doc.imported_at = datetime.now().isoformat(timespec="seconds")
+                            add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                            tier_label = TIER_LABELS.get(doc.tier, doc.tier)
+                            status_label = "正式可用" if doc.status == "formal_ready" else "草稿"
+                            st.success(f"已导入：{doc.doc_id}（{tier_label} / {status_label}）")
+                            app.retriever.invalidate_corpus_cache()
+                            # Performance: mark KB dirty so perf_cache clears on next access
+                            st.session_state._kb_dirty = True
+                            perf_mark_kb_dirty()
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"导入失败：{exc}")
+                        finally:
+                            if tmp_path.exists():
+                                tmp_path.unlink()
+    
+        with st.expander("图文操作文档导入", expanded=False):
+            st.caption("支持文本/Markdown/JSON/YAML 和截图批次。系统先生成草稿，人工确认后才进入知识库。")
+            op_doc = st.file_uploader(
+                "上传操作文档或主截图",
+                type=["txt", "md", "markdown", "json", "yaml", "yml", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
+                key="operation_doc_uploader",
+            )
+            op_images = st.file_uploader(
+                "补充截图",
+                type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
+                accept_multiple_files=True,
+                key="operation_doc_images",
+            )
+            ic1, ic2 = st.columns(2)
+            with ic1:
+                ingest_tier = st.selectbox("草稿权重", options=["note", "sop"], format_func=lambda x: TIER_LABELS.get(x, x), key="operation_ingest_tier")
+            with ic2:
+                ingest_status = st.selectbox(
+                    "草稿状态",
+                    options=["draft", "formal_ready"],
+                    format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用",
+                    key="operation_ingest_status",
+                )
+            if op_doc is not None and st.button("生成可审核草稿", use_container_width=True):
+                file_size = len(op_doc.getbuffer()) + sum(len(img.getbuffer()) for img in (op_images or []))
+                if file_size > MAX_FILE_SIZE * 5:
+                    st.error(f"图文材料总大小超过最大限制 {MAX_FILE_SIZE * 5 // (1024*1024)}MB")
+                else:
+                    source_ext = Path(op_doc.name).suffix.lower()
+                    safe_source = UPLOAD_DIR / f"opdoc_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{source_ext}"
+                    safe_source.write_bytes(op_doc.getbuffer())
+                    image_paths = []
+                    try:
+                        for idx, image_file in enumerate(op_images or [], start=1):
+                            image_ext = Path(image_file.name).suffix.lower()
+                            tmp_img = UPLOAD_DIR / f"opdoc_img_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{idx}{image_ext}"
+                            tmp_img.write_bytes(image_file.getbuffer())
+                            image_paths.append(tmp_img)
+                        draft = build_ingest_draft(
+                            safe_source,
+                            INGEST_ASSET_ROOT,
+                            default_software=state.software,
+                            tier=ingest_tier,
+                            status=ingest_status,
+                            extra_image_paths=image_paths,
+                        )
+                        st.session_state.operation_ingest_draft = draft.to_dict()
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"草稿生成失败：{exc}")
+                    finally:
+                        for path in [safe_source] + image_paths:
+                            try:
+                                if path.exists():
+                                    path.unlink()
+                            except Exception:
+                                pass
+    
+            draft_payload = st.session_state.get("operation_ingest_draft")
+            if draft_payload:
+                draft_doc = draft_payload.get("doc", {})
+                draft_images = draft_payload.get("images", []) or []
+                for warning in draft_payload.get("warnings", []) or []:
+                    st.warning(warning)
+                with st.form("operation_ingest_review_form"):
+                    st.markdown("**审核草稿**")
+                    r_doc_id = st.text_input("doc_id", value=draft_doc.get("doc_id", ""))
+                    rc1, rc2 = st.columns(2)
+                    with rc1:
+                        r_software = st.text_input("software", value=draft_doc.get("software", state.software))
+                        r_checkpoint = st.text_input("checkpoint_id", value=draft_doc.get("checkpoint_id", state.current_cp_id))
+                    with rc2:
+                        r_tier = st.selectbox("权重", options=["note", "sop"], index=0 if draft_doc.get("tier") != "sop" else 1, format_func=lambda x: TIER_LABELS.get(x, x))
+                        r_status = st.selectbox("状态", options=["draft", "formal_ready"], index=0 if draft_doc.get("status") != "formal_ready" else 1, format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用")
+                    r_title = st.text_input("标题", value=draft_doc.get("title_cn", ""))
+                    r_summary = st.text_area("摘要", value=draft_doc.get("summary", ""), height=90)
+    
+                    def _join_draft(value):
+                        return "\n".join(value) if isinstance(value, list) else (value or "")
+    
+                    r_steps = st.text_area("操作步骤（每行一条）", value=_join_draft(draft_doc.get("action_steps")), height=120)
+                    r_qc = st.text_area("质控要点（每行一条）", value=_join_draft(draft_doc.get("qc_checks")), height=80)
+                    r_errors = st.text_area("常见错误（每行一条）", value=_join_draft(draft_doc.get("common_errors")), height=80)
+                    r_tags = st.text_input("标签（逗号分隔）", value=", ".join(draft_doc.get("tags", []) if isinstance(draft_doc.get("tags"), list) else []))
+                    approve = st.form_submit_button("确认写入知识库", use_container_width=True)
+                    cancel = st.form_submit_button("丢弃草稿", use_container_width=True)
+                if draft_images:
+                    st.caption(f"已保存截图 {len(draft_images)} 张")
+                    for image in draft_images[:6]:
+                        image_path = image.get("stored_path", "")
+                        if image_path and os.path.exists(image_path):
+                            render_lazy_image(image_path, caption=image.get("caption") or image.get("source_name"), width=240)
+                if approve:
+                    def _split_lines(value):
+                        return [item.strip() for item in (value or "").splitlines() if item.strip()]
+    
+                    doc = KnowledgeDoc(
+                        doc_id=r_doc_id.strip() or f"doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                        software=r_software.strip() or state.software,
+                        checkpoint_id=r_checkpoint.strip(),
+                        title_cn=r_title.strip(),
+                        summary=r_summary.strip(),
+                        action_steps=_split_lines(r_steps),
+                        qc_checks=_split_lines(r_qc),
+                        common_errors=_split_lines(r_errors),
+                        image_refs=[img.get("stored_path", "") for img in draft_images if img.get("stored_path")],
+                        tags=[item.strip() for item in r_tags.split(",") if item.strip()],
+                        tier=r_tier,
+                        status=r_status,
+                        source="document_ingest",
+                        imported_at=datetime.now().isoformat(timespec="seconds"),
+                    )
+                    add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                    app.retriever.invalidate_corpus_cache()
+                    st.session_state.operation_ingest_draft = None
+                    st.session_state.last_feedback = f"已写入图文知识草稿：{doc.doc_id}"
+                    st.rerun()
+                if cancel:
+                    st.session_state.operation_ingest_draft = None
+                    st.rerun()
+    
+        with st.expander("📂 已导入知识管理", expanded=False):
+            _knowledge_dir = str(BASE_DIR / "knowledge_base")
+            all_docs = load_sharded_knowledge_index(_knowledge_dir)
+            user_docs = [d for d in all_docs if d.get("tier") != "builtin" and d.get("source") != "builtin"]
+            if not user_docs:
+                st.info("暂无导入的知识文档。上传YAML/JSON文件或使用「沉淀经验」来添加。")
+            else:
+                def _doc_tags(doc: dict) -> list[str]:
+                    tags = doc.get("tags") or []
+                    return [str(tag).strip().lower() for tag in tags if str(tag).strip()] if isinstance(tags, list) else []
+    
+                def _grade_from_doc(doc: dict, field: str, default: str = "未标注") -> str:
+                    value = str(doc.get(field) or "").strip()
+                    if value:
+                        return value.upper() if field.endswith("_grade") and len(value) <= 2 else value
+                    tags = _doc_tags(doc)
+                    if field == "evidence_grade":
+                        for grade in ("a", "b", "c", "d"):
+                            if grade in tags:
+                                return grade.upper()
+                    if field == "risk_grade":
+                        for grade in ("high", "medium", "low"):
+                            if grade in tags:
+                                return grade
+                    if field == "source_grade":
+                        source_text = " ".join(str(doc.get(k) or "") for k in ("source", "source_url", "summary")).lower()
+                        if "official" in source_text or "readthedocs" in source_text or "guide.cryosparc" in source_text:
+                            return "A"
+                        if doc.get("image_refs"):
+                            return "B"
+                        if doc.get("source") in {"distill", "user_correction"}:
+                            return "C"
+                    return default
+    
+                def _doc_hit_count(doc: dict) -> int:
+                    hit_stats = st.session_state.get("kb_hit_stats") or {}
+                    stat = hit_stats.get(str(doc.get("doc_id") or ""), {})
+                    if isinstance(stat, dict):
+                        try:
+                            return int(stat.get("hits") or 0)
                         except Exception:
                             pass
-
-        draft_payload = st.session_state.get("operation_ingest_draft")
-        if draft_payload:
-            draft_doc = draft_payload.get("doc", {})
-            draft_images = draft_payload.get("images", []) or []
-            for warning in draft_payload.get("warnings", []) or []:
-                st.warning(warning)
-            with st.form("operation_ingest_review_form"):
-                st.markdown("**审核草稿**")
-                r_doc_id = st.text_input("doc_id", value=draft_doc.get("doc_id", ""))
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    r_software = st.text_input("software", value=draft_doc.get("software", state.software))
-                    r_checkpoint = st.text_input("checkpoint_id", value=draft_doc.get("checkpoint_id", state.current_cp_id))
-                with rc2:
-                    r_tier = st.selectbox("权重", options=["note", "sop"], index=0 if draft_doc.get("tier") != "sop" else 1, format_func=lambda x: TIER_LABELS.get(x, x))
-                    r_status = st.selectbox("状态", options=["draft", "formal_ready"], index=0 if draft_doc.get("status") != "formal_ready" else 1, format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用")
-                r_title = st.text_input("标题", value=draft_doc.get("title_cn", ""))
-                r_summary = st.text_area("摘要", value=draft_doc.get("summary", ""), height=90)
-
-                def _join_draft(value):
-                    return "\n".join(value) if isinstance(value, list) else (value or "")
-
-                r_steps = st.text_area("操作步骤（每行一条）", value=_join_draft(draft_doc.get("action_steps")), height=120)
-                r_qc = st.text_area("质控要点（每行一条）", value=_join_draft(draft_doc.get("qc_checks")), height=80)
-                r_errors = st.text_area("常见错误（每行一条）", value=_join_draft(draft_doc.get("common_errors")), height=80)
-                r_tags = st.text_input("标签（逗号分隔）", value=", ".join(draft_doc.get("tags", []) if isinstance(draft_doc.get("tags"), list) else []))
-                approve = st.form_submit_button("确认写入知识库", use_container_width=True)
-                cancel = st.form_submit_button("丢弃草稿", use_container_width=True)
-            if draft_images:
-                st.caption(f"已保存截图 {len(draft_images)} 张")
-                for image in draft_images[:6]:
-                    image_path = image.get("stored_path", "")
-                    if image_path and os.path.exists(image_path):
-                        st.image(image_path, caption=image.get("caption") or image.get("source_name"), width=240)
-            if approve:
-                def _split_lines(value):
-                    return [item.strip() for item in (value or "").splitlines() if item.strip()]
-
-                doc = KnowledgeDoc(
-                    doc_id=r_doc_id.strip() or f"doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                    software=r_software.strip() or state.software,
-                    checkpoint_id=r_checkpoint.strip(),
-                    title_cn=r_title.strip(),
-                    summary=r_summary.strip(),
-                    action_steps=_split_lines(r_steps),
-                    qc_checks=_split_lines(r_qc),
-                    common_errors=_split_lines(r_errors),
-                    image_refs=[img.get("stored_path", "") for img in draft_images if img.get("stored_path")],
-                    tags=[item.strip() for item in r_tags.split(",") if item.strip()],
-                    tier=r_tier,
-                    status=r_status,
-                    source="document_ingest",
-                    imported_at=datetime.now().isoformat(timespec="seconds"),
-                )
-                index_path = BASE_DIR / "knowledge_base" / "knowledge_index.json"
-                update_knowledge_index(doc, str(index_path))
-                app.retriever.invalidate_corpus_cache()
-                st.session_state.operation_ingest_draft = None
-                st.session_state.last_feedback = f"已写入图文知识草稿：{doc.doc_id}"
-                st.rerun()
-            if cancel:
-                st.session_state.operation_ingest_draft = None
-                st.rerun()
-
-    with st.expander("📂 已导入知识管理", expanded=False):
-        index_path = BASE_DIR / "knowledge_base" / "knowledge_index.json"
-        all_docs = load_knowledge_index(str(index_path))
-        user_docs = [d for d in all_docs if d.get("tier") != "builtin" and d.get("source") != "builtin"]
-        if not user_docs:
-            st.info("暂无导入的知识文档。上传YAML/JSON文件或使用「沉淀经验」来添加。")
-        else:
-            def _doc_tags(doc: dict) -> list[str]:
-                tags = doc.get("tags") or []
-                return [str(tag).strip().lower() for tag in tags if str(tag).strip()] if isinstance(tags, list) else []
-
-            def _grade_from_doc(doc: dict, field: str, default: str = "未标注") -> str:
-                value = str(doc.get(field) or "").strip()
-                if value:
-                    return value.upper() if field.endswith("_grade") and len(value) <= 2 else value
-                tags = _doc_tags(doc)
-                if field == "evidence_grade":
-                    for grade in ("a", "b", "c", "d"):
-                        if grade in tags:
-                            return grade.upper()
-                if field == "risk_grade":
-                    for grade in ("high", "medium", "low"):
-                        if grade in tags:
-                            return grade
-                if field == "source_grade":
-                    source_text = " ".join(str(doc.get(k) or "") for k in ("source", "source_url", "summary")).lower()
-                    if "official" in source_text or "readthedocs" in source_text or "guide.cryosparc" in source_text:
-                        return "A"
-                    if doc.get("image_refs"):
-                        return "B"
-                    if doc.get("source") in {"distill", "user_correction"}:
-                        return "C"
-                return default
-
-            def _doc_hit_count(doc: dict) -> int:
-                hit_stats = st.session_state.get("kb_hit_stats") or {}
-                stat = hit_stats.get(str(doc.get("doc_id") or ""), {})
-                if isinstance(stat, dict):
-                    try:
-                        return int(stat.get("hits") or 0)
-                    except Exception:
-                        pass
-                for key in ("recent_hits", "hit_count", "usage_count", "query_count"):
-                    try:
-                        return int(doc.get(key) or 0)
-                    except Exception:
-                        pass
-                return 0
-
-            hit_stats_path = RUNTIME_ROOT / "knowledge_hit_counts.json"
-            try:
-                hit_payload = json.loads(hit_stats_path.read_text(encoding="utf-8")) if hit_stats_path.exists() else {}
-                st.session_state.kb_hit_stats = hit_payload.get("counts", {}) if isinstance(hit_payload, dict) else {}
-            except Exception:
-                st.session_state.kb_hit_stats = {}
-
-            formal_count = sum(1 for d in user_docs if d.get("status") == "formal_ready")
-            draft_count = sum(1 for d in user_docs if d.get("status") == "draft")
-            deprecated_count = sum(1 for d in user_docs if d.get("status") == "deprecated")
-            image_doc_count = sum(1 for d in user_docs if d.get("image_refs"))
-            high_risk_count = sum(1 for d in user_docs if _grade_from_doc(d, "risk_grade", "").lower() == "high")
-            mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-            mc1.metric("正式", formal_count)
-            mc2.metric("草稿", draft_count)
-            mc3.metric("废弃", deprecated_count)
-            mc4.metric("含图文", image_doc_count)
-            mc5.metric("高风险", high_risk_count)
-            st.caption(f"共 {len(user_docs)} 条知识（不含内置检查站）。草稿和废弃不会作为正式 SOP 的主要证据。")
-            conflicts = detect_conflicts(all_docs)
-            if conflicts:
-                for cf in conflicts:
-                    with st.warning(f"⚠️ 站点 {cf['checkpoint_id']} 可能存在知识矛盾"):
-                        st.write(f"**{cf['reason']}**")
-                        for did, title in zip(cf["docs"], cf["titles"]):
-                            st.markdown(f"- `{did}` — {title}")
-                        st.caption("建议在下方列表中审核并调整权重/状态")
-
-            fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 1])
-            with fc1:
-                status_filter = st.selectbox("状态筛选", ["全部", "正式", "草稿", "废弃"], key="kb_status_filter")
-            with fc2:
-                risk_filter = st.selectbox("风险筛选", ["全部", "high", "medium", "low", "未标注"], key="kb_risk_filter")
-            with fc3:
-                evidence_filter = st.selectbox("证据筛选", ["全部", "A", "B", "C", "D", "未标注"], key="kb_evidence_filter")
-            with fc4:
-                sort_opt = st.selectbox("排序", ["按时间(新→旧)", "按站点", "按权重", "按命中"], key="kb_sort_opt")
-
-            status_map = {"正式": "formal_ready", "草稿": "draft", "废弃": "deprecated"}
-            filtered_docs = list(user_docs)
-            if status_filter != "全部":
-                filtered_docs = [d for d in filtered_docs if d.get("status", "formal_ready") == status_map.get(status_filter)]
-            if risk_filter != "全部":
-                filtered_docs = [d for d in filtered_docs if _grade_from_doc(d, "risk_grade") == risk_filter]
-            if evidence_filter != "全部":
-                filtered_docs = [d for d in filtered_docs if _grade_from_doc(d, "evidence_grade") == evidence_filter]
-
-            if sort_opt == "按时间(新→旧)":
-                filtered_docs.sort(key=lambda d: d.get("imported_at", ""), reverse=True)
-            elif sort_opt == "按站点":
-                filtered_docs.sort(key=lambda d: (d.get("checkpoint_id", ""), d.get("title_cn", "")))
-            elif sort_opt == "按命中":
-                filtered_docs.sort(key=_doc_hit_count, reverse=True)
+                    for key in ("recent_hits", "hit_count", "usage_count", "query_count"):
+                        try:
+                            return int(doc.get(key) or 0)
+                        except Exception:
+                            pass
+                    return 0
+    
+                hit_stats_path = RUNTIME_ROOT / "knowledge_hit_counts.json"
+                try:
+                    hit_payload = json.loads(hit_stats_path.read_text(encoding="utf-8")) if hit_stats_path.exists() else {}
+                    st.session_state.kb_hit_stats = hit_payload.get("counts", {}) if isinstance(hit_payload, dict) else {}
+                except Exception:
+                    st.session_state.kb_hit_stats = {}
+    
+                formal_count = sum(1 for d in user_docs if d.get("status") == "formal_ready")
+                draft_count = sum(1 for d in user_docs if d.get("status") == "draft")
+                deprecated_count = sum(1 for d in user_docs if d.get("status") == "deprecated")
+                image_doc_count = sum(1 for d in user_docs if d.get("image_refs"))
+                high_risk_count = sum(1 for d in user_docs if _grade_from_doc(d, "risk_grade", "").lower() == "high")
+                mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+                mc1.metric("正式", formal_count)
+                mc2.metric("草稿", draft_count)
+                mc3.metric("废弃", deprecated_count)
+                mc4.metric("含图文", image_doc_count)
+                mc5.metric("高风险", high_risk_count)
+                st.caption(f"共 {len(user_docs)} 条知识（不含内置检查站）。草稿和废弃不会作为正式 SOP 的主要证据。")
+                conflicts = detect_conflicts(all_docs)
+                if conflicts:
+                    for cf in conflicts:
+                        with st.warning(f"⚠️ 站点 {cf['checkpoint_id']} 可能存在知识矛盾"):
+                            st.write(f"**{cf['reason']}**")
+                            for did, title in zip(cf["docs"], cf["titles"]):
+                                st.markdown(f"- `{did}` — {title}")
+                            st.caption("建议在下方列表中审核并调整权重/状态")
+    
+                fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 1])
+                with fc1:
+                    status_filter = st.selectbox("状态筛选", ["全部", "正式", "草稿", "废弃"], key="kb_status_filter")
+                with fc2:
+                    risk_filter = st.selectbox("风险筛选", ["全部", "high", "medium", "low", "未标注"], key="kb_risk_filter")
+                with fc3:
+                    evidence_filter = st.selectbox("证据筛选", ["全部", "A", "B", "C", "D", "未标注"], key="kb_evidence_filter")
+                with fc4:
+                    sort_opt = st.selectbox("排序", ["按时间(新→旧)", "按站点", "按权重", "按命中"], key="kb_sort_opt")
+    
+                status_map = {"正式": "formal_ready", "草稿": "draft", "废弃": "deprecated"}
+                filtered_docs = list(user_docs)
+                if status_filter != "全部":
+                    filtered_docs = [d for d in filtered_docs if d.get("status", "formal_ready") == status_map.get(status_filter)]
+                if risk_filter != "全部":
+                    filtered_docs = [d for d in filtered_docs if _grade_from_doc(d, "risk_grade") == risk_filter]
+                if evidence_filter != "全部":
+                    filtered_docs = [d for d in filtered_docs if _grade_from_doc(d, "evidence_grade") == evidence_filter]
+    
+                if sort_opt == "按时间(新→旧)":
+                    filtered_docs.sort(key=lambda d: d.get("imported_at", ""), reverse=True)
+                elif sort_opt == "按站点":
+                    filtered_docs.sort(key=lambda d: (d.get("checkpoint_id", ""), d.get("title_cn", "")))
+                elif sort_opt == "按命中":
+                    filtered_docs.sort(key=_doc_hit_count, reverse=True)
+                else:
+                    _tw = {"sop": 3, "note": 2, "draft": 1}
+                    filtered_docs.sort(key=lambda d: _tw.get(d.get("tier", "note"), 0), reverse=True)
+    
+                if not filtered_docs:
+                    st.info("当前筛选条件下没有知识条目。")
+    
+                for i, d in enumerate(filtered_docs):
+                    did = d.get("doc_id", f"doc_{i}")
+                    title = d.get("title_cn") or d.get("title_en") or did
+                    cp = d.get("checkpoint_id", "")
+                    tier = d.get("tier", "note")
+                    status = d.get("status", "formal_ready")
+                    src = d.get("source", "import")
+                    src_label = {"import": "📥导入", "distill": "💬沉淀", "builtin": "📘内置", "document_ingest": "🖼️图文", "user_correction": "🧾纠错"}.get(src, src)
+                    tier_label = TIER_LABELS.get(tier, tier)
+                    status_icon = "✅" if status == "formal_ready" else ("🚫" if status == "deprecated" else "📝")
+                    status_label = {"formal_ready": "正式", "draft": "草稿", "deprecated": "废弃"}.get(status, status)
+                    evidence_grade = _grade_from_doc(d, "evidence_grade")
+                    risk_grade = _grade_from_doc(d, "risk_grade")
+                    source_grade = _grade_from_doc(d, "source_grade")
+                    image_count = len(d.get("image_refs") or [])
+                    hit_count = _doc_hit_count(d)
+    
+                    with st.container():
+                        hc1, hc2, hc3, hc4 = st.columns([3, 1.2, 1.4, 1.2])
+                        with hc1:
+                            st.markdown(f"**{title}**  `{did}`")
+                        with hc2:
+                            st.caption(f"{src_label} {cp}")
+                        with hc3:
+                            st.caption(f"🏷️{tier_label} · 图 {image_count} · 命中 {hit_count}")
+                        with hc4:
+                            st.caption(f"{status_icon}{status_label}")
+                        summary = (d.get("summary") or "")[:120]
+                        if summary:
+                            st.caption(summary)
+                        st.caption(f"来源等级 {source_grade} · 证据等级 {evidence_grade} · 风险等级 {risk_grade} · 审核状态 {d.get('review_status') or status_label}")
+                        bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 1, 1, 1])
+                        with bc1:
+                            if st.button("👁️查看", key=f"kb_view_{i}", use_container_width=True):
+                                st.session_state[f"kb_detail_{i}"] = not st.session_state.get(f"kb_detail_{i}", False)
+                        with bc2:
+                            new_tier = "note" if tier == "sop" else "sop"
+                            new_tier_label = TIER_LABELS.get(new_tier, new_tier)
+                            if st.button(f"→{new_tier_label}", key=f"kb_tier_{i}", use_container_width=True):
+                                update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, status, new_tier)
+                                app.retriever.invalidate_corpus_cache()
+                                st.rerun()
+                        with bc3:
+                            new_status = "draft" if status == "formal_ready" else "formal_ready"
+                            new_status_label = "转草稿" if new_status == "draft" else "转正"
+                            if st.button(f"{status_icon}{new_status_label}", key=f"kb_status_{i}", use_container_width=True):
+                                update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, new_status)
+                                app.retriever.invalidate_corpus_cache()
+                                st.rerun()
+                        with bc4:
+                            new_status = "draft" if status == "deprecated" else "deprecated"
+                            new_status_label = "恢复草稿" if new_status == "draft" else "废弃"
+                            if st.button(new_status_label, key=f"kb_deprecate_{i}", use_container_width=True):
+                                update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, new_status)
+                                app.retriever.invalidate_corpus_cache()
+                                st.rerun()
+                        with bc5:
+                            if st.button("🗑️删除", key=f"kb_del_{i}", use_container_width=True):
+                                delete_doc_from_sharded_index(str(BASE_DIR / "knowledge_base"), did)
+                                app.retriever.invalidate_corpus_cache()
+                                st.rerun()
+                        if st.session_state.get(f"kb_detail_{i}", False):
+                            st.json({k: v for k, v in d.items() if k not in ("ui_keywords", "ui_elements")}, expanded=False)
+                            for img_path in (d.get("image_refs") or [])[:4]:
+                                if img_path and os.path.exists(img_path):
+                                    render_lazy_image(img_path, width=220)
+                        st.divider()
+    
+        with st.expander("用户纠错审核", expanded=False):
+            corrections = load_corrections(CORRECTIONS_PATH, limit=50)
+            if not corrections:
+                st.info("暂无用户纠错记录。用户在对话中提交理解纠正或回答反馈后，会出现在这里。")
             else:
-                _tw = {"sop": 3, "note": 2, "draft": 1}
-                filtered_docs.sort(key=lambda d: _tw.get(d.get("tier", "note"), 0), reverse=True)
-
-            if not filtered_docs:
-                st.info("当前筛选条件下没有知识条目。")
-
-            for i, d in enumerate(filtered_docs):
-                did = d.get("doc_id", f"doc_{i}")
-                title = d.get("title_cn") or d.get("title_en") or did
-                cp = d.get("checkpoint_id", "")
-                tier = d.get("tier", "note")
-                status = d.get("status", "formal_ready")
-                src = d.get("source", "import")
-                src_label = {"import": "📥导入", "distill": "💬沉淀", "builtin": "📘内置", "document_ingest": "🖼️图文", "user_correction": "🧾纠错"}.get(src, src)
-                tier_label = TIER_LABELS.get(tier, tier)
-                status_icon = "✅" if status == "formal_ready" else ("🚫" if status == "deprecated" else "📝")
-                status_label = {"formal_ready": "正式", "draft": "草稿", "deprecated": "废弃"}.get(status, status)
-                evidence_grade = _grade_from_doc(d, "evidence_grade")
-                risk_grade = _grade_from_doc(d, "risk_grade")
-                source_grade = _grade_from_doc(d, "source_grade")
-                image_count = len(d.get("image_refs") or [])
-                hit_count = _doc_hit_count(d)
-
-                with st.container():
-                    hc1, hc2, hc3, hc4 = st.columns([3, 1.2, 1.4, 1.2])
-                    with hc1:
-                        st.markdown(f"**{title}**  `{did}`")
-                    with hc2:
-                        st.caption(f"{src_label} {cp}")
-                    with hc3:
-                        st.caption(f"🏷️{tier_label} · 图 {image_count} · 命中 {hit_count}")
-                    with hc4:
-                        st.caption(f"{status_icon}{status_label}")
-                    summary = (d.get("summary") or "")[:120]
-                    if summary:
-                        st.caption(summary)
-                    st.caption(f"来源等级 {source_grade} · 证据等级 {evidence_grade} · 风险等级 {risk_grade} · 审核状态 {d.get('review_status') or status_label}")
-                    bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 1, 1, 1])
-                    with bc1:
-                        if st.button("👁️查看", key=f"kb_view_{i}", use_container_width=True):
-                            st.session_state[f"kb_detail_{i}"] = not st.session_state.get(f"kb_detail_{i}", False)
-                    with bc2:
-                        new_tier = "note" if tier == "sop" else "sop"
-                        new_tier_label = TIER_LABELS.get(new_tier, new_tier)
-                        if st.button(f"→{new_tier_label}", key=f"kb_tier_{i}", use_container_width=True):
-                            update_doc_status(did, str(index_path), status, new_tier)
-                            app.retriever.invalidate_corpus_cache()
-                            st.rerun()
-                    with bc3:
-                        new_status = "draft" if status == "formal_ready" else "formal_ready"
-                        new_status_label = "转草稿" if new_status == "draft" else "转正"
-                        if st.button(f"{status_icon}{new_status_label}", key=f"kb_status_{i}", use_container_width=True):
-                            update_doc_status(did, str(index_path), new_status)
-                            app.retriever.invalidate_corpus_cache()
-                            st.rerun()
-                    with bc4:
-                        new_status = "draft" if status == "deprecated" else "deprecated"
-                        new_status_label = "恢复草稿" if new_status == "draft" else "废弃"
-                        if st.button(new_status_label, key=f"kb_deprecate_{i}", use_container_width=True):
-                            update_doc_status(did, str(index_path), new_status)
-                            app.retriever.invalidate_corpus_cache()
-                            st.rerun()
-                    with bc5:
-                        if st.button("🗑️删除", key=f"kb_del_{i}", use_container_width=True):
-                            delete_knowledge_doc(did, str(index_path))
-                            app.retriever.invalidate_corpus_cache()
-                            st.rerun()
-                    if st.session_state.get(f"kb_detail_{i}", False):
-                        st.json({k: v for k, v in d.items() if k not in ("ui_keywords", "ui_elements")}, expanded=False)
-                        for img_path in (d.get("image_refs") or [])[:4]:
-                            if img_path and os.path.exists(img_path):
-                                st.image(img_path, width=220)
-                    st.divider()
-
-    with st.expander("用户纠错审核", expanded=False):
-        corrections = load_corrections(CORRECTIONS_PATH, limit=50)
-        if not corrections:
-            st.info("暂无用户纠错记录。用户在对话中提交理解纠正或回答反馈后，会出现在这里。")
-        else:
-            st.caption(f"最近 {len(corrections)} 条待审核纠错。纠错记录采用追加日志保存，便于审计和回溯。")
-            for idx, item in enumerate(corrections):
-                title = item.get("user_note") or item.get("corrected_query") or item.get("kind", "correction")
-                title = str(title).strip()[:80] or item.get("correction_id", f"corr_{idx}")
-                with st.container():
-                    c1, c2, c3 = st.columns([3, 1, 1])
-                    with c1:
-                        st.markdown(f"**{title}**")
-                        st.caption(
-                            f"{item.get('kind', '')} · {item.get('software', '')} · "
-                            f"{item.get('checkpoint_id', '')} · {item.get('created_at', '')}"
-                        )
-                    with c2:
-                        if st.button("查看", key=f"corr_view_{idx}", use_container_width=True):
-                            st.session_state[f"corr_detail_{idx}"] = not st.session_state.get(f"corr_detail_{idx}", False)
-                    with c3:
-                        if st.button("转知识草稿", key=f"corr_to_doc_{idx}", use_container_width=True):
-                            summary = item.get("user_note") or item.get("corrected_query") or item.get("answer_excerpt") or "User correction"
-                            doc = KnowledgeDoc(
-                                doc_id=f"corr_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{idx}",
-                                software=item.get("software") or state.software,
-                                checkpoint_id=item.get("checkpoint_id") or state.current_cp_id,
-                                title_cn=f"用户纠错：{item.get('kind', 'correction')}",
-                                summary=str(summary).strip(),
-                                action_steps=[item.get("corrected_query", "")] if item.get("corrected_query") else [],
-                                common_errors=[item.get("answer_excerpt", "")[:300]] if item.get("answer_excerpt") else [],
-                                tags=["user_correction", item.get("kind", "correction")],
-                                tier="note",
-                                status="draft",
-                                source="user_correction",
-                                imported_at=datetime.now().isoformat(timespec="seconds"),
+                st.caption(f"最近 {len(corrections)} 条待审核纠错。纠错记录采用追加日志保存，便于审计和回溯。")
+                for idx, item in enumerate(corrections):
+                    title = item.get("user_note") or item.get("corrected_query") or item.get("kind", "correction")
+                    title = str(title).strip()[:80] or item.get("correction_id", f"corr_{idx}")
+                    with st.container():
+                        c1, c2, c3 = st.columns([3, 1, 1])
+                        with c1:
+                            st.markdown(f"**{title}**")
+                            st.caption(
+                                f"{item.get('kind', '')} · {item.get('software', '')} · "
+                                f"{item.get('checkpoint_id', '')} · {item.get('created_at', '')}"
                             )
-                            index_path = BASE_DIR / "knowledge_base" / "knowledge_index.json"
-                            update_knowledge_index(doc, str(index_path))
-                            app.retriever.invalidate_corpus_cache()
-                            st.session_state.last_feedback = f"已转为知识草稿：{doc.doc_id}"
-                            st.rerun()
-                    if st.session_state.get(f"corr_detail_{idx}", False):
-                        st.json(item, expanded=False)
-                    st.divider()
+                        with c2:
+                            if st.button("查看", key=f"corr_view_{idx}", use_container_width=True):
+                                st.session_state[f"corr_detail_{idx}"] = not st.session_state.get(f"corr_detail_{idx}", False)
+                        with c3:
+                            if st.button("转知识草稿", key=f"corr_to_doc_{idx}", use_container_width=True):
+                                summary = item.get("user_note") or item.get("corrected_query") or item.get("answer_excerpt") or "User correction"
+                                doc = KnowledgeDoc(
+                                    doc_id=f"corr_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{idx}",
+                                    software=item.get("software") or state.software,
+                                    checkpoint_id=item.get("checkpoint_id") or state.current_cp_id,
+                                    title_cn=f"用户纠错：{item.get('kind', 'correction')}",
+                                    summary=str(summary).strip(),
+                                    action_steps=[item.get("corrected_query", "")] if item.get("corrected_query") else [],
+                                    common_errors=[item.get("answer_excerpt", "")[:300]] if item.get("answer_excerpt") else [],
+                                    tags=["user_correction", item.get("kind", "correction")],
+                                    tier="note",
+                                    status="draft",
+                                    source="user_correction",
+                                    imported_at=datetime.now().isoformat(timespec="seconds"),
+                                )
+                                add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                                app.retriever.invalidate_corpus_cache()
+                                st.session_state.last_feedback = f"已转为知识草稿：{doc.doc_id}"
+                                st.rerun()
+                        if st.session_state.get(f"corr_detail_{idx}", False):
+                            st.json(item, expanded=False)
+                        st.divider()
+    
+    # --------------------------------------------------------------------------- #
+    # 高级模式专属功能面板（仅在 expert 模式下渲染）
+    # --------------------------------------------------------------------------- #
+if st.session_state.app_mode == "expert":
+    st.markdown("---")
+    from modes import render_expert_view
+    # 在底部追加高级功能（导出、预设、贡献经验）
+    with st.expander("⚙️ 高级功能", expanded=False):
+        render_expert_view(_current_cp, state.software)
 
 # --------------------------------------------------------------------------- #
 # Desk Pets (bottom-right companions)

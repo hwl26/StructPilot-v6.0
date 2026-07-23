@@ -1,0 +1,280 @@
+[
+  {
+    "doc_id": "formal_cp_09_43f94f5d",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "refine_3d",
+    "screen_name": "3D auto-refine, High-resolution 3D refinement",
+    "checkpoint_id": "cp_09",
+    "title_cn": "3D auto-refine 结果主要看哪些指标？",
+    "title_en": "",
+    "summary": "Q: 3D auto-refine 结果主要看哪些指标？\nA: 3D auto-refine 用 gold-standard FSC 评估，主要指标：\n1. FSC 分辨率：收敛后 run_class001.mrc 对应的 _model.star 中 rlnEstimatedResolution，或 PostProcess 后的 postprocess.star 中 rlnFinalResolution。官方 tutorial beta-galactosidase 达到 3.0 Å。\n2. Gold-standard FSC：两个独立 half-map 的 FSC 曲线，0.143 截断值处的分辨率。FSC 曲线应平滑下降，不应有突兀跳变。\n3. 角度分布：_model.star 中 rlnAngleDistribution，确认无 preferred orientation 缺失区域。\n4. 收敛性：迭代次数合理（通常 20–40 次），过早收敛可能参数过严，不收敛可能 mask 或参数有问题。\n5. map 视觉质量：在 chimera 中查看，结构清晰、二级结构可辨、无 streaks 或噪声条纹。\n6. 对比 half-map 和 sharpened map：差异大说明 sharpening 参数可能需调整。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Mask diameter",
+      "Angular sampling",
+      "Initial low-pass filter",
+      "Gold-standard FSC",
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "ui_elements": [
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "action_steps": [
+      "3D auto-refine 用 gold-standard FSC 评估，主要指标：\n1. FSC 分辨率：收敛后 run_class001.mrc 对应的 _model.star 中 rlnEstimatedResolution，或 PostProcess 后的 postprocess.star 中 rlnFinalResolution。官方 tutorial beta-galactosidase 达到 3.0 Å。\n2. Gold-standard FSC：两个独立 half-map 的 FSC 曲线，0.143 截断值处的分辨率。FSC 曲线应平滑下降，不应有突兀跳变。\n3. 角度分布：_model.star 中 rlnAngleDistribution，确认无 preferred orientation 缺失区域。\n4. 收敛性：迭代次数合理（通常 20–40 次），过早收敛可能参数过严，不收敛可能 mask 或参数有问题。\n5. map 视觉质量：在 chimera 中查看，结构清晰、二级结构可辨、无 streaks 或噪声条纹。\n6. 对比 half-map 和 sharpened map：差异大说明 sharpening 参数可能需调整。"
+    ],
+    "qc_checks": [
+      "gold-standard FSC 曲线合理",
+      "half-map 独立性没有被破坏",
+      "map 细节与报告分辨率一致",
+      "角度分布和 class 粒子数合理"
+    ],
+    "common_errors": [
+      "参考低通不足造成 model bias",
+      "mask 过紧导致 FSC 虚高",
+      "把异质颗粒直接精修导致地图模糊",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_09"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_09_8c5419cc",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "refine_3d",
+    "screen_name": "3D auto-refine, High-resolution 3D refinement",
+    "checkpoint_id": "cp_09",
+    "title_cn": "FSC 分辨率和实际 map 质量不一致怎么办？",
+    "title_en": "",
+    "summary": "Q: FSC 分辨率和实际 map 质量不一致怎么办？\nA: FSC 分辨率高但 map 质量差，常见原因：\n1. Mask 过紧：mask 太贴合结构会虚高 FSC。官方做法：PostProcess 时用 soft mask（cosine edge），mask 应略大于结构，留出溶剂区。\n2. Preferred orientation：FSC 看起来好但角度分布不均，map 某方向分辨率差。查看 _model.star 的角度分布图。\n3. Overfitting：检查 FSC 曲线的 random-phase correlation（如有），若真实 FSC 与 random FSC 间距过小，说明 overfitting。\n4. Sharpening 过度：B-factor 设太负会让高频噪声放大，map 看起来「锐」但实为噪声。用 PostProcess 的 auto-B-factor 或局部分辨率估计 (LocRes) 交叉验证。\n5. 对称性误用：错误施加高对称性会让 FSC 虚高但 map 在非对称区域失真。\n6. 解决：重做 mask（looser、soft edge）、检查角度分布、用 LocRes map 评估真实局部分辨率、调整 sharpening。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Mask diameter",
+      "Angular sampling",
+      "Initial low-pass filter",
+      "Gold-standard FSC",
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "ui_elements": [
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "action_steps": [
+      "FSC 分辨率高但 map 质量差，常见原因：\n1. Mask 过紧：mask 太贴合结构会虚高 FSC。官方做法：PostProcess 时用 soft mask（cosine edge），mask 应略大于结构，留出溶剂区。\n2. Preferred orientation：FSC 看起来好但角度分布不均，map 某方向分辨率差。查看 _model.star 的角度分布图。\n3. Overfitting：检查 FSC 曲线的 random-phase correlation（如有），若真实 FSC 与 random FSC 间距过小，说明 overfitting。\n4. Sharpening 过度：B-factor 设太负会让高频噪声放大，map 看起来「锐」但实为噪声。用 PostProcess 的 auto-B-factor 或局部分辨率估计 (LocRes) 交叉验证。\n5. 对称性误用：错误施加高对称性会让 FSC 虚高但 map 在非对称区域失真。\n6. 解决：重做 mask（looser、soft edge）、检查角度分布、用 LocRes map 评估真实局部分辨率、调整 sharpening。"
+    ],
+    "qc_checks": [
+      "gold-standard FSC 曲线合理",
+      "half-map 独立性没有被破坏",
+      "map 细节与报告分辨率一致",
+      "角度分布和 class 粒子数合理"
+    ],
+    "common_errors": [
+      "参考低通不足造成 model bias",
+      "mask 过紧导致 FSC 虚高",
+      "把异质颗粒直接精修导致地图模糊",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_09"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_09_3770675a",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "refine_3d",
+    "screen_name": "3D auto-refine, High-resolution 3D refinement",
+    "checkpoint_id": "cp_09",
+    "title_cn": "mask 会怎样影响 refinement？",
+    "title_en": "",
+    "summary": "Q: mask 会怎样影响 refinement？\nA: mask 在 3D auto-refine 和 PostProcess 中都关键：\n1. Refine3D 阶段：Reference mask (optional) 留空则用球形 mask（基于 Optimisation tab 的 particle diameter）。官方 Class3D tutorial：\"If left empty, a spherical mask with the particle diameter given on the Optimisation tab will be used. This introduces the least bias.\"\n2. 过紧的 mask：让 refinement 只关注结构内信号，可能虚高 FSC 但丢失柔性区域信息。\n3. 过松的 mask：溶剂噪声多，refinement 收敛慢，分辨率可能低估。\n4. PostProcess 阶段：mask 决定 FSC 计算范围。官方 tutorial 用 Mask job 生成 soft mask（cosine edge 6 Å，扩展 5 Å）。mask 太紧会让 FSC 在截断处突跳，形成「假分辨率」。\n5. 检查方法：在 chimera 中叠加 mask 和 map，确认 mask 覆盖结构但不过分贴合；查看 PostProcess 的 FSC 曲线是否平滑。\n6. 错误信号：mask 边缘有锐利跳变、mask 体积与结构体积比 <0.8 或 >1.5。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Mask diameter",
+      "Angular sampling",
+      "Initial low-pass filter",
+      "Gold-standard FSC",
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "ui_elements": [
+      "3D auto-refine",
+      "High-resolution 3D refinement"
+    ],
+    "action_steps": [
+      "mask 在 3D auto-refine 和 PostProcess 中都关键：\n1. Refine3D 阶段：Reference mask (optional) 留空则用球形 mask（基于 Optimisation tab 的 particle diameter）。官方 Class3D tutorial：\"If left empty, a spherical mask with the particle diameter given on the Optimisation tab will be used. This introduces the least bias.\"\n2. 过紧的 mask：让 refinement 只关注结构内信号，可能虚高 FSC 但丢失柔性区域信息。\n3. 过松的 mask：溶剂噪声多，refinement 收敛慢，分辨率可能低估。\n4. PostProcess 阶段：mask 决定 FSC 计算范围。官方 tutorial 用 Mask job 生成 soft mask（cosine edge 6 Å，扩展 5 Å）。mask 太紧会让 FSC 在截断处突跳，形成「假分辨率」。\n5. 检查方法：在 chimera 中叠加 mask 和 map，确认 mask 覆盖结构但不过分贴合；查看 PostProcess 的 FSC 曲线是否平滑。\n6. 错误信号：mask 边缘有锐利跳变、mask 体积与结构体积比 <0.8 或 >1.5。"
+    ],
+    "qc_checks": [
+      "gold-standard FSC 曲线合理",
+      "half-map 独立性没有被破坏",
+      "map 细节与报告分辨率一致",
+      "角度分布和 class 粒子数合理"
+    ],
+    "common_errors": [
+      "参考低通不足造成 model bias",
+      "mask 过紧导致 FSC 虚高",
+      "把异质颗粒直接精修导致地图模糊",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_09"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_09",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "refine_3d",
+    "screen_name": "Homogeneous Refinement / Non-uniform Refinement",
+    "checkpoint_id": "cp_09",
+    "title_cn": "cryoSPARC 3D 精修 — Heterogeneous→Homogeneous→Non-uniform 三级管线",
+    "title_en": "",
+    "summary": "实验室标准三级精修：Heterogeneous 分构象 → Homogeneous（假设单一构象刚体，含 Per-particle CTF/Gold-standard FSC/Ewald 球校正）push 分辨率 → Non-uniform（数据驱动逐频点加权锐化替代一刀切 B-factor + 动态软掩膜 + 局部分辨率）做最终 push，通常比 Homogeneous 提升 0.1-0.3Å。三级 Max alignment resolution 均为 3Å，Cache on SSD=OFF，Non-uniform 的 Dynamic mask use absolute value=OFF。",
+    "ui_keywords": [
+      "max_alignment_resolution",
+      "cache_particles_on_ssd",
+      "dynamic_mask_use_absolute_value",
+      "Homogeneous Refinement",
+      "Non-uniform Refinement",
+      "FSC",
+      "local_resolution"
+    ],
+    "ui_elements": [
+      "Homogeneous Refinement",
+      "Non-uniform Refinement"
+    ],
+    "action_steps": [
+      "Heterogeneous Refinement（3D 分类）：详见 cp_08，分好构象后选最好 class + volume 进 Homogeneous。",
+      "Homogeneous Refinement：输入只选 Heterogeneous 中最好的 class + volume；Max alignment resolution=3Å（同质对齐 push 分辨率，用全频带信号）；Cache on SSD=OFF。三大核心算法：Per-Particle CTF Correction、Gold-Standard FSC（FSC=0.143 判真实分辨率）、Ewald Sphere Correction（<3.5Å 必须校正）。输出 Half Map A/B、Full Map、FSC Curve、alignments3D。",
+      "Non-uniform Refinement：输入 Homogeneous 最佳 class + volume + mask；Max alignment resolution=3Å（刚性+柔性区域同步精修）；Dynamic mask use absolute value=OFF（算法自动计算软掩膜排除溶剂噪声）；Cache on SSD=OFF。用逐频点加权替代 B-factor + 输出 local resolution map，是高分辨率重建最关键最后一步。",
+      "三步递进为现代 cryoSPARC 标准管线（v3+ 引入 Heterogeneous、v4+ 引入 Non-uniform）；只做 Homogeneous 是旧版做法。"
+    ],
+    "qc_checks": [
+      "Homogeneous 的 FSC 曲线平滑衰减，FSC=0.143 处分辨率合理（无低分辨率震荡/突然下降）",
+      "Non-uniform 输出 local resolution map，柔性区域分辨率改善明显",
+      "Non-uniform 分辨率通常比 Homogeneous 提升 0.1-0.3Å",
+      "Half Map A/B 用于 FSC 计算，Full Map 为最终密度图"
+    ],
+    "common_errors": [
+      "T08 FSC 曲线异常：低分辨率震荡→颗粒取向严重不均（Template Picker 补全或重新采集）；突然下降+平台→Heterogeneous 分类未分干净（增加 class 数或调低 class similarity）；整体分辨率差→颗粒数不够或噪声大",
+      "跳过 Non-uniform → 柔性蛋白损失 0.1-0.3Å（刚体蛋白影响较小）",
+      "跳过 Heterogeneous → 颗粒混在一起，分辨率上限被构象异质性卡住",
+      "Homogeneous FSC 低分辨率震荡说明颗粒方向不准或分类没分干净"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_09"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Refine3D (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_09",
+    "title_cn": "RELION 高分辨率 3D 精修(Refine3D)",
+    "title_en": "RELION SPA Tutorial — Refine3D",
+    "summary": "同质性子集选定后，用 3D auto-refine 全自动高分辨率精修。采用 gold-standard FSC（独立半集）估计分辨率避免自增强过拟合，并自动判断收敛，几乎无需调参。",
+    "action_steps": [
+      "先重新提取粒子（更少下采样）：Particle extraction，OR re-extract refined particles?: Yes，Particle box size: 360，Rescale: Yes，Re-scaled size: 256（→1.244 Å，限分辨率~2.5Å）",
+      "I/O tab：Input images STAR: Extract/job018/particles.star，Reference map: 缩放至256盒的 class map",
+      "Reference tab：Ref. map is on absolute greyscale?: No，Initial low-pass filter (A): 50，Symmetry: D2",
+      "Optimisation/CTF tab 同 Class3D；Auto-sampling tab：Use finer angular sampling faster?: Yes",
+      "Compute tab：Use parallel disc I/O?: Yes，Skip padding?: Yes（省内存但小心混叠），Pre-read all particles into RAM?: Yes，Use GPU acceleration?: Yes；Running tab：Number of MPI procs: 5（奇数，最小3），threads: 6"
+    ],
+    "qc_checks": [
+      "收敛时最后迭代分辨率显著提升（两半集合并）",
+      "grep Auto Refine3D/job019/run.out 查看采样与分辨率估计",
+      "odd MPI 数最高效（1 master + 2 half-set worker sets）"
+    ],
+    "common_errors": [
+      "Skip padding?: Yes 省内存但 box 紧时边缘可能混叠",
+      "高对称精修才用 3.7° 采样+0.9° 局部搜索，其余默认 7.5°/1.8°",
+      "大 box 末迭代内存显著增加"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_09",
+      "refine3d",
+      "autorefine",
+      "goldstandard"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html",
+    "imported_at": "2026-07-10T10:52:44"
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Polish (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_09",
+    "title_cn": "RELION Bayesian polishing（贝叶斯抛光）",
+    "title_en": "RELION SPA Tutorial — Polish",
+    "summary": "relion 实现基于参考的每颗粒 beam-induced motion 校正的贝叶斯方法，优化正则化似然，对每颗粒轨迹关联平滑时空运动的先验。先训练模式估计最优先验参数，再抛光模式拟合所有颗粒运动并产生加权平均。",
+    "action_steps": [
+      "训练模式：I/O 选 MotionCorr corrected micrographs + Refine3D/CtfRefine particles + Postprocess STAR；First/Last frame: 1/-1",
+      "Train tab：Train optimal parameters?: Yes，Fraction of Fourier pixels for testing: 0.5，Use this many particles: 3000；Perform particle polishing?: No（单 MPI）",
+      "抛光模式：Perform particle polishing?: Yes，Optimised parameter file 或 OR use your own parameters?: Yes",
+      "自带参数（示例）：Sigma for velocity: 0.45，Sigma for divergence: 1290，Sigma for acceleration: 2.66，Min/Max resolution for B-factor fit: 20/-1",
+      "抛光后重跑 3D auto-refine（shiny.star）+ Post-processing"
+    ],
+    "qc_checks": [
+      "polish 输出 shiny.star 与 PDF logfile（scale/B-factor 图、颗粒轨迹）",
+      "重跑精修+后处理确认分辨率提升（示例达 2.9 Å）",
+      "提供 half-map 作参考可防过拟合，Initial low-pass: 8，Use solvent-flattened FSCs?: Yes"
+    ],
+    "common_errors": [
+      "Bayesian polishing 不推荐丢弃首/末帧（B-factor 自动优化 SNR）",
+      "训练未 MPI 并行，须单 MPI；默认参数 σvel=0.2;σdiv=5000;σacc=2 常可直接用",
+      "训练结果有时不稳定（多次运行 sigma 差异大），但抛光实际分辨率常不敏感",
+      "CTF 精修与 polishing 顺序可互换，先处理最大问题"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_09",
+      "cp_11",
+      "polish",
+      "bayesian",
+      "motion"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

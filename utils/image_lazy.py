@@ -244,16 +244,6 @@ def render_image_with_expand(
             st.image(path, caption=None, use_container_width=True)
 
 
-def inject_scroll_to_latest_js() -> None:
-    """Deprecated compatibility hook.
-
-    Page-level scrolling is now centralized in ``main.inject_smart_scroll``.
-    Keeping this as a no-op prevents stale callers from injecting a second,
-    conflicting observer or using Streamlit's deprecated component path.
-    """
-    return None
-
-
 def preload_next_step_images(
     current_cp_id: str,
     checkpoints: list,

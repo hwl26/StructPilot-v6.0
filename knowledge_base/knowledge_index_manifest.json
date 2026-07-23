@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "description": "Sharded knowledge index. Each file holds the knowledge_index docs for one pipeline checkpoint. Loaders should iterate all *.json files in knowledge_index/ and concatenate the lists.",
+  "shard_dir": "knowledge_index",
+  "shards": [
+    {
+      "file": "cp_00_general.json",
+      "checkpoint_id": "",
+      "label": "general",
+      "doc_count": 1
+    },
+    {
+      "file": "cp_01_import.json",
+      "checkpoint_id": "cp_01",
+      "label": "import",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_02_motioncorr.json",
+      "checkpoint_id": "cp_02",
+      "label": "motioncorr",
+      "doc_count": 7
+    },
+    {
+      "file": "cp_03_ctf.json",
+      "checkpoint_id": "cp_03",
+      "label": "ctf",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_04_picking.json",
+      "checkpoint_id": "cp_04",
+      "label": "picking",
+      "doc_count": 4
+    },
+    {
+      "file": "cp_05_extract.json",
+      "checkpoint_id": "cp_05",
+      "label": "extract",
+      "doc_count": 3
+    },
+    {
+      "file": "cp_06_class2d.json",
+      "checkpoint_id": "cp_06",
+      "label": "class2d",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_07_abinitio.json",
+      "checkpoint_id": "cp_07",
+      "label": "abinitio",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_08_class3d.json",
+      "checkpoint_id": "cp_08",
+      "label": "class3d",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_09_refine3d.json",
+      "checkpoint_id": "cp_09",
+      "label": "refine3d",
+      "doc_count": 6
+    },
+    {
+      "file": "cp_10_ctf_refine.json",
+      "checkpoint_id": "cp_10",
+      "label": "ctf_refine",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_11_postprocess.json",
+      "checkpoint_id": "cp_11",
+      "label": "postprocess",
+      "doc_count": 5
+    },
+    {
+      "file": "cp_12_model_build.json",
+      "checkpoint_id": "cp_12",
+      "label": "model_build",
+      "doc_count": 6
+    }
+  ],
+  "total_doc_count": 62,
+  "source_file": "knowledge_index.json (now a backup placeholder)"
+}

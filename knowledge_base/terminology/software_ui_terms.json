@@ -1,4 +1,33 @@
 {
-  "relion": {},
-  "cryosparc": {}
+  "relion": {
+    "relion_import": "Import",
+    "relion_motioncorr": "Motion correction",
+    "relion_ctffind": "CTF estimation",
+    "relion_autopick": "Auto-picking",
+    "relion_extract": "Particle extraction",
+    "relion_class2d": "2D classification",
+    "relion_select2d": "Particle selection",
+    "relion_initialmodel": "Initial model",
+    "relion_class3d": "3D classification",
+    "relion_refine3d": "3D auto-refine",
+    "relion_maskcreate": "Mask creation",
+    "relion_postprocess": "Post-processing"
+  },
+  "cryosparc": {
+    "cryosparc_import": "Import movies",
+    "cryosparc_patch_motion": "Patch motion correction",
+    "cryosparc_patch_ctf": "Patch CTF estimation",
+    "cryosparc_blob_picker": "Blob picker",
+    "cryosparc_template_picker": "Template picker",
+    "cryosparc_extract": "Particle extraction",
+    "cryosparc_2d_class": "2D classification",
+    "cryosparc_select_2d": "Select 2D classes",
+    "cryosparc_abinitio": "Ab-initio reconstruction",
+    "cryosparc_3d_class": "3D classification",
+    "cryosparc_homo_refine": "Homogeneous refinement",
+    "cryosparc_hetero_refine": "Heterogeneous refinement",
+    "cryosparc_nonuniform_refine": "Non-uniform refinement",
+    "cryosparc_mask": "Mask creation",
+    "cryosparc_validation": "Model validation"
+  }
 }

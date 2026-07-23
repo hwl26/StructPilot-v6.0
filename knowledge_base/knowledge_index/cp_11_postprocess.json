@@ -1,0 +1,250 @@
+[
+  {
+    "doc_id": "formal_cp_11_42ed2b21",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "post_processing",
+    "screen_name": "Mask creation, Post-processing, Bayesian polishing, Local-resolution estimation",
+    "checkpoint_id": "cp_11",
+    "title_cn": "mask 应该怎么做才不虚高 FSC？",
+    "title_en": "",
+    "summary": "Q: mask 应该怎么做才不虚高 FSC？\nA: mask 做法直接影响 PostProcess 的 FSC 估计，官方推荐：\n1. 用 Mask job 生成：input map = Refine3D 的 run_class001.mrc，low-pass filter 到 15 Å，threshold 选刚好覆盖结构的值。\n2. Soft edge：官方用 cosine edge 6 Å，扩展 5 Å（extend 5 Å）。soft edge 避免 Fourier 空间 mask 边缘锐利跳变引入虚假 FSC 信号。\n3. 不贴合太紧：mask 应略大于结构，留出柔性区域和 solvent 边界。过紧会让 FSC 在结构内信号集中，虚高分辨率。\n4. 球形 mask 作为对照：如果不确定，先用 Refine3D 默认球形 mask（基于 particle diameter）做 PostProcess，再对比自定义 mask 的 FSC。\n5. 检查方法：在 chimera 中叠加 mask 和 map；看 PostProcess 的 FSC 曲线是否平滑下降，有无在 mask 边界频率处突跳。\n6. 错误信号：FSC 曲线在 0.143 截断处有尖锐转折、mask 体积与结构体积比 <0.8。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+    "ui_keywords": [
+      "Mask threshold / extension / soft edge",
+      "B-factor sharpening",
+      "FSC cutoff",
+      "Polishing training",
+      "Local resolution settings",
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "ui_elements": [
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "action_steps": [
+      "mask 做法直接影响 PostProcess 的 FSC 估计，官方推荐：\n1. 用 Mask job 生成：input map = Refine3D 的 run_class001.mrc，low-pass filter 到 15 Å，threshold 选刚好覆盖结构的值。\n2. Soft edge：官方用 cosine edge 6 Å，扩展 5 Å（extend 5 Å）。soft edge 避免 Fourier 空间 mask 边缘锐利跳变引入虚假 FSC 信号。\n3. 不贴合太紧：mask 应略大于结构，留出柔性区域和 solvent 边界。过紧会让 FSC 在结构内信号集中，虚高分辨率。\n4. 球形 mask 作为对照：如果不确定，先用 Refine3D 默认球形 mask（基于 particle diameter）做 PostProcess，再对比自定义 mask 的 FSC。\n5. 检查方法：在 chimera 中叠加 mask 和 map；看 PostProcess 的 FSC 曲线是否平滑下降，有无在 mask 边界频率处突跳。\n6. 错误信号：FSC 曲线在 0.143 截断处有尖锐转折、mask 体积与结构体积比 <0.8。"
+    ],
+    "qc_checks": [
+      "mask 不切掉真实密度且不过度包含噪声",
+      "sharpen 后细节增强但噪声不过强",
+      "local resolution 与 map 视觉质量一致",
+      "polishing 或 CTF refinement 循环带来可重复改善"
+    ],
+    "common_errors": [
+      "mask 过紧导致分辨率虚高",
+      "B-factor sharpening 过度放大噪声",
+      "把一次局部改善误判为全局质量提升",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_11"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_11_af0dcb0c",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "post_processing",
+    "screen_name": "Mask creation, Post-processing, Bayesian polishing, Local-resolution estimation",
+    "checkpoint_id": "cp_11",
+    "title_cn": "post-processing 后 map 太噪怎么办？",
+    "title_en": "",
+    "summary": "Q: post-processing 后 map 太噪怎么办？\nA: map 太噪的排查顺序：\n1. Sharpening 参数：B-factor 设太负（如 -100）会放大高频噪声。用 PostProcess 的 auto-B-factor（基于 Rosenthal-Henderson plot），或手动调低 B-factor 绝对值。\n2. FSC 截断分辨率：PostProcess 的 rlnFinalResolution 决定低通滤波截止。若截止频率高于实际信号频率，高频噪声会保留。手动设 lower low-pass filter。\n3. Mask 问题：mask 过松会纳入溶剂噪声。收紧 mask 但保持 soft edge。\n4. 颗粒数不足：分辨率达不到时强 sharpening 没有信号支撑。回看 Refine3D 的颗粒数和角度分布。\n5. 局部分辨率估计：用 LocRes job 生成 local resolution map，若整体 3 Å 但局部 6 Å，说明 map 异质性大，全局 sharpening 不合适。\n6. 对比 half-map：若两个 half-map 都很噪，说明数据本身信号弱；若 half-map 平滑但 sharpened map 噪，是 sharpening 问题。\n7. 官方做法：PostProcess 的 \"Skip masking\" = No，\"Use LoG-filtered map\" 视情况。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+    "ui_keywords": [
+      "Mask threshold / extension / soft edge",
+      "B-factor sharpening",
+      "FSC cutoff",
+      "Polishing training",
+      "Local resolution settings",
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "ui_elements": [
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "action_steps": [
+      "map 太噪的排查顺序：\n1. Sharpening 参数：B-factor 设太负（如 -100）会放大高频噪声。用 PostProcess 的 auto-B-factor（基于 Rosenthal-Henderson plot），或手动调低 B-factor 绝对值。\n2. FSC 截断分辨率：PostProcess 的 rlnFinalResolution 决定低通滤波截止。若截止频率高于实际信号频率，高频噪声会保留。手动设 lower low-pass filter。\n3. Mask 问题：mask 过松会纳入溶剂噪声。收紧 mask 但保持 soft edge。\n4. 颗粒数不足：分辨率达不到时强 sharpening 没有信号支撑。回看 Refine3D 的颗粒数和角度分布。\n5. 局部分辨率估计：用 LocRes job 生成 local resolution map，若整体 3 Å 但局部 6 Å，说明 map 异质性大，全局 sharpening 不合适。\n6. 对比 half-map：若两个 half-map 都很噪，说明数据本身信号弱；若 half-map 平滑但 sharpened map 噪，是 sharpening 问题。\n7. 官方做法：PostProcess 的 \"Skip masking\" = No，\"Use LoG-filtered map\" 视情况。"
+    ],
+    "qc_checks": [
+      "mask 不切掉真实密度且不过度包含噪声",
+      "sharpen 后细节增强但噪声不过强",
+      "local resolution 与 map 视觉质量一致",
+      "polishing 或 CTF refinement 循环带来可重复改善"
+    ],
+    "common_errors": [
+      "mask 过紧导致分辨率虚高",
+      "B-factor sharpening 过度放大噪声",
+      "把一次局部改善误判为全局质量提升",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_11"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_11_ce823918",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "post_processing",
+    "screen_name": "Mask creation, Post-processing, Bayesian polishing, Local-resolution estimation",
+    "checkpoint_id": "cp_11",
+    "title_cn": "Bayesian polishing 什么时候值得做？",
+    "title_en": "",
+    "summary": "Q: Bayesian polishing 什么时候值得做？\nA: Bayesian polishing 在 3D auto-refine + PostProcess 收敛后进行，作用是估计 per-particle motion 并生成修正后的颗粒。官方 tutorial 在 3.0 Å 后执行：\n1. 适合场景：电影数据可用（有 movie frames）、分辨率优于 4 Å、颗粒数足够（>1万）。\n2. 官方效果：polishing 后分辨率从 3.0 Å 提升到 2.9 Å，map 质量明显改善。\n3. 不适合场景：单帧数据（无 movie）、分辨率 <6 Å（信号不足以拟合 motion）、样品本身 preferred orientation 严重（polishing 救不了角度问题）。\n4. 执行顺序：先 Train（估计 motion 参数，约 24 hours on GPU）→ Polish（应用参数生成新 particles.star）→ 重新 Refine3D + PostProcess。\n5. 验证：对比 polishing 前后的 FSC 分辨率和 map 质量；若没有提升，说明 motion correction 已足够好，polishing 边际收益小。\n6. 计算成本：Train 耗时长，小数据集可跳过直接用默认参数 Polish。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+    "ui_keywords": [
+      "Mask threshold / extension / soft edge",
+      "B-factor sharpening",
+      "FSC cutoff",
+      "Polishing training",
+      "Local resolution settings",
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "ui_elements": [
+      "Mask creation",
+      "Post-processing",
+      "Bayesian polishing",
+      "Local-resolution estimation"
+    ],
+    "action_steps": [
+      "Bayesian polishing 在 3D auto-refine + PostProcess 收敛后进行，作用是估计 per-particle motion 并生成修正后的颗粒。官方 tutorial 在 3.0 Å 后执行：\n1. 适合场景：电影数据可用（有 movie frames）、分辨率优于 4 Å、颗粒数足够（>1万）。\n2. 官方效果：polishing 后分辨率从 3.0 Å 提升到 2.9 Å，map 质量明显改善。\n3. 不适合场景：单帧数据（无 movie）、分辨率 <6 Å（信号不足以拟合 motion）、样品本身 preferred orientation 严重（polishing 救不了角度问题）。\n4. 执行顺序：先 Train（估计 motion 参数，约 24 hours on GPU）→ Polish（应用参数生成新 particles.star）→ 重新 Refine3D + PostProcess。\n5. 验证：对比 polishing 前后的 FSC 分辨率和 map 质量；若没有提升，说明 motion correction 已足够好，polishing 边际收益小。\n6. 计算成本：Train 耗时长，小数据集可跳过直接用默认参数 Polish。"
+    ],
+    "qc_checks": [
+      "mask 不切掉真实密度且不过度包含噪声",
+      "sharpen 后细节增强但噪声不过强",
+      "local resolution 与 map 视觉质量一致",
+      "polishing 或 CTF refinement 循环带来可重复改善"
+    ],
+    "common_errors": [
+      "mask 过紧导致分辨率虚高",
+      "B-factor sharpening 过度放大噪声",
+      "把一次局部改善误判为全局质量提升",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_11"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_11",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "post_processing",
+    "screen_name": "Sharpening Tools",
+    "checkpoint_id": "cp_11",
+    "title_cn": "cryoSPARC 后处理 — 实验室真实SOP（Non-uniform 内置锐化）",
+    "title_en": "",
+    "summary": "本 SOP 未单独设置 Sharpening Tools 后处理步骤；Non-uniform Refinement 已用数据驱动的逐频点加权锐化替代一刀切 B-factor，直接输出最终精修 map + local resolution map。Homogeneous 输出的 Full Map 为 A+B 合并+锐化版本。基于 300kV/0.96Å/50e⁻ 采集参数。",
+    "ui_keywords": [
+      "Non-uniform Refinement",
+      "sharpening",
+      "B-factor",
+      "local_resolution",
+      "Dynamic Mask",
+      "Homogeneous Refinement",
+      "Full Map"
+    ],
+    "ui_elements": [
+      "Non-uniform Refinement",
+      "Sharpening Tools"
+    ],
+    "action_steps": [
+      "本 SOP 未单独设置后处理 Job；Non-uniform Refinement 已内置逐频点加权锐化（数据驱动，替代一刀切 B-factor）。",
+      "Non-uniform 输出：最终精修 map + local resolution map（每体素分辨率热力图，判断哪些区域好/需改进）+ 动态软掩膜（自动识别蛋白 vs 溶剂，排除溶剂噪声，Dynamic mask use absolute value=OFF）。",
+      "Homogeneous 输出的 Full Map 为 Half Map A+B 合并+锐化版本，可作为 Non-uniform 前的中间结果。",
+      "若需额外锐化可参考 cryoSPARC 官方 Sharpening Tools，但实验室标准管线中 Non-uniform 已为最终输出。"
+    ],
+    "qc_checks": [
+      "Non-uniform 输出 local resolution map 合理（柔性区域分辨率改善最明显）",
+      "Non-uniform 分辨率比 Homogeneous 提升 0.1-0.3Å",
+      "Full Map 无溶剂噪声污染（动态软掩膜生效）"
+    ],
+    "common_errors": [
+      "在 Non-uniform 之外重复 B-factor 锐化 → 可能过度锐化放大噪声（Non-uniform 已做数据驱动加权）",
+      "跳过 Non-uniform 直接用 Homogeneous Full Map → 柔性区域分辨率损失 0.1-0.3Å"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_11"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Mask (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_11",
+    "title_cn": "RELION 溶剂掩膜创建(MaskCreate)与后处理锐化(PostProcess)",
+    "title_en": "RELION SPA Tutorial — Mask",
+    "summary": "3D auto-refine 后需锐化 map。gold-standard FSC 在精修中仅用未掩膜 map（除非用 solvent-flattened FSCs），导致分辨率被溶剂区噪声低估。先做掩膜定义蛋白/溶剂边界，再做 post-processing（B-factor 锐化 + 计算 masked FSC）。",
+    "action_steps": [
+      "Mask Creation：I/O 选 Refine3D/job019/run_class001.mrc",
+      "Mask tab：Lowpass filter map (A): 15，Pixel size (A): -1（自动从header），Initial binarisation threshold: 0.01，Extend binary map: 3 px，Add soft-edge: 8 px",
+      "Post-processing：I/O 选一半未滤波 half-map + Solvent mask + Calibrated pixel size: 1.244",
+      "Sharpen tab：Estimate B-factor automatically?: Yes，Lowest resolution for auto-B fit (A): 10",
+      "MTF of detector: mtf_k2_200kV.star，Original detector pixel size: 0.885"
+    ],
+    "qc_checks": [
+      "PostProcess 后查看 FSC 曲线与 Guinier 图",
+      "phase-randomized FSC（红曲线）在估计分辨率处应≈0；否则掩膜过锐",
+      "掩膜应包裹整个结构但不含过多溶剂"
+    ],
+    "common_errors": [
+      "掩膜过锐或细节过多→FSC 红曲线不归零，需更强低通/更软更宽掩膜后重做",
+      "像素尺寸若偏差几个百分点，在 PostProcess 提供正确 Calibrated pixel size 即可，无需重精修",
+      "掩膜 soft-edge 余弦过渡很重要，过锐对 FSC 校正敏感"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_11",
+      "mask",
+      "postprocess",
+      "sharpen",
+      "bfactor"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Mask.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

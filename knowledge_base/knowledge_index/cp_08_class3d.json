@@ -1,0 +1,239 @@
+[
+  {
+    "doc_id": "formal_cp_08_9a65f557",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_3d",
+    "screen_name": "3D classification, Unsupervised 3D classification",
+    "checkpoint_id": "cp_08",
+    "title_cn": "3D 分类 class 数怎么选？",
+    "title_en": "",
+    "summary": "Q: 3D 分类 class 数怎么选？\nA: 官方 tutorial 用 Number of classes = 4，理由 \"Using more classes will divide the data set into smaller subsets\"。选择原则：\n1. homogeneous 数据：2–4 class 即可，让坏颗粒有一个「sink class」。\n2. 已知异质性：按预期构象数 ×1.5–2 设 class 数，给分类留余量。\n3. 未知异质性：从 4 开始，观察各 class 颗粒数和 map 差异；若某 class 颗粒 <5% 且 map 差，下次减少 class 数。\n4. class 太多的风险：每个 class 颗粒少，分辨率低，难以判断哪个 class 值得继续；计算时间线性增长。\n5. Regularisation parameter T：3D 分类官方推荐 T=3–4（tutorial 中 Class3D 用 4）；T 高让分类更「软」（颗粒可分到多 class），T 低让分类更「硬」。\n6. Initial low-pass filter：官方用 50 Å（\"For ribosome we often use 70 Å, for smaller particles we typically use 40-60 Å\"），避免高分辨率 reference bias。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Class3D.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask",
+      "Angular sampling",
+      "Symmetry",
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "ui_elements": [
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "action_steps": [
+      "官方 tutorial 用 Number of classes = 4，理由 \"Using more classes will divide the data set into smaller subsets\"。选择原则：\n1. homogeneous 数据：2–4 class 即可，让坏颗粒有一个「sink class」。\n2. 已知异质性：按预期构象数 ×1.5–2 设 class 数，给分类留余量。\n3. 未知异质性：从 4 开始，观察各 class 颗粒数和 map 差异；若某 class 颗粒 <5% 且 map 差，下次减少 class 数。\n4. class 太多的风险：每个 class 颗粒少，分辨率低，难以判断哪个 class 值得继续；计算时间线性增长。\n5. Regularisation parameter T：3D 分类官方推荐 T=3–4（tutorial 中 Class3D 用 4）；T 高让分类更「软」（颗粒可分到多 class），T 低让分类更「硬」。\n6. Initial low-pass filter：官方用 50 Å（\"For ribosome we often use 70 Å, for smaller particles we typically use 40-60 Å\"），避免高分辨率 reference bias。"
+    ],
+    "qc_checks": [
+      "不同 3D class 差异有生物学或质量解释",
+      "目标 class 占比和分辨率合理",
+      "去除明显坏颗粒或错误构象",
+      "选择的 class 后续 refinement 表现更好"
+    ],
+    "common_errors": [
+      "class 数过多导致过拟合或颗粒分散",
+      "mask 或参考引入偏置",
+      "把低占比但关键构象误删",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_08"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_08_95184543",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_3d",
+    "screen_name": "3D classification, Unsupervised 3D classification",
+    "checkpoint_id": "cp_08",
+    "title_cn": "如何判断哪个 3D class 应该进入精修？",
+    "title_en": "",
+    "summary": "Q: 如何判断哪个 3D class 应该进入精修？\nA: 判断标准：\n1. 颗粒数：官方 tutorial 中 largest class (class002) 被选中精修。颗粒数过少（<总颗粒10%）的 class 通常 map 质量差。\n2. Map 质量：在 Display 或 chimera 中查看每个 class 的 run_it???_class???.mrc，结构清晰、无噪声团块的 class 优先。\n3. 分辨率：查看 _model.star 中各 class 的 rlnEstimatedResolution，分辨率高的 class 信号更好。\n4. 与预期结构对比：如果有已知结构，看哪个 class map 更接近。\n5. 异质性判断：如果多个 class map 看起来是同一构象的不同视角，可合并进入精修；如果是明显不同构象，分别精修。\n6. 在 Select job 中按 class 选颗粒，或手动从 Class3D/job???/run_it025_model.star 挑选 class。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Class3D.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask",
+      "Angular sampling",
+      "Symmetry",
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "ui_elements": [
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "action_steps": [
+      "判断标准：\n1. 颗粒数：官方 tutorial 中 largest class (class002) 被选中精修。颗粒数过少（<总颗粒10%）的 class 通常 map 质量差。\n2. Map 质量：在 Display 或 chimera 中查看每个 class 的 run_it???_class???.mrc，结构清晰、无噪声团块的 class 优先。\n3. 分辨率：查看 _model.star 中各 class 的 rlnEstimatedResolution，分辨率高的 class 信号更好。\n4. 与预期结构对比：如果有已知结构，看哪个 class map 更接近。\n5. 异质性判断：如果多个 class map 看起来是同一构象的不同视角，可合并进入精修；如果是明显不同构象，分别精修。\n6. 在 Select job 中按 class 选颗粒，或手动从 Class3D/job???/run_it025_model.star 挑选 class。"
+    ],
+    "qc_checks": [
+      "不同 3D class 差异有生物学或质量解释",
+      "目标 class 占比和分辨率合理",
+      "去除明显坏颗粒或错误构象",
+      "选择的 class 后续 refinement 表现更好"
+    ],
+    "common_errors": [
+      "class 数过多导致过拟合或颗粒分散",
+      "mask 或参考引入偏置",
+      "把低占比但关键构象误删",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_08"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_08_4ca77817",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_3d",
+    "screen_name": "3D classification, Unsupervised 3D classification",
+    "checkpoint_id": "cp_08",
+    "title_cn": "3D 分类能解决构象异质性吗？",
+    "title_en": "",
+    "summary": "Q: 3D 分类能解决构象异质性吗？\nA: 3D 分类是 RELION 处理构象异质性的主要工具，但有局限：\n1. 能解决：离散构象态（如开放/闭合、结合/未结合），不同构象会分到不同 class。\n2. 难解决：连续构象变化（如 domain flexible linker），需要 multi-body refinement 或 DynaMight 等专门工具。\n3. 官方建议：3D 分类时 Symmetry = C1（\"it is often a good idea to perform an initial classification without any symmetry, so bad particles can get separated\"），让坏颗粒先分出去。\n4. class 数和 T 影响敏感度：T=4 适合软分类，构象差异小时可能需要降 T 让分类更果断。\n5. 多轮分类：第一轮 4 class 挑出主构象，再用主构象颗粒做第二轮更细的 3D 分类。\n6. 如果 3D 分类后所有 class map 都相似，说明数据可能 homogeneous，或异质性超出 3D 分类能力。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Class3D.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask",
+      "Angular sampling",
+      "Symmetry",
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "ui_elements": [
+      "3D classification",
+      "Unsupervised 3D classification"
+    ],
+    "action_steps": [
+      "3D 分类是 RELION 处理构象异质性的主要工具，但有局限：\n1. 能解决：离散构象态（如开放/闭合、结合/未结合），不同构象会分到不同 class。\n2. 难解决：连续构象变化（如 domain flexible linker），需要 multi-body refinement 或 DynaMight 等专门工具。\n3. 官方建议：3D 分类时 Symmetry = C1（\"it is often a good idea to perform an initial classification without any symmetry, so bad particles can get separated\"），让坏颗粒先分出去。\n4. class 数和 T 影响敏感度：T=4 适合软分类，构象差异小时可能需要降 T 让分类更果断。\n5. 多轮分类：第一轮 4 class 挑出主构象，再用主构象颗粒做第二轮更细的 3D 分类。\n6. 如果 3D 分类后所有 class map 都相似，说明数据可能 homogeneous，或异质性超出 3D 分类能力。"
+    ],
+    "qc_checks": [
+      "不同 3D class 差异有生物学或质量解释",
+      "目标 class 占比和分辨率合理",
+      "去除明显坏颗粒或错误构象",
+      "选择的 class 后续 refinement 表现更好"
+    ],
+    "common_errors": [
+      "class 数过多导致过拟合或颗粒分散",
+      "mask 或参考引入偏置",
+      "把低占比但关键构象误删",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_08"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_08",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "class_3d",
+    "screen_name": "Heterogeneous Refinement",
+    "checkpoint_id": "cp_08",
+    "title_cn": "cryoSPARC 3D 分类 — Heterogeneous Refinement",
+    "title_en": "",
+    "summary": "用 Ab-Initio 的全部 3D 模型（好坏都要，垃圾类当海绵吸坏颗粒）作为参考，把混合颗粒按真实 3D 构象分类同时细化每类，本质是有参考的 3D 分类。实验室参数：Refinement box size=直径÷0.96×1.5~2（与 Extract 一致，越小对 GPU 越友好）；Max alignment resolution=3Å；Cache on SSD=OFF。输出分类模型+颗粒子集，选最好 class 进 Homogeneous。",
+    "ui_keywords": [
+      "refinement_box_size",
+      "max_alignment_resolution",
+      "cache_particles_on_ssd",
+      "Heterogeneous Refinement",
+      "class_similarity"
+    ],
+    "ui_elements": [
+      "Heterogeneous Refinement"
+    ],
+    "action_steps": [
+      "输入：去重后颗粒 + Ab-Initio 生成的所有初始模型（好坏都要，垃圾类当海绵吸收坏颗粒）。",
+      "Refinement box size (Voxels)=颗粒直径÷0.96×1.5~2（与 Extract box size 一致，越小对 GPU 越友好）。",
+      "Max alignment resolution=3Å（比 Ab-Initio 的 10Å 精细得多，但分类阶段不必 push 到极限）。",
+      "Cache particle images on SSD=OFF（减少运算缓存）。",
+      "输出每个 3D class 的密度图 + 对应颗粒子集；选密度图最像蛋白（二级结构可见、无碎片噪声）的 class 进 Homogeneous；若两个 class 都像真构象则都保留分别精修。"
+    ],
+    "qc_checks": [
+      "每个 class 密度图可辨二级结构（非碎片噪声）",
+      "好 class 颗粒数足够支撑后续精修",
+      "Class similarity 未过激拆分（默认 0.1）"
+    ],
+    "common_errors": [
+      "只输入一个 Ab-Initio model → 缺少垃圾类吸收坏颗粒，好类混噪声",
+      "Class similarity 太低（0.03）→ 分类过激，把一个好构象硬拆成两个",
+      "分辨率设太高 → 分类阶段不需要，3Å 足够分辨不同构象",
+      "T08 下游 FSC 曲线震荡/突然下降 → Heterogeneous 分类未分干净，增加 class 数或调低 class similarity"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_08"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Class3D (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_08",
+    "title_cn": "RELION 3D 分类(Class3D)",
+    "title_en": "RELION SPA Tutorial — Class3D",
+    "summary": "无监督 3D 分类，relion 的 3D multi-reference refinement 提供强大异质性分析。从 3D classification job-type 运行，可对数据集分亚组描述变异性。",
+    "action_steps": [
+      "I/O tab：Input images STAR: Select/job014/particles.star，Reference map: InitialModel/job015/initial_model.mrc",
+      "Reference tab：Ref. map is on absolute greyscale?: Yes，Initial low-pass filter (A): 50，Symmetry: C1",
+      "CTF tab：Do CTF correction?: Yes，Ignore CTFs until first peak?: No",
+      "Optimisation tab：Number of classes: 4，Regularisation parameter T: 4，Number of iterations: 25，Mask diameter (A): 200，Mask individual particles with zeros?: Yes，Limit resolution E-step to (A): -1，Use Blush regularisation?: Yes",
+      "Sampling tab 通常不改；Compute tab：Use GPU acceleration?: Yes；Running tab：Number of MPI procs: 5，threads: 6",
+      "Subset selection：Automatically select 2D classes?: No，手动选优类丢弃亚优类"
+    ],
+    "qc_checks": [
+      "在 2D slices 查看类重建评估未解异质性（模糊/条纹区）",
+      "用 relion_star_printtable 查看 rlnResolution/rlnSsnrMap",
+      "grep _rlnChangesOptimalClasses 检查收敛"
+    ],
+    "common_errors": [
+      "类平均过噪→降低 T；分辨率不足→提高 T",
+      "初始分类常用 C1 无对称以分离坏颗粒并验证对称性",
+      "Blush regularisation 需 relion-5 conda + CUDA GPU，否则设 No",
+      "3D 分类计算更耗内存，常用更多 threads"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_08",
+      "class3d",
+      "classification",
+      "blush"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class3D.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

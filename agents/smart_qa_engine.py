@@ -216,10 +216,10 @@ class QueryUnderstandingAgent:
         current_software: str = "",
         chat_history_summary: str = "",
     ) -> QueryUnderstanding:
-        """理解用户查询，返回结构化理解结果.
+        """理解用户查询，返回结构化理解结果（规则匹配模式）.
 
-        性能优化：始终用规则匹配（navigator 路由已经做了意图识别），
-        不再调用 LLM——省掉一次 ~25s 的 LLM 调用。
+        navigator 路由已经做了意图识别，此处用规则匹配补充
+        阶段/软件/参数/缺失信息。
         """
         return self._understand_with_rules(
             user_message, current_stage, current_software
@@ -230,107 +230,6 @@ class QueryUnderstandingAgent:
             self.llm is not None
             and getattr(self.llm, "enabled", False)
         )
-
-    def _understand_with_llm(
-        self,
-        user_message: str,
-        current_stage: str,
-        current_software: str,
-        chat_history_summary: str,
-    ) -> Optional[QueryUnderstanding]:
-        """使用 LLM 做意图理解（增强版）.
-
-        增强点：
-        - system prompt 覆盖完整 14 步工作流（cp_01~cp_12）+ cryoSPARC/RELION 双体系；
-        - 五类意图给出精确区分规则，避免 parameter_advice / concept_explain /
-          operation_guide / fault_troubleshoot 互相混淆；
-        - 对 LLM 返回做稳健解析（去 code fence、截取首尾大括号、阶段名归一化到 cp_XX）；
-        - 只要意图可识别即接受，不再因 confidence=0 静默降级到规则模式。
-        """
-        system_prompt = (
-            "你是 cryo-EM（冷冻电镜）单颗粒分析智能问答系统的【查询理解】模块。\n"
-            "用户用中文口语提问，你需要把它解析为结构化 JSON。\n\n"
-            "## 14 步工作流（checkpoint_id -> 中文名 / 常用软件 Job）\n"
-            "cp_01 数据导入 (Import / Import Movies) — 关键参数 pixel_size, voltage, dose\n"
-            "cp_02 运动校正 (Motion Correction / Patch Motion) — bfactor, patches\n"
-            "cp_03 CTF 估计与照片筛选 (CTF Estimation / Patch CTF) — defocus, amplitude_contrast\n"
-            "cp_04 颗粒挑选 (Particle Picking / Blob·Topaz·Template Picker)\n"
-            "cp_05 颗粒提取 (Particle Extraction / Extract) — box_size, binning\n"
-            "cp_06 2D 分类与精选 (2D Classification / Select 2D) — num_classes\n"
-            "cp_07 Ab-initio 初始模型 (Ab-Initio) — symmetry\n"
-            "cp_08 3D 分类 / 异质性 (3D Classification / Heterogeneous Refinement)\n"
-            "cp_09 3D 精修 (Homogeneous / Non-Uniform Refinement) — FSC, 分辨率\n"
-            "cp_10 CTF 精修 (CTF Refinement / Beam Tilt·Trefoil)\n"
-            "cp_11 后处理与锐化 (Post-Processing / Sharpening) — bfactor, mask\n"
-            "cp_12 模型构建与验证 (Model Building / Coot·Phenix·Validation)\n\n"
-            "## 软件体系（detected_software 取值）\n"
-            "cryosparc = cryoSPARC 体系；relion = RELION 体系；空字符串 = 用户未指定\n\n"
-            "## 五类意图 user_intent（必须严格取其一）\n"
-            "parameter_advice   : 问『某个参数怎么设/调/选/多少合适/推荐值/影响』\n"
-            "fault_troubleshoot: 问『结果不好/失败/报错/异常/某现象怎么解决/排查』\n"
-            "operation_guide   : 问『怎么做/步骤/操作流程/SOP/怎么跑/怎么用』\n"
-            "concept_explain   : 问『X 是什么/含义/原理/作用/为什么』（纯概念，无具体操作）\n"
-            "decision_advice   : 问『A 还是 B / 哪个好 / 要不要做 / 区别 / 选什么』\n"
-            "区分示例：『CTF 是什么』=concept_explain；『CTF 参数怎么调』=parameter_advice；"
-            "『怎么做 CTF』=operation_guide；『CTF 拟合差怎么办』=fault_troubleshoot；"
-            "『cryoSPARC 还是 RELION』=decision_advice。\n\n"
-            "## 输出格式\n"
-            "只输出一个 JSON 对象，不要任何解释文字、不要代码块标记。字段：\n"
-            '{"detected_stage":"cp_XX 或空串","detected_software":"cryosparc/relion/空串",'
-            '"user_intent":"上述五类之一","problem_type":"quality_degradation/parameter_error/data_limitation/classification_issue/空串",'
-            '"mentioned_parameters":["参数名"],"missing_information":["缺失信息"],'
-            '"confidence":0.0~1.0,"should_ask_clarification":false,'
-            '"clarification_questions":[]}'
-        )
-        user_prompt = json.dumps({
-            "user_message": user_message,
-            "current_stage": current_stage or "",
-            "current_software": current_software or "",
-            "chat_history_summary": (chat_history_summary or "")[:500],
-        }, ensure_ascii=False)
-        instruction = (
-            f"{system_prompt}\n\n用户输入（JSON）：\n{user_prompt}\n\n请输出理解结果 JSON："
-        )
-        try:
-            raw = self.llm._dispatch_rewrite(user_message, instruction, context="query_understanding")
-            text = (raw or "").strip()
-            # 稳健解析：去掉可能的 ```json 代码围栏
-            if "```" in text:
-                text = re.sub(r"```(?:json)?", "", text).strip()
-            start, end = text.find("{"), text.rfind("}")
-            if start == -1 or end <= start:
-                return None
-            data = json.loads(text[start:end + 1])
-
-            intent = (data.get("user_intent") or "").strip()
-            if intent not in self.INTENT_KEYWORDS:
-                return None
-            detected_stage = self._normalize_stage(
-                data.get("detected_stage", "") or "", current_stage
-            )
-            try:
-                confidence = float(data.get("confidence", 0.6))
-            except (TypeError, ValueError):
-                confidence = 0.6
-            confidence = max(0.0, min(1.0, confidence))
-
-            result = QueryUnderstanding(
-                detected_stage=detected_stage,
-                detected_stage_name=self._stage_name(detected_stage),
-                detected_software=(data.get("detected_software") or current_software or "").strip(),
-                user_intent=intent,
-                problem_type=data.get("problem_type", "") or "",
-                mentioned_parameters=data.get("mentioned_parameters", []) or [],
-                missing_information=data.get("missing_information", []) or [],
-                confidence=confidence,
-                should_ask_clarification=bool(data.get("should_ask_clarification", False)),
-                clarification_questions=data.get("clarification_questions", []) or [],
-                source="llm",
-            )
-            self._apply_intent_flags(result)
-            return result
-        except Exception:
-            return None
 
     def _normalize_stage(self, raw_stage: str, current_stage: str) -> str:
         """把 LLM 返回的阶段描述（cp_XX / 阶段名 / 英文名 / 缩写）归一化为 cp_XX.
@@ -592,49 +491,11 @@ class QueryExpansionAgent:
         user_message: str,
         understanding: QueryUnderstanding,
     ) -> QueryExpansion:
-        """扩展查询，返回结构化扩展结果.
-
-        性能优化：查询扩展始终用规则模式（同义词+缩写扩展已经足够），
-        不再调用 LLM——省掉一次 ~25s 的 LLM 调用。
-        """
+        """扩展查询，返回结构化扩展结果（规则模式：同义词+缩写扩展）."""
         return self._expand_with_rules(user_message, understanding)
 
     def _llm_available(self) -> bool:
         return self.llm is not None and getattr(self.llm, "enabled", False)
-
-    def _expand_with_llm(
-        self, user_message: str, understanding: QueryUnderstanding
-    ) -> Optional[QueryExpansion]:
-        instruction = (
-            "你是 cryo-EM 问答系统的查询扩展模块。把用户问题扩展为检索关键词。"
-            "只输出 JSON。字段：search_queries(检索查询字符串数组), "
-            "keywords_cn(中文关键词), keywords_en(英文关键词), "
-            "related_stage_ids(相关阶段ID如cp_06), related_parameters(参数名), "
-            "related_problem_ids(问题ID如2d_stripe_noise), image_search_keywords(图片检索关键词)\n\n"
-            f"用户问题：{user_message}\n"
-            f"已检测阶段：{understanding.detected_stage}\n"
-            f"已检测意图：{understanding.user_intent}\n"
-            f"已检测问题类型：{understanding.problem_type}"
-        )
-        try:
-            raw = self.llm._dispatch_rewrite(user_message, instruction, context="query_expansion")
-            text = raw.strip()
-            start, end = text.find("{"), text.rfind("}")
-            if start == -1 or end == -1 or end <= start:
-                return None
-            data = json.loads(text[start:end + 1])
-            return QueryExpansion(
-                search_queries=data.get("search_queries", [user_message]),
-                keywords_cn=data.get("keywords_cn", []),
-                keywords_en=data.get("keywords_en", []),
-                related_stage_ids=data.get("related_stage_ids", []),
-                related_parameters=data.get("related_parameters", []),
-                related_problem_ids=data.get("related_problem_ids", []),
-                image_search_keywords=data.get("image_search_keywords", []),
-                source="llm",
-            )
-        except Exception:
-            return None
 
     def _compute_acronym_terms(self, user_message: str) -> List[str]:
         """把用户问题中的常见 cryo-EM 缩写扩展为全称关键词。
@@ -1077,72 +938,15 @@ class SOPReasoningAgent:
         retrieval: RetrievalResult,
         current_software: str = "",
     ) -> SOPReasoning:
-        """结合检索结果和用户上下文进行推理.
+        """结合检索结果和用户上下文进行推理（规则模式）.
 
-        性能优化：始终用规则推理（RAG 检索结果 + 规则模板已经足够），
-        不再调用 LLM——省掉一次 ~25s 的 LLM 调用。
-        最终回答质量由 _polish_reply 中的 LLM rewrite 保证。
+        RAG 检索结果 + 规则模板推理；最终回答质量由 _polish_reply 中的
+        LLM rewrite 保证。
         """
         return self._reason_with_rules(understanding, expansion, retrieval, current_software)
 
     def _llm_available(self) -> bool:
         return self.llm is not None and getattr(self.llm, "enabled", False)
-
-    def _reason_with_llm(
-        self,
-        understanding: QueryUnderstanding,
-        expansion: QueryExpansion,
-        retrieval: RetrievalResult,
-        current_software: str,
-    ) -> Optional[SOPReasoning]:
-        """LLM 推理."""
-        context_parts = []
-        if retrieval.sop_snippets:
-            context_parts.append("SOP: " + "\n".join(retrieval.sop_snippets))
-        if retrieval.fault_cards:
-            for fc in retrieval.fault_cards[:2]:
-                context_parts.append(f"故障卡: {fc.get('title_cn', '')} - {fc.get('symptom_cn', '')}")
-        if retrieval.parameter_rules:
-            for pr in retrieval.parameter_rules[:3]:
-                context_parts.append(f"参数规则: {json.dumps(pr, ensure_ascii=False)}")
-        if retrieval.glossary_entries:
-            for gl in retrieval.glossary_entries[:2]:
-                context_parts.append(f"术语: {gl.get('term', '')} - {gl.get('definition_cn', '')}")
-
-        context = "\n".join(context_parts)[:2000]
-        instruction = (
-            "你是 cryo-EM 数据处理推理模块。根据理解结果和检索知识，推理出结构化结论。"
-            "只输出 JSON。字段：stage_judgment(阶段判断), problem_analysis(问题分析), "
-            "knowledge_basis(知识依据数组), recommended_params(推荐参数数组{param,value,reason}), "
-            "operation_steps(操作步骤数组), qc_judgment(质控判断), "
-            "decision_options(决策选项数组{option,reason}), risk_warnings(风险提示数组), "
-            "next_step_hint(下一步提示)\n\n"
-            f"理解结果: {json.dumps(understanding.__dict__, ensure_ascii=False, default=str)}\n"
-            f"检索知识:\n{context}"
-        )
-        try:
-            raw = self.llm._dispatch_rewrite(
-                understanding.detected_stage or "reasoning", instruction, context="sop_reasoning"
-            )
-            text = raw.strip()
-            start, end = text.find("{"), text.rfind("}")
-            if start == -1 or end == -1 or end <= start:
-                return None
-            data = json.loads(text[start:end + 1])
-            return SOPReasoning(
-                stage_judgment=data.get("stage_judgment", ""),
-                problem_analysis=data.get("problem_analysis", ""),
-                knowledge_basis=data.get("knowledge_basis", []),
-                recommended_params=data.get("recommended_params", []),
-                operation_steps=data.get("operation_steps", []),
-                qc_judgment=data.get("qc_judgment", ""),
-                decision_options=data.get("decision_options", []),
-                risk_warnings=data.get("risk_warnings", []),
-                next_step_hint=data.get("next_step_hint", ""),
-                source="llm",
-            )
-        except Exception:
-            return None
 
     def _reason_with_rules(
         self,
@@ -1519,6 +1323,43 @@ class SmartQAEngine:
         self.reasoning_agent = SOPReasoningAgent(llm=llm, kb_dir=kb_dir)
         self.composer = AnswerComposerAgent(llm=llm, kb_dir=kb_dir)
 
+    def understand_and_expand(
+        self,
+        user_text: str,
+        current_stage: str = "",
+        current_software: str = "",
+        chat_history_summary: str = "",
+    ) -> Tuple[QueryUnderstanding, QueryExpansion]:
+        """合并理解 + 扩展为单一阶段（规则模式，零 LLM 调用）.
+
+        一次完成意图识别 + 查询扩展，减少主流程的函数调用与 try/except 开销。
+        返回 (understanding, expansion) 元组，保持与原 understand() + expand()
+        串行调用完全兼容的返回值。
+
+        性能说明：understand 与 expand 均为规则模式（不调 LLM），合并后仍为
+        规则模式；对 concept_explain 快速通道，expansion 会被丢弃但开销可忽略。
+        """
+        # 阶段 1：理解（规则模式）
+        try:
+            understanding = self.understanding_agent.understand(
+                user_text, current_stage, current_software, chat_history_summary
+            )
+        except Exception:
+            understanding = QueryUnderstanding(
+                detected_stage=current_stage,
+                detected_software=current_software,
+                confidence=0.0,
+                source="rule",
+            )
+
+        # 阶段 2：扩展（规则模式，依赖 understanding 结果）
+        try:
+            expansion = self.expansion_agent.expand(user_text, understanding)
+        except Exception:
+            expansion = QueryExpansion(search_queries=[user_text], source="rule")
+
+        return understanding, expansion
+
     def process(
         self,
         user_text: str,
@@ -1538,23 +1379,16 @@ class SmartQAEngine:
         chat_summary = getattr(state, "session_summary", "")
         response_profile = normalize_response_profile(response_profile)
 
-        # 1. Query Understanding
+        # 1+2. Query Understanding + Expansion（合并为单一阶段，减少串行调用开销）
         t0 = time.perf_counter()
-        try:
-            understanding = self.understanding_agent.understand(
-                user_text, current_stage, current_software, chat_summary
-            )
-        except Exception:
-            understanding = QueryUnderstanding(
-                detected_stage=current_stage,
-                detected_software=current_software,
-                confidence=0.0,
-                source="rule",
-            )
-        timing["understand_ms"] = int((time.perf_counter() - t0) * 1000)
+        understanding, expansion = self.understand_and_expand(
+            user_text, current_stage, current_software, chat_summary
+        )
+        timing["understand_and_expand_ms"] = int((time.perf_counter() - t0) * 1000)
 
-        # ✅ 新增：概念问答快速通道
+        # ✅ 概念问答快速通道
         # 对于概念解释类问题，跳过复杂的 RAG 检索，直接调用 LLM
+        # （expansion 已在 understand_and_expand 中产出，概念路径不使用，开销可忽略）
         if understanding.user_intent == "concept_explain":
             t_fast = time.perf_counter()
             # 只检索术语库
@@ -1580,7 +1414,7 @@ class SmartQAEngine:
                         response_profile=response_profile,
                     )
                     timing["concept_fast_ms"] = int((time.perf_counter() - t_fast) * 1000)
-                    timing["total_ms"] = timing["concept_fast_ms"] + timing["understand_ms"]
+                    timing["total_ms"] = timing["concept_fast_ms"] + timing["understand_and_expand_ms"]
 
                     return {
                         "understanding": understanding,
@@ -1606,7 +1440,7 @@ class SmartQAEngine:
             if glossary_entry:
                 glossary_text = f"## {glossary_entry.get('term', '概念')}\n\n{glossary_entry.get('definition_cn', '')}"
                 timing["concept_fast_ms"] = int((time.perf_counter() - t_fast) * 1000)
-                timing["total_ms"] = timing["concept_fast_ms"] + timing["understand_ms"]
+                timing["total_ms"] = timing["concept_fast_ms"] + timing["understand_and_expand_ms"]
 
                 return {
                     "understanding": understanding,
@@ -1627,13 +1461,7 @@ class SmartQAEngine:
                 }
         # 概念问答快速通道结束，其他意图继续走完整流程
 
-        # 2. Query Expansion
-        t0 = time.perf_counter()
-        try:
-            expansion = self.expansion_agent.expand(user_text, understanding)
-        except Exception:
-            expansion = QueryExpansion(search_queries=[user_text], source="rule")
-        timing["expand_ms"] = int((time.perf_counter() - t0) * 1000)
+        # （expansion 已在上方 understand_and_expand 中产出，此处直接进入检索）
 
         # 3. RAG Retrieval
         t0 = time.perf_counter()

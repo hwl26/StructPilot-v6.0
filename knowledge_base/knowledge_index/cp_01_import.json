@@ -1,0 +1,235 @@
+[
+  {
+    "doc_id": "formal_cp_01_d7ce267f",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "data_import",
+    "screen_name": "Import, Getting organised / project setup",
+    "checkpoint_id": "cp_01",
+    "title_cn": "RELION 项目目录应该怎么组织？",
+    "title_en": "",
+    "summary": "Q: RELION 项目目录应该怎么组织？\nA: RELION 项目目录组织原则：\n1. 固定项目根目录：从单一目录启动 RELION GUI，避免在不同目录反复启动导致相对路径和 job 依赖混乱。\n2. 目录结构：原始 movies/micrographs、Import 输出、后续 job 输出、STAR/metadata 文件保持清晰路径层级。\n3. 导入后必查三项：文件数量与原始数据一致；STAR 文件路径可访问；pixel size、voltage、Cs、optics group 与采集记录一致。\n4. 不要在不同目录反复启动同一项目，以免后续 job 依赖断裂。\nEvidence grade: A\nRisk grade: low\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ImportTomo.html; https://github.com/3dem/relion/issues/1327",
+    "ui_keywords": [
+      "Pixel size",
+      "Voltage",
+      "Spherical aberration / Cs",
+      "Input files pattern",
+      "Optics group / metadata",
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "ui_elements": [
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "action_steps": [
+      "RELION 项目目录组织原则：\n1. 固定项目根目录：从单一目录启动 RELION GUI，避免在不同目录反复启动导致相对路径和 job 依赖混乱。\n2. 目录结构：原始 movies/micrographs、Import 输出、后续 job 输出、STAR/metadata 文件保持清晰路径层级。\n3. 导入后必查三项：文件数量与原始数据一致；STAR 文件路径可访问；pixel size、voltage、Cs、optics group 与采集记录一致。\n4. 不要在不同目录反复启动同一项目，以免后续 job 依赖断裂。"
+    ],
+    "qc_checks": [
+      "导入后的文件数量与原始数据一致",
+      "STAR 文件中的路径可访问",
+      "pixel size 和 optics 信息与显微镜记录一致",
+      "项目目录结构清晰，后续 job 可复现"
+    ],
+    "common_errors": [
+      "从错误目录启动 RELION GUI，导致相对路径混乱",
+      "pixel size 写错，后续 CTF、重构尺度都会受影响",
+      "重复或不一致的 mdoc/STAR metadata 导致导入异常",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "low",
+      "cp_01"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_01_99da22dd",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "data_import",
+    "screen_name": "Import, Getting organised / project setup",
+    "checkpoint_id": "cp_01",
+    "title_cn": "导入时 pixel size 写错会影响什么？",
+    "title_en": "",
+    "summary": "Q: 导入时 pixel size 写错会影响什么？\nA: pixel size 是 CTF 估计、颗粒尺寸、box size、三维重构尺度和模型解释的基础 metadata。写错会导致：\n1. CTF 估计：defocus 拟合在错误尺度上偏移，Thon rings 拟合不准。\n2. 颗粒挑选：LoG 的 diameter filter、box size 估算全部偏离实际颗粒尺寸。\n3. 3D 重构：map 尺度失真，分辨率估计和 model building 全部失效。\n4. 后续修正成本高：即使某些 job 能运行，结果也难以解释。\n保守做法：Import 后立即核对 STAR/optics 的 rlnImagePixelSize 与显微镜记录，发现错误时从正确 metadata 重新导入，而不是后期零散补救。\nRELION 官方文档有专门章节讨论 pixel size 问题（PixelSizeIssues.html）。\nEvidence grade: A\nRisk grade: low\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ImportTomo.html; https://github.com/3dem/relion/issues/1327",
+    "ui_keywords": [
+      "Pixel size",
+      "Voltage",
+      "Spherical aberration / Cs",
+      "Input files pattern",
+      "Optics group / metadata",
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "ui_elements": [
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "action_steps": [
+      "pixel size 是 CTF 估计、颗粒尺寸、box size、三维重构尺度和模型解释的基础 metadata。写错会导致：\n1. CTF 估计：defocus 拟合在错误尺度上偏移，Thon rings 拟合不准。\n2. 颗粒挑选：LoG 的 diameter filter、box size 估算全部偏离实际颗粒尺寸。\n3. 3D 重构：map 尺度失真，分辨率估计和 model building 全部失效。\n4. 后续修正成本高：即使某些 job 能运行，结果也难以解释。\n保守做法：Import 后立即核对 STAR/optics 的 rlnImagePixelSize 与显微镜记录，发现错误时从正确 metadata 重新导入，而不是后期零散补救。\nRELION 官方文档有专门章节讨论 pixel size 问题（PixelSizeIssues.html）。"
+    ],
+    "qc_checks": [
+      "导入后的文件数量与原始数据一致",
+      "STAR 文件中的路径可访问",
+      "pixel size 和 optics 信息与显微镜记录一致",
+      "项目目录结构清晰，后续 job 可复现"
+    ],
+    "common_errors": [
+      "从错误目录启动 RELION GUI，导致相对路径混乱",
+      "pixel size 写错，后续 CTF、重构尺度都会受影响",
+      "重复或不一致的 mdoc/STAR metadata 导致导入异常",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "low",
+      "cp_01"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_01_bf4cd562",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "data_import",
+    "screen_name": "Import, Getting organised / project setup",
+    "checkpoint_id": "cp_01",
+    "title_cn": "导入后应该检查哪些 STAR 文件字段？",
+    "title_en": "",
+    "summary": "Q: 导入后应该检查哪些 STAR 文件字段？\nA: 导入后优先检查 STAR/metadata 中的字段：\n1. 文件路径：rlnMicrographName/rlnImageName 路径在当前项目目录下可访问。\n2. 像素信息：rlnImagePixelSize、rlnVoltage、rlnSphericalAberration 与采集记录一致。\n3. Optics group：rlnOpticsGroup、rlnImageDimensionality、rlnImageSize 符合预期。\n4. Dose/frame 信息：若后续要做 motion correction 或 polishing，rlnDoseRate、frame 相关信息要保持一致。\n5. 文件数量：导入文件数与原始 movies/micrographs 数量一致。\nEvidence grade: A\nRisk grade: low\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/Reference/Using-RELION.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ImportTomo.html; https://github.com/3dem/relion/issues/1327",
+    "ui_keywords": [
+      "Pixel size",
+      "Voltage",
+      "Spherical aberration / Cs",
+      "Input files pattern",
+      "Optics group / metadata",
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "ui_elements": [
+      "Import",
+      "Getting organised / project setup"
+    ],
+    "action_steps": [
+      "导入后优先检查 STAR/metadata 中的字段：\n1. 文件路径：rlnMicrographName/rlnImageName 路径在当前项目目录下可访问。\n2. 像素信息：rlnImagePixelSize、rlnVoltage、rlnSphericalAberration 与采集记录一致。\n3. Optics group：rlnOpticsGroup、rlnImageDimensionality、rlnImageSize 符合预期。\n4. Dose/frame 信息：若后续要做 motion correction 或 polishing，rlnDoseRate、frame 相关信息要保持一致。\n5. 文件数量：导入文件数与原始 movies/micrographs 数量一致。"
+    ],
+    "qc_checks": [
+      "导入后的文件数量与原始数据一致",
+      "STAR 文件中的路径可访问",
+      "pixel size 和 optics 信息与显微镜记录一致",
+      "项目目录结构清晰，后续 job 可复现"
+    ],
+    "common_errors": [
+      "从错误目录启动 RELION GUI，导致相对路径混乱",
+      "pixel size 写错，后续 CTF、重构尺度都会受影响",
+      "重复或不一致的 mdoc/STAR metadata 导致导入异常",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "low",
+      "cp_01"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_01",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "data_import",
+    "screen_name": "Import Movies / Import Micrographs",
+    "checkpoint_id": "cp_01",
+    "title_cn": "cryoSPARC 数据导入 — 实验室真实SOP",
+    "title_en": "",
+    "summary": "实验室在 300kV Titan Krios 上采集单颗粒数据（pixel=0.96 Å/px、Cs=2.7mm、dose=50 e⁻/Å²），数据先经外部 MotionCorr 校正为 .mrc，再用 cryoSPARC 的 Import Movies 导入。导入前需用 setfacl -R 为 cryosparcuser 递归赋权，并核对 pixel/voltage/dose/Cs 四项与采集记录一致。",
+    "ui_keywords": [
+      "pixel_size",
+      "accelerating_voltage",
+      "spherical_aberration",
+      "total_exposure_dose",
+      "micrographs_data_path",
+      "Import Movies",
+      "Import Micrographs"
+    ],
+    "ui_elements": [
+      "Import Movies",
+      "Import Micrographs"
+    ],
+    "action_steps": [
+      "前置终端赋权：在 MobaXterm 执行 setfacl -m u:cryosparcuser:rwx -R 【原始数据目录】（需确认工作站站点 225/226/227，文件为实际路径非软连接）。",
+      "Import Movies 参数：Micrographs data path 指向 ../MotionCorr/job002/Movies/*EER.mrc（motion-corrected 后的 .mrc，非原始 .eer）。",
+      "Pixel size (Å)=0.96；Accelerating Voltage (kV)=300（Titan Krios）；Spherical Aberration (mm)=2.7；Total exposure dose (e⁻/Å²)=50。",
+      "与官方 Tutorial 差异：官方 200kV/0.5585Å/69e⁻，实验室 300kV/0.96Å/50e⁻，为真实采集参数。"
+    ],
+    "qc_checks": [
+      "导入后文件数量与 MotionCorr 输出一致",
+      "STAR/元数据路径在服务器上可访问（sudo -u cryosparcuser ls 可读）",
+      "pixel size 0.96、voltage 300、dose 50、Cs 2.7 与采集记录一致",
+      "预览 micrograph 非全黑/全白（确认是 .mrc 而非原始 .eer）"
+    ],
+    "common_errors": [
+      "T01 Import Movies 找不到文件：setfacl 未递归（缺 -R）或工作站站点号不一致 → 重新 setfacl -R 并 getfacl 确认",
+      "T09 cryoSPARC Job 权限错误：未赋权或文件拥有者变化 → setfacl -m u:cryosparcuser:rwx -R 重赋",
+      "T10 导入的 micrograph 显示异常（全黑/全白/严重噪点）：误输入原始 .eer 而非 motion-corrected .mrc → 改指向 MotionCorr/job002/Movies/*EER.mrc"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_01"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Introduction (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_01",
+    "title_cn": "RELION 5.0 SPA 教程概览与数据导入",
+    "title_en": "RELION SPA Tutorial — Introduction",
+    "summary": "RELION 5.0 单颗粒分析全流程教程，覆盖 beam-induced motion correction、CTF estimation、自动颗粒挑选、颗粒提取、2D 类平均、VDAM 初始模型、3D 分类、高分辨率 3D 精修（含 Blush 正则化）、CTF 精修与高阶像差校正、Bayesian polishing、map 锐化与局部分辨率估计、ModelAngelo 自动建模、DynaMight 柔性分析。使用 beta-galactosidase 测试数据（JEOL CRYO ARM 200），约一天可走完。",
+    "action_steps": [
+      "启动 RELION GUI 并进入 project directory",
+      "下载并解压教程测试数据 relion30_tutorial_data.tar 与 relion50_tutorial_precalculated_results.tar.gz",
+      "完整数据集可在 EMPIAR-10204 获取",
+      "遇到问题先读 RELION Wiki FAQ 与 CCPEM 邮件列表，再考虑提问"
+    ],
+    "qc_checks": [
+      "确认数据已正确解压且 project directory 可写",
+      "确认显微镜参数与数据匹配（本教程为 200kV JEOL CRYO ARM）"
+    ],
+    "common_errors": [
+      "不要直接邮件联系作者，先查 FAQ / CCPEM 列表",
+      "确保使用正确的 pixel size 与加速电压参数"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_01",
+      "introduction",
+      "setup"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

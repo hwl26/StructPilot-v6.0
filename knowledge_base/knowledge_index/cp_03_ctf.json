@@ -1,0 +1,256 @@
+[
+  {
+    "doc_id": "formal_cp_03_e4c5e276",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_estimation",
+    "screen_name": "CTF estimation, CTFFIND / Gctf related workflow",
+    "checkpoint_id": "cp_03",
+    "title_cn": "CTF 估计结果怎么判断好坏？",
+    "title_en": "",
+    "summary": "Q: CTF 估计结果怎么判断好坏？\nA: CTF 估计好坏主要看三点：\n1. Thon rings：在 CtfFind 输出的 logfile.pdf 中，Thon rings 应清晰可数且拟合曲线与实验曲线吻合到尽量高的分辨率。如果 Thon rings 模糊或拟合曲线早早偏离实验曲线，说明 CTF 拟合质量差。\n2. Defocus 分布：在 RELION GUI 中查看 micrographs_ctf.star 的 rlnDefocusU/rlnDefocusV 列，defocus 值应分布在采集预设范围内（典型 cryo-EM 数据 0.5–2.5 μm），不应出现极端值或大片相同值。\n3. 残差与最高分辨率：rlnCtfFigureOfMerit 越小越好；rlnCtfMaxResolution 反映 CTF 信号可信的最高频率，若大量 micrographs 该值低于 5–6 Å，需回查 motion correction 输出、gain reference 或 ice 厚度。\n剔除标准：Thon rings 不可见、defocus 异常（<0.3 μm 或 >5 μm）、拟合曲线完全偏离的 micrographs 应在 Select job 中剔除。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/Installation.html; https://relion.readthedocs.io/en/release-5.0/Reference/PixelSizeIssues.html",
+    "ui_keywords": [
+      "Defocus search range",
+      "Pixel size",
+      "Voltage",
+      "Cs",
+      "Amplitude contrast",
+      "Resolution range",
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "ui_elements": [
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "action_steps": [
+      "CTF 估计好坏主要看三点：\n1. Thon rings：在 CtfFind 输出的 logfile.pdf 中，Thon rings 应清晰可数且拟合曲线与实验曲线吻合到尽量高的分辨率。如果 Thon rings 模糊或拟合曲线早早偏离实验曲线，说明 CTF 拟合质量差。\n2. Defocus 分布：在 RELION GUI 中查看 micrographs_ctf.star 的 rlnDefocusU/rlnDefocusV 列，defocus 值应分布在采集预设范围内（典型 cryo-EM 数据 0.5–2.5 μm），不应出现极端值或大片相同值。\n3. 残差与最高分辨率：rlnCtfFigureOfMerit 越小越好；rlnCtfMaxResolution 反映 CTF 信号可信的最高频率，若大量 micrographs 该值低于 5–6 Å，需回查 motion correction 输出、gain reference 或 ice 厚度。\n剔除标准：Thon rings 不可见、defocus 异常（<0.3 μm 或 >5 μm）、拟合曲线完全偏离的 micrographs 应在 Select job 中剔除。"
+    ],
+    "qc_checks": [
+      "Thon rings 清晰且拟合曲线合理",
+      "defocus 分布符合采集预期",
+      "剔除 CTF 拟合差或污染严重的 micrographs",
+      "低分辨和高分辨拟合范围设置合理"
+    ],
+    "common_errors": [
+      "pixel size 或 voltage 错误导致 CTF 系统性错误",
+      "冰太厚、污染或漂移导致 Thon rings 不清晰",
+      "defocus 搜索范围过窄漏掉真实值",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_03"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_03_37fadfe2",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_estimation",
+    "screen_name": "CTF estimation, CTFFIND / Gctf related workflow",
+    "checkpoint_id": "cp_03",
+    "title_cn": "defocus 范围应该怎么设？",
+    "title_en": "",
+    "summary": "Q: defocus 范围应该怎么设？\nA: defocus 范围在 Import 或 CtfFind job 中通过 rlnDefocusU/rlnDefocusV 体现。常用做法：\n1. 采集时规划 defocus 跨度以覆盖contrast与分辨率需求，典型 cryo-EM 范围 0.5–2.5 μm（或 5000–25000 Å）。负染样品通常 0.3–1.5 μm。\n2. 太低（<0.3 μm）contrast 不足，2D 分类难收敛；太高（>3 μm）Thon rings 零点密集，高频信息被 envelope 衰减。\n3. 在 CtfFind job 的 Optimisation tab 中，Min/Max defocus 应略宽于采集预设（例如采集 1.0–2.5 μm，则设 0.5–3.0 μm），让 ctffind 有搜索余量；过窄会导致真实 defocus 落在边界外被错误拟合。\n4. 检查 micrographs_ctf.star 的 defocus 直方图，若出现单峰堆积在边界值，说明搜索范围设置有问题。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/Installation.html; https://relion.readthedocs.io/en/release-5.0/Reference/PixelSizeIssues.html",
+    "ui_keywords": [
+      "Defocus search range",
+      "Pixel size",
+      "Voltage",
+      "Cs",
+      "Amplitude contrast",
+      "Resolution range",
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "ui_elements": [
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "action_steps": [
+      "defocus 范围在 Import 或 CtfFind job 中通过 rlnDefocusU/rlnDefocusV 体现。常用做法：\n1. 采集时规划 defocus 跨度以覆盖contrast与分辨率需求，典型 cryo-EM 范围 0.5–2.5 μm（或 5000–25000 Å）。负染样品通常 0.3–1.5 μm。\n2. 太低（<0.3 μm）contrast 不足，2D 分类难收敛；太高（>3 μm）Thon rings 零点密集，高频信息被 envelope 衰减。\n3. 在 CtfFind job 的 Optimisation tab 中，Min/Max defocus 应略宽于采集预设（例如采集 1.0–2.5 μm，则设 0.5–3.0 μm），让 ctffind 有搜索余量；过窄会导致真实 defocus 落在边界外被错误拟合。\n4. 检查 micrographs_ctf.star 的 defocus 直方图，若出现单峰堆积在边界值，说明搜索范围设置有问题。"
+    ],
+    "qc_checks": [
+      "Thon rings 清晰且拟合曲线合理",
+      "defocus 分布符合采集预期",
+      "剔除 CTF 拟合差或污染严重的 micrographs",
+      "低分辨和高分辨拟合范围设置合理"
+    ],
+    "common_errors": [
+      "pixel size 或 voltage 错误导致 CTF 系统性错误",
+      "冰太厚、污染或漂移导致 Thon rings 不清晰",
+      "defocus 搜索范围过窄漏掉真实值",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_03"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_03_4064d8c3",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_estimation",
+    "screen_name": "CTF estimation, CTFFIND / Gctf related workflow",
+    "checkpoint_id": "cp_03",
+    "title_cn": "哪些 micrographs 应该在 CTF 后剔除？",
+    "title_en": "",
+    "summary": "Q: 哪些 micrographs 应该在 CTF 后剔除？\nA: CTF 后应剔除以下 micrographs（在 Select job 中按 rlnCtfMaxResolution 和 rlnCtfFigureOfMerit 过滤）：\n1. rlnCtfMaxResolution > 8–10 Å：Thon rings 信号弱，CTF 不可信，常见于冰太厚、碳膜区域或漂移严重的图像。\n2. rlnCtfFigureOfMerit 过低（<0.1）：拟合残差大。\n3. Defocus 异常：落在搜索范围边界、为负值或与其他 micrographs 差异巨大的图像。\n4. Astigmatism 过大：rlnDefocusAngle 不稳定且 |rlnDefocusU - rlnDefocusV| > 1000 Å 的图像。\n5. 视觉检查：在 Display 中翻看 corrected micrographs，明显有裂纹、污染、大块噪声的图像应一并剔除。\n剔除比例通常 5–20%，超过 30% 需回查样品制备和数据采集质量。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/Installation.html; https://relion.readthedocs.io/en/release-5.0/Reference/PixelSizeIssues.html",
+    "ui_keywords": [
+      "Defocus search range",
+      "Pixel size",
+      "Voltage",
+      "Cs",
+      "Amplitude contrast",
+      "Resolution range",
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "ui_elements": [
+      "CTF estimation",
+      "CTFFIND / Gctf related workflow"
+    ],
+    "action_steps": [
+      "CTF 后应剔除以下 micrographs（在 Select job 中按 rlnCtfMaxResolution 和 rlnCtfFigureOfMerit 过滤）：\n1. rlnCtfMaxResolution > 8–10 Å：Thon rings 信号弱，CTF 不可信，常见于冰太厚、碳膜区域或漂移严重的图像。\n2. rlnCtfFigureOfMerit 过低（<0.1）：拟合残差大。\n3. Defocus 异常：落在搜索范围边界、为负值或与其他 micrographs 差异巨大的图像。\n4. Astigmatism 过大：rlnDefocusAngle 不稳定且 |rlnDefocusU - rlnDefocusV| > 1000 Å 的图像。\n5. 视觉检查：在 Display 中翻看 corrected micrographs，明显有裂纹、污染、大块噪声的图像应一并剔除。\n剔除比例通常 5–20%，超过 30% 需回查样品制备和数据采集质量。"
+    ],
+    "qc_checks": [
+      "Thon rings 清晰且拟合曲线合理",
+      "defocus 分布符合采集预期",
+      "剔除 CTF 拟合差或污染严重的 micrographs",
+      "低分辨和高分辨拟合范围设置合理"
+    ],
+    "common_errors": [
+      "pixel size 或 voltage 错误导致 CTF 系统性错误",
+      "冰太厚、污染或漂移导致 Thon rings 不清晰",
+      "defocus 搜索范围过窄漏掉真实值",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_03"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_03",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "ctf_estimation",
+    "screen_name": "Patch CTF Estimation",
+    "checkpoint_id": "cp_03",
+    "title_cn": "cryoSPARC CTF 估计 — 实验室真实SOP",
+    "title_en": "",
+    "summary": "用 Patch CTF Estimation 为每张 micrograph 的每个 patch 估算 CTF，基于 300kV/0.96Å/50e⁻ 采集参数；GPU 数量视可用资源调整以加速。CTF 估计后接 Manual Curate Exposures 交互式剔除像散过高、冰层太厚、CTF fit 差的照片。",
+    "ui_keywords": [
+      "num_gpus",
+      "Patch CTF Estimation",
+      "Curate Exposures",
+      "ctf_fit",
+      "defocus",
+      "astigmatism",
+      "pixel_size",
+      "accelerating_voltage"
+    ],
+    "ui_elements": [
+      "Patch CTF Estimation",
+      "Curate Exposures"
+    ],
+    "action_steps": [
+      "Patch CTF Estimation：Number of GPUs to parallelize 视可用 GPU 调整（多 GPU 显著加速），其余参数基于导入的 300kV/0.96Å/50e⁻ 元数据。",
+      "Patch CTF 为每张 micrograph 每个 patch 估算 CTF 参数，是后续所有图像处理的基础。",
+      "Curate Exposures 交互式筛选：删除像散过高、冰层太厚、污染/破损/看不清、CTF fit 质量差的照片。",
+      "Curate Exposures 的 Threshold 可用于为 Topaz 训练筛选约 1000 张好照片。"
+    ],
+    "qc_checks": [
+      "抽查几张 micrograph 的 CTF fit 质量（Thon rings 拟合）",
+      "Curate Exposures 后保留的高质量 micrographs 数量合理",
+      "像散、冰厚、CTF fit 差的坏照片已剔除"
+    ],
+    "common_errors": [
+      "CTF fit 质量差：可能需调整 CTF 估算参数或检查原始 micrograph 质量（见 T04 排查顺序）",
+      "像素尺度错误导致 defocus 拟合偏移：核对 Import 时 pixel_size=0.96"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_03"
+    ]
+  },
+  {
+    "doc_id": "exp_20260717_202921",
+    "software": "relion",
+    "version": "",
+    "module": "",
+    "screen_name": "",
+    "checkpoint_id": "cp_03",
+    "title_cn": "RELION中CTF估计操作指南",
+    "title_en": "",
+    "summary": "在完成运动校正后，下一步是启动CTF估计，为每张micrograph估算defocus和CTF参数，为后续颗粒挑选和三维重建打基础。",
+    "ui_keywords": [],
+    "ui_elements": [],
+    "action_steps": [
+      "在RELION GUI中选择'New job' → 'CTF estimation'，输入运动校正后的micrographs（来自MotionCorr输出）。",
+      "选择CTF估计工具，推荐使用CTFFIND4（RELION 5.0默认支持，兼容MotionCorr功率谱）。",
+      "设置关键参数：Defocus搜索范围5000–50000 pm，Pixel size与采集一致（如0.885 Å），Voltage根据显微镜设置（300kV设为300），Cs通常2.7 mm，Amplitude contrast建议0.07–0.1（300kV常用0.1），Resolution range设为4–10 Å。",
+      "点击'Submit'提交运行。",
+      "运行完成后，打开'Display' → 'micrographs_ctf.star'，检查Thon rings清晰度、拟合曲线合理性及defocus分布是否符合预期。"
+    ],
+    "qc_checks": [
+      "检查Thon rings是否清晰、连续，拟合曲线是否与功率谱匹配。",
+      "确认defocus分布是否在预期范围内（如1–3 µm），避免异常集中或离散。",
+      "剔除拟合差（FSC < 0.143或Thon rings不连续）或污染严重的micrographs。",
+      "保留照片比例建议>80%，若过低需检查筛选阈值或原始图像质量。"
+    ],
+    "common_errors": [
+      "CTF拟合差（Thon rings不清晰）：可能因冰层过厚、污染或运动校正不充分，建议重新MotionCorr或剔除污染片。",
+      "Defocus搜索范围太窄：导致拟合失败或偏差，应扩大至5000–50000 pm。",
+      "Pixel size或Voltage设置错误：导致系统性拟合偏移，需核对采集参数并重新设置。",
+      "CTF fit分辨率过低（<6 Å）：说明拟合质量差，需检查power spectrum质量或调整resolution range/amplitude contrast。",
+      "保留照片数过少（<80%）：可能因筛选过严或污染严重，建议放宽FSC阈值（如>0.1）或重新检查原始micrographs。"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryo-EM",
+      "RELION",
+      "CTF估计",
+      "CTFFIND4",
+      "运动校正后处理",
+      "质控",
+      "参数设置"
+    ],
+    "tier": "note",
+    "status": "draft",
+    "source": "distill",
+    "imported_at": "2026-07-17T20:30:09",
+    "source_url": "",
+    "source_grade": "",
+    "evidence_grade": "",
+    "risk_grade": "",
+    "review_status": ""
+  }
+]

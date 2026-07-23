@@ -6,5 +6,86 @@
     "decision_tree": ["box_size_pixels = particle_diameter_A × 1.8 / pixel_size"],
     "reference": "StructPilot 建议新手使用直径 × 1.8",
     "approval_level": "推荐"
+  },
+  {
+    "rule_id": "r_pixel_size",
+    "rule_name": "像素大小范围校验",
+    "param_name": "pixel_size",
+    "condition": "0.5 <= pixel_size <= 3.0 A/pix 视为正常采样范围",
+    "recommendation": "超出 [0.5, 3.0] A/pix 时需复核：>3.0 多为欠采样（高频信息丢失、Nyquist 上限过低）；<0.5 多为超分辨模式或标定错误，需确认是否做了 binning 与像素物理尺度匹配",
+    "severity": "warning",
+    "description": "像素大小是 CTF 估计、box size、重构尺度的物理地基，正常冷冻电镜单颗粒采样多落在 0.5–3.0 A/pix；超范围需对照采集记录与探测器模式核对"
+  },
+  {
+    "rule_id": "r_voltage",
+    "rule_name": "加速电压合法性校验",
+    "param_name": "voltage",
+    "condition": "voltage ∈ {80, 120, 200, 300} kV 视为合法值",
+    "recommendation": "电压值不在 {80, 120, 200, 300} kV 时应拒绝并提示核对显微镜配置；200/300 kV 为主流冷冻电镜配置，80/120 kV 多用于低剂量或特定样品",
+    "severity": "error",
+    "description": "冷冻电镜加速电压为离散标准值，错误电压会导致 CTF 模型（与波长、相对论修正相关）完全失真，必须作为硬性校验"
+  },
+  {
+    "rule_id": "r_cs",
+    "rule_name": "球差 Cs 校验",
+    "param_name": "cs",
+    "condition": "cs ∈ {0.0, 0.1, 1.4, 2.0, 2.7} mm 视为常见值",
+    "recommendation": "Cs 不在常见值集合时应提示用户核对透镜配置；常见台式机 2.7 mm、Talos 2.7 mm、Krios 2.7 mm、F20 2.0 mm，校正器机型可低至 0.0–0.1 mm",
+    "severity": "warning",
+    "description": "球差 Cs 是 CTF 模型的关键项，常见机型 Cs 取值有限；偏离常见值需确认是否来自 Cs 校正器或录入错误"
+  },
+  {
+    "rule_id": "r_num_classes",
+    "rule_name": "分类数 K 校验",
+    "param_name": "num_classes",
+    "condition": "30 <= num_classes <= 100 视为单颗粒 2D 分类的正常范围",
+    "recommendation": "K<30 类平均信息量不足、易过拟合；K>100 计算开销大且多数类为噪声；建议按粒子总数 1/1000–1/500 估 K，并在 2D 阶段从较小 K 起步逐步加 K",
+    "severity": "warning",
+    "description": "2D 分类数 K 影响类平均信噪比与异质性解析能力，典型单颗粒流程 K 取 30–100，需结合粒子总数与计算资源权衡"
+  },
+  {
+    "rule_id": "r_dose",
+    "rule_name": "总剂量校验",
+    "param_name": "dose",
+    "condition": "30 <= total_dose <= 80 e/A^2 视为单颗粒冷冻电镜的正常范围",
+    "recommendation": "总剂量 <30 e/A^2 信噪比偏低、重构分辨率受限；>80 e/A^2 辐射损伤加剧、高频信号衰减严重；建议结合 dose weighting 分帧加权以平衡噪声与损伤",
+    "severity": "warning",
+    "description": "总电子剂量决定信噪比与辐射损伤的平衡点，单颗粒典型总剂量 30–80 e/A^2，超出范围需评估样品耐受性与重构目标"
+  },
+  {
+    "rule_id": "r_defocus",
+    "rule_name": "散焦范围校验",
+    "param_name": "defocus",
+    "condition": "0.5 <= |defocus| <= 3.0 um 视为正常欠焦范围",
+    "recommendation": "|defocus|<0.5 um 衬度过低、低频信息缺失；>3.0 um CTF 振荡过快、高频信息丢失且拟合困难；建议数据集 defocus 分布在 0.8–2.5 um 以兼顾衬度与高频",
+    "severity": "warning",
+    "description": "散焦决定相位衬度与 CTF 振荡频率，典型欠焦 0.5–3.0 um；过小缺衬度、过大丢高频，需在数据采集时做 defocus 分布规划"
+  },
+  {
+    "rule_id": "r_diameter",
+    "rule_name": "颗粒直径校验",
+    "param_name": "particle_diameter",
+    "condition": "particle_diameter 应与分子量推算的尺寸量级一致（如 100 kDa ≈ 60–80 A，500 kDa ≈ 100–120 A，1 MDa ≈ 140–180 A）",
+    "recommendation": "直径与分子量严重不匹配时应提示核对：直径偏小可能漏掉柔性区域，偏大则 box size 过大引入背景噪声；可用 diameter = 2 × (3×MW×1.21/(4π))^(1/3) 粗估",
+    "severity": "warning",
+    "description": "颗粒直径是 box size 与 LoG picker 的关键输入，应与目标分子量推算的尺寸量级相符，异常值会导致挑选/提取尺度失真"
+  },
+  {
+    "rule_id": "r_resolution",
+    "rule_name": "分辨率范围校验",
+    "param_name": "resolution",
+    "condition": "2 <= resolution <= 20 A 视为有意义的冷冻电镜分辨率范围",
+    "recommendation": "resolution<2 A 多为过拟合或 FSC 阈值错误需复核；>20 A 多为粒子不足、取向缺失或参数错误；近原子分辨率（<3.5 A）需有足够粒子数与取向覆盖支撑",
+    "severity": "warning",
+    "description": "报告分辨率需落在物理合理区间 2–20 A，超低分辨率提示流程问题，超高分辨率提示过拟合，均需结合 FSC 曲线与粒子数核查"
+  },
+  {
+    "rule_id": "r_mask",
+    "rule_name": "Mask 半径校验",
+    "param_name": "mask_radius",
+    "condition": "mask_radius < 0.7 × box_size 视为合理",
+    "recommendation": "mask_radius >= 0.7×box_size 时会引入边界伪影与 FSC 虚高；建议 soft mask 边缘落在颗粒主体外缘与 box 边界之间，典型取 0.5–0.65 × box_size，并加 cosine soft edge",
+    "severity": "warning",
+    "description": "mask 半径过大会把 box 边界噪声纳入掩膜导致 FSC 偏高，应确保 mask 显著小于 box_size（<0.7 倍）并配合软边缘"
   }
 ]

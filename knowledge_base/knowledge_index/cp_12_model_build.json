@@ -1,0 +1,284 @@
+[
+  {
+    "doc_id": "formal_cp_12_2e129a1b",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "model_building",
+    "screen_name": "ModelAngelo: atomic modelling, Checking handedness, External tools such as Coot / Phenix / ChimeraX",
+    "checkpoint_id": "cp_12",
+    "title_cn": "RELION 里的 ModelAngelo 适合做什么？",
+    "title_en": "",
+    "summary": "Q: RELION 里的 ModelAngelo 适合做什么？\nA: ModelAngelo 是 RELION 5.0 集成的自动建模工具，官方原话：\"a machine-learning approach for automated atomic model building... combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\" 适合场景：\n1. 中高分辨率 map（优于 4 Å）：ModelAngelo 需要可辨识的二级结构密度。\n2. 已知序列：提供蛋白序列文件（FASTA），ModelAngelo 用 sequence + map 联合建模。\n3. 自动生成初始模型：作为手工建模的起点，尤其是大型复合物或多个链的 map。\n4. 不适合：低分辨率 map（<5 Å，密度不足以追踪 backbone）；全新折叠（无同源模板，ModelAngelo 可能出错）；非蛋白密度（核酸、ligand 需其他工具）。\n5. RELION 集成：在 GUI 的 ModelAngelo job 中运行，输入 map + 序列文件，输出 .pdb 和 .cif。\n6. 注意：ModelAngelo 依赖 Python 环境（\"you will have to setup a Python environment with dependencies\"），与 RELION 主程序分开安装。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+    "ui_keywords": [
+      "Map handedness",
+      "Sequence input",
+      "Model confidence",
+      "Map-model fit",
+      "Validation metrics",
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "ui_elements": [
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "action_steps": [
+      "ModelAngelo 是 RELION 5.0 集成的自动建模工具，官方原话：\"a machine-learning approach for automated atomic model building... combines information from the cryo-EM map with sequence information of the proteins that are present in the map to build an atomic model.\" 适合场景：\n1. 中高分辨率 map（优于 4 Å）：ModelAngelo 需要可辨识的二级结构密度。\n2. 已知序列：提供蛋白序列文件（FASTA），ModelAngelo 用 sequence + map 联合建模。\n3. 自动生成初始模型：作为手工建模的起点，尤其是大型复合物或多个链的 map。\n4. 不适合：低分辨率 map（<5 Å，密度不足以追踪 backbone）；全新折叠（无同源模板，ModelAngelo 可能出错）；非蛋白密度（核酸、ligand 需其他工具）。\n5. RELION 集成：在 GUI 的 ModelAngelo job 中运行，输入 map + 序列文件，输出 .pdb 和 .cif。\n6. 注意：ModelAngelo 依赖 Python 环境（\"you will have to setup a Python environment with dependencies\"），与 RELION 主程序分开安装。"
+    ],
+    "qc_checks": [
+      "模型与密度吻合",
+      "handedness 正确",
+      "主链和侧链可解释性与分辨率匹配",
+      "几何验证和 map-model 相关性合理"
+    ],
+    "common_errors": [
+      "handedness 错误导致模型无法合理拟合",
+      "低分辨区域过度建模",
+      "未知蛋白识别缺乏来源证据",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_12"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_12_eb1e8397",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "model_building",
+    "screen_name": "ModelAngelo: atomic modelling, Checking handedness, External tools such as Coot / Phenix / ChimeraX",
+    "checkpoint_id": "cp_12",
+    "title_cn": "怎么检查 map handedness？",
+    "title_en": "",
+    "summary": "Q: 怎么检查 map handedness？\nA: handedness 检查在 RELION 官方 tutorial 的 Validation 章节有专门小节 \"Checking the handedness\"：\n1. 方法一：与已知结构对比。如果有同源蛋白的 PDB 结构，在 chimera 中叠加 map 和 PDB，看 alpha-helix 的螺旋方向（右手螺旋为正确）和 beta-sheet 的扭曲方向。\n2. 方法二：beta-galactosidase 等已知 handedness 的样品，直接视觉判断特征结构（如 TIM barrel 的扭转方向）。\n3. 方法三：如果 map 来自 C1 refinement 且对称性未知，可能 handedness 反转。用 relion_image_handler --invert_hand 翻转，对比两个版本哪个与已知结构吻合。\n4. 为什么重要：handedness 错误会导致模型 building 完全失败（残基方向全反），或 docking 时结构无法匹配。\n5. RELION 中的位置：3D auto-refine 和 initial model 的输出 map 默认遵循 input 的 handedness；如果 input movie 的 gain reference 或坐标系翻转，可能引入错误。\n6. 官方 tutorial 建议在 Validation 阶段必查 handedness，再进入 model building。\nEvidence grade: B\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+    "ui_keywords": [
+      "Map handedness",
+      "Sequence input",
+      "Model confidence",
+      "Map-model fit",
+      "Validation metrics",
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "ui_elements": [
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "action_steps": [
+      "handedness 检查在 RELION 官方 tutorial 的 Validation 章节有专门小节 \"Checking the handedness\"：\n1. 方法一：与已知结构对比。如果有同源蛋白的 PDB 结构，在 chimera 中叠加 map 和 PDB，看 alpha-helix 的螺旋方向（右手螺旋为正确）和 beta-sheet 的扭曲方向。\n2. 方法二：beta-galactosidase 等已知 handedness 的样品，直接视觉判断特征结构（如 TIM barrel 的扭转方向）。\n3. 方法三：如果 map 来自 C1 refinement 且对称性未知，可能 handedness 反转。用 relion_image_handler --invert_hand 翻转，对比两个版本哪个与已知结构吻合。\n4. 为什么重要：handedness 错误会导致模型 building 完全失败（残基方向全反），或 docking 时结构无法匹配。\n5. RELION 中的位置：3D auto-refine 和 initial model 的输出 map 默认遵循 input 的 handedness；如果 input movie 的 gain reference 或坐标系翻转，可能引入错误。\n6. 官方 tutorial 建议在 Validation 阶段必查 handedness，再进入 model building。"
+    ],
+    "qc_checks": [
+      "模型与密度吻合",
+      "handedness 正确",
+      "主链和侧链可解释性与分辨率匹配",
+      "几何验证和 map-model 相关性合理"
+    ],
+    "common_errors": [
+      "handedness 错误导致模型无法合理拟合",
+      "低分辨区域过度建模",
+      "未知蛋白识别缺乏来源证据",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "b",
+      "high",
+      "cp_12"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_12_a4cb4569",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "model_building",
+    "screen_name": "ModelAngelo: atomic modelling, Checking handedness, External tools such as Coot / Phenix / ChimeraX",
+    "checkpoint_id": "cp_12",
+    "title_cn": "模型和 map 不匹配时先查什么？",
+    "title_en": "",
+    "summary": "Q: 模型和 map 不匹配时先查什么？\nA: 模型和 map 不匹配的排查顺序：\n1. Handedness：最常见原因。翻转 map handedness 重新 fitting（见上题）。\n2. 像素尺寸：pixel size 误差会让模型和 map 尺度不一致。检查 Import 时的 pixel size 与显微镜记录是否一致；用 known feature distance（如 alpha-helix 5.4 Å/turn）校准。\n3. 分辨率匹配：模型来自高分辨率结构，map 分辨率低时密度可能不足以容纳所有残基。检查 model-map correlation vs resolution。\n4. 对称性：模型施加了对称性但 map 没有（或反之）。确认 Refine3D 的 Symmetry 设置与模型一致。\n5. 构象差异：模型来自不同构象态，与 map 不匹配正常。需要 flexible fitting 或换构象接近的模型。\n6. Sequence 错误：ModelAngelo 或自动建模用错序列，导致 chain 不对应。核对输入 FASTA。\n7. Map sharpening：过度 sharpening 让 map 密度畸变，模型 fit 不上。用 unsharpened map 或 LocRes map 交叉验证。\n8. 在 chimera 中用 Fit in Map 工具量化 fit score，低于 0.7 通常说明有上述问题。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+    "ui_keywords": [
+      "Map handedness",
+      "Sequence input",
+      "Model confidence",
+      "Map-model fit",
+      "Validation metrics",
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "ui_elements": [
+      "ModelAngelo: atomic modelling",
+      "Checking handedness",
+      "External tools such as Coot / Phenix / ChimeraX"
+    ],
+    "action_steps": [
+      "模型和 map 不匹配的排查顺序：\n1. Handedness：最常见原因。翻转 map handedness 重新 fitting（见上题）。\n2. 像素尺寸：pixel size 误差会让模型和 map 尺度不一致。检查 Import 时的 pixel size 与显微镜记录是否一致；用 known feature distance（如 alpha-helix 5.4 Å/turn）校准。\n3. 分辨率匹配：模型来自高分辨率结构，map 分辨率低时密度可能不足以容纳所有残基。检查 model-map correlation vs resolution。\n4. 对称性：模型施加了对称性但 map 没有（或反之）。确认 Refine3D 的 Symmetry 设置与模型一致。\n5. 构象差异：模型来自不同构象态，与 map 不匹配正常。需要 flexible fitting 或换构象接近的模型。\n6. Sequence 错误：ModelAngelo 或自动建模用错序列，导致 chain 不对应。核对输入 FASTA。\n7. Map sharpening：过度 sharpening 让 map 密度畸变，模型 fit 不上。用 unsharpened map 或 LocRes map 交叉验证。\n8. 在 chimera 中用 Fit in Map 工具量化 fit score，低于 0.7 通常说明有上述问题。"
+    ],
+    "qc_checks": [
+      "模型与密度吻合",
+      "handedness 正确",
+      "主链和侧链可解释性与分辨率匹配",
+      "几何验证和 map-model 相关性合理"
+    ],
+    "common_errors": [
+      "handedness 错误导致模型无法合理拟合",
+      "低分辨区域过度建模",
+      "未知蛋白识别缺乏来源证据",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_12"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_12",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "model_building",
+    "screen_name": "Coot / Phenix / ChimeraX",
+    "checkpoint_id": "cp_12",
+    "title_cn": "cryoSPARC 模型构建与验证 — 实验室真实SOP（未覆盖，参考外部工具）",
+    "title_en": "",
+    "summary": "本 Batch3 实验室 SOP 未覆盖模型构建与验证步骤。Non-uniform Refinement 输出的最终密度图（基于 300kV/0.96Å/50e⁻ 数据）需导出至外部工具进行原子模型构建、实空间/refinement 验证和可视化，参考 Coot（手动建模）、Phenix（real_space_refine/auto_build）、ChimeraX（可视化/验证）。",
+    "ui_keywords": [
+      "Non-uniform Refinement",
+      "Coot",
+      "Phenix",
+      "ChimeraX",
+      "model_building",
+      "real_space_refine",
+      "map_export",
+      "FSC",
+      "local_resolution"
+    ],
+    "ui_elements": [
+      "Non-uniform Refinement",
+      "Coot",
+      "Phenix",
+      "ChimeraX"
+    ],
+    "action_steps": [
+      "本 SOP 未覆盖模型构建步骤；Non-uniform Refinement 输出的最终密度图需导出（.map/.mrc）至外部工具。",
+      "参考外部工具：Coot（手动原子模型构建与调整）、Phenix（real_space_refine 实空间精修、phenix.autobuild 自动建模、综合验证）、ChimeraX（三维可视化、模型-地图拟合、验证报告）。",
+      "验证参考：FSC=0.143 处分辨率（来自 Homogeneous/Non-uniform）、local resolution map、模型-地图相关性、MolProbity 验证。",
+      "如需跨软件，可通过 csparc2star.py /导出 map 将 cryoSPARC 结果转至 RELION/Phenix 等继续处理。"
+    ],
+    "qc_checks": [
+      "最终密度图分辨率（FSC=0.143）足以支撑模型构建",
+      "local resolution map 显示关键区域分辨率足够",
+      "模型-地图拟合与 MolProbity 验证通过"
+    ],
+    "common_errors": [
+      "本 SOP 未覆盖模型构建，遇到具体建模问题请参考 Coot/Phenix/ChimeraX 官方文档",
+      "密度图分辨率不足时勿强行建模 → 回上游优化颗粒数/精修参数"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_12"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Validation (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_12",
+    "title_cn": "RELION 局部分辨率估计(LocalRes)与手性验证",
+    "title_en": "RELION SPA Tutorial — Validation",
+    "summary": "post-processing 的分辨率是全局估计，无法描述复合体内部常见分辨率的局域变化。relion 通过 Local resolution job-type 包装 Kucukelbir/Tagare 程序估计局部分辨率，也可选 relion 自身实现（移动软球掩膜）。",
+    "action_steps": [
+      "Local resolution：I/O 选一半未滤波 half-map + User-provided solvent mask + Calibrated pixel size: 1.244",
+      "Relion tab：Use Relion?: Yes，User-provided B-factor: -30，MTF of detector: mtf_k2_200kv.star",
+      "输出 relion_locres.mrc 可在 UCSF chimera 按局部分辨率着色",
+      "检查手性：α-helix 转向错误提示手性反了；SGD 初始模型有 50% 概率反手",
+      "命令行翻转手性：relion_image_handler --i postprocess.mrc --o ..._invert.mrc --invert_hand"
+    ],
+    "qc_checks": [
+      "局部分辨率图描述整体 map 质量变化",
+      "正确手性后叠加原子模型（如 PDB 5a1a β-galactosidase）验证",
+      "8 MPI 运行约 7 分钟"
+    ],
+    "common_errors": [
+      "绝对手性无法从数据确定（除非倾斜样品台）",
+      "像素尺寸偏差几个百分点在 LocalRes 提供正确值即可，无需重精修",
+      "偏振随机化 FSC 红曲线应≈0"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_12",
+      "validation",
+      "localres",
+      "resolution",
+      "handedness"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html",
+    "imported_at": "2026-07-10T10:52:44"
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·WrappingUp (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_12",
+    "title_cn": "RELION 收尾：目录清理、引用与延伸阅读",
+    "title_en": "RELION SPA Tutorial — WrappingUp",
+    "summary": "教程结束。relion 提供清理 job 目录选项节省磁盘（gentle/harsh 两种模式）。鼓励引用论文与查阅 FAQ/CCPEM。本教程未覆盖 multi-body refinement。",
+    "action_steps": [
+      "Gentle cleaning：仅删中间迭代文件；Harsh cleaning：也删启动新 job 所需文件（如 MotionCorr 平均微图、提取颗粒栈）",
+      "可从 Job actions 清理单个 job，或从 GUI 顶部 Jobs 菜单 Gently clean all jobs",
+      "长期存储前 gently clean project directory",
+      "有问题先查 relion Wiki FAQ 与 CCPEM 邮件列表",
+      "引用 Scheres 2012/2016 等相关论文"
+    ],
+    "qc_checks": [
+      "清理前确认不再需要中间文件",
+      "导出前确保最终 postprocess.mrc 与 half-maps 保留"
+    ],
+    "common_errors": [
+      "harsh cleaning 会删除重跑所需输入，谨慎使用",
+      "multi-body refinement 不在本教程范围，见 RELION Wiki"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_12",
+      "wrappingup",
+      "export",
+      "cleanup"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/WrappingUp.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

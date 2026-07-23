@@ -21,6 +21,8 @@ import html as _html_mod
 
 import streamlit as st
 
+from components.qa_card import render_qa_card
+
 
 def render_stage_workspace(
     checkpoint: Dict[str, Any],
@@ -935,13 +937,23 @@ def _render_qc_tab(
                 st.markdown(f"{'✅' if is_checked else '☐'} {check}")
 
         if qc_passed is True:
-            st.success("✅ 当前质控通过")
+            render_qa_card({"status": "pass", "message": "当前质控通过"})
         elif qc_passed is False:
-            concerns = last_qc.get("concerns", [])
+            concerns = last_qc.get("concerns", []) or []
             if concerns:
-                st.warning("⚠️ 质控未通过：" + "；".join(concerns[:3]))
+                shown = concerns[:3]
+                extra = concerns[3:]
+                render_qa_card(
+                    {
+                        "status": "fail",
+                        "message": "质控未通过：" + "；".join(shown),
+                        "suggestions": extra,
+                    }
+                )
             else:
-                st.warning("⚠️ 质控未通过，请检查参数。")
+                render_qa_card(
+                    {"status": "fail", "message": "质控未通过，请检查参数。"}
+                )
 
         rec = getattr(state, "checkpoint_records", {}).get(cp_id)
         if rec and rec.qc_summary:

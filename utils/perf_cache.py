@@ -62,7 +62,8 @@ def mark_kb_dirty() -> None:
     _kb_dirty = True
     _clear_rag_cache()
     # Also clear st.cache_data for JSON files
-    cached_load_json.clear()
+    _cached_load_json_impl.clear()
+    _cached_load_json_by_path_impl.clear()
 
 
 def _clear_rag_cache() -> None:
@@ -84,6 +85,24 @@ def _file_mtime_key(path: str) -> float:
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
+def _cached_load_json_impl(primary_relpath: str, legacy_filename: str, _mtime: float, default: Any) -> Any:
+    """Internal cached implementation. Do not call directly — use cached_load_json."""
+    # Try primary path first
+    candidates = [_KNOWLEDGE_DIR / primary_relpath]
+    if legacy_filename:
+        candidates.append(_KNOWLEDGE_DIR / legacy_filename)
+
+    for path in candidates:
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                continue
+
+    return default if default is not None else []
+
+
 def cached_load_json(primary_relpath: str, legacy_filename: str = "", default: Any = None) -> Any:
     """Load a knowledge-base JSON file with Streamlit caching.
 
@@ -107,29 +126,16 @@ def cached_load_json(primary_relpath: str, legacy_filename: str = "", default: A
     Any
         Parsed JSON content (list or dict), or ``default``.
     """
-    # Try primary path first
-    candidates = [_KNOWLEDGE_DIR / primary_relpath]
+    # Compute mtime for cache invalidation — file edits will bust the cache
+    mtime = _file_mtime_key(str(_KNOWLEDGE_DIR / primary_relpath))
     if legacy_filename:
-        candidates.append(_KNOWLEDGE_DIR / legacy_filename)
-
-    for path in candidates:
-        if path.exists():
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                continue
-
-    return default if default is not None else []
+        mtime = max(mtime, _file_mtime_key(str(_KNOWLEDGE_DIR / legacy_filename)))
+    return _cached_load_json_impl(primary_relpath, legacy_filename, mtime, default)
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
-def cached_load_json_by_path(abs_path: str, default: Any = None) -> Any:
-    """Load a JSON file by absolute path with Streamlit caching.
-
-    Used for files outside knowledge_base/ (e.g. config/llm_config.json).
-    Cache key includes file mtime for auto-invalidation.
-    """
+def _cached_load_json_by_path_impl(abs_path: str, _mtime: float, default: Any) -> Any:
+    """Internal cached implementation. Do not call directly — use cached_load_json_by_path."""
     path = Path(abs_path)
     if not path.exists():
         return default if default is not None else {}
@@ -138,6 +144,16 @@ def cached_load_json_by_path(abs_path: str, default: Any = None) -> Any:
             return json.load(f)
     except Exception:
         return default if default is not None else {}
+
+
+def cached_load_json_by_path(abs_path: str, default: Any = None) -> Any:
+    """Load a JSON file by absolute path with Streamlit caching.
+
+    Used for files outside knowledge_base/ (e.g. config/llm_config.json).
+    Cache key includes file mtime for auto-invalidation.
+    """
+    mtime = _file_mtime_key(abs_path)
+    return _cached_load_json_by_path_impl(abs_path, mtime, default)
 
 
 @st.cache_data(show_spinner=False, max_entries=32)

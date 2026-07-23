@@ -5,20 +5,24 @@
     "cp_01": [
       "formal_cp_01_d7ce267f",
       "formal_cp_01_99da22dd",
-      "formal_cp_01_bf4cd562"
+      "formal_cp_01_bf4cd562",
+      "cs_cp_01_import"
     ],
     "cp_02": [
       "formal_cp_02_cf31640c",
       "formal_cp_02_c065e7e8",
-      "formal_cp_02_32e0ad08"
+      "formal_cp_02_32e0ad08",
+      "cs_cp_02_motion"
     ],
     "cp_04": [
       "formal_cp_04_7b6ee678",
-      "formal_cp_04_cf5d6531"
+      "formal_cp_04_cf5d6531",
+      "cs_cp_04_picking"
     ],
     "cp_05": [
       "formal_cp_05_ab8042df",
-      "formal_cp_05_0e4a412a"
+      "formal_cp_05_0e4a412a",
+      "cs_cp_05_extract"
     ],
     "cp_03": [
       {
@@ -37,6 +41,12 @@
         "id": "formal_cp_03_4064d8c3",
         "question": "哪些 micrographs 应该在 CTF 后剔除？",
         "status": "formal_ready_with_caution_v0",
+        "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_03_ctf",
+        "question": "Patch CTF 估计后如何做 Manual Curate Exposures 筛选？",
+        "status": "expert_approved",
         "runtime_allowed": true
       }
     ],
@@ -58,6 +68,12 @@
         "question": "2D 结果差是挑选问题还是样品问题？",
         "status": "formal_ready_with_caution_v0",
         "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_06_2d",
+        "question": "cryoSPARC 两轮 2D 分类的参数怎么设？怎么判断哪些类该保留？",
+        "status": "expert_approved",
+        "runtime_allowed": true
       }
     ],
     "cp_07": [
@@ -77,6 +93,12 @@
         "id": "formal_cp_07_e393bc9c",
         "question": "初始模型阶段能不能设置对称性？",
         "status": "formal_ready_with_caution_v0",
+        "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_07_abinitio",
+        "question": "Ab-Initio Reconstruction 前为什么要 Remove Duplicates？参数怎么设？",
+        "status": "expert_approved",
         "runtime_allowed": true
       }
     ],
@@ -98,6 +120,12 @@
         "question": "3D 分类能解决构象异质性吗？",
         "status": "formal_ready_with_caution_v0",
         "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_08_3dclass",
+        "question": "Heterogeneous Refinement 为什么要输入所有 Ab-Initio 模型？怎么选最好的 class？",
+        "status": "expert_approved",
+        "runtime_allowed": true
       }
     ],
     "cp_09": [
@@ -117,6 +145,12 @@
         "id": "formal_cp_09_3770675a",
         "question": "mask 会怎样影响 refinement？",
         "status": "formal_ready_with_caution_v0",
+        "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_09_refine",
+        "question": "Homogeneous 和 Non-uniform Refinement 有什么区别？三步管线为什么要做完？",
+        "status": "expert_approved",
         "runtime_allowed": true
       }
     ],
@@ -138,6 +172,12 @@
         "question": "CTF refinement 后一定要重新 refine 吗？",
         "status": "formal_ready_with_caution_v0",
         "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_10_ctfrefine",
+        "question": "cryoSPARC 的 Global/Local CTF Refinement 什么时候做？",
+        "status": "expert_approved",
+        "runtime_allowed": true
       }
     ],
     "cp_11": [
@@ -158,6 +198,12 @@
         "question": "Bayesian polishing 什么时候值得做？",
         "status": "formal_ready_with_caution_v0",
         "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_11_postprocess",
+        "question": "cryoSPARC Sharpening Tools 的 B-factor 怎么定？怎么避免过度锐化？",
+        "status": "expert_approved",
+        "runtime_allowed": true
       }
     ],
     "cp_12": [
@@ -177,6 +223,12 @@
         "id": "formal_cp_12_a4cb4569",
         "question": "模型和 map 不匹配时先查什么？",
         "status": "formal_ready_with_caution_v0",
+        "runtime_allowed": true
+      },
+      {
+        "id": "cs_cp_12_model",
+        "question": "cryoSPARC 最终 map 怎么导出到 Coot/Phenix 建模？验证标准是什么？",
+        "status": "expert_approved",
         "runtime_allowed": true
       }
     ]
@@ -435,7 +487,8 @@
     "数据导入": [
       "formal_cp_01_99da22dd",
       "formal_cp_01_bf4cd562",
-      "formal_cp_01_d7ce267f"
+      "formal_cp_01_d7ce267f",
+      "cs_cp_01_import"
     ],
     "检查": [
       "formal_cp_01_bf4cd562",
@@ -454,7 +507,8 @@
     "运动校正": [
       "formal_cp_02_32e0ad08",
       "formal_cp_02_c065e7e8",
-      "formal_cp_02_cf31640c"
+      "formal_cp_02_cf31640c",
+      "cs_cp_02_motion"
     ],
     "降采样": [
       "formal_cp_05_ab8042df"
@@ -466,11 +520,13 @@
     "颗粒挑选": [
       "formal_cp_02_cf31640c",
       "formal_cp_04_7b6ee678",
-      "formal_cp_04_cf5d6531"
+      "formal_cp_04_cf5d6531",
+      "cs_cp_04_picking"
     ],
     "颗粒提取": [
       "formal_cp_05_0e4a412a",
-      "formal_cp_05_ab8042df"
+      "formal_cp_05_ab8042df",
+      "cs_cp_05_extract"
     ],
     "defocus": [
       "cp_03",
@@ -564,6 +620,182 @@
     ],
     "sequence": [
       "cp_12"
+    ],
+    "sop": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "low": [
+      "cs_cp_01_import"
+    ],
+    "lab_sop": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "cp_01": [
+      "cs_cp_01_import"
+    ],
+    "cryosparc": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "a": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "cryoem": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "expert_approved": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "lab_sop_cryosparc": [
+      "cs_cp_01_import",
+      "cs_cp_02_motion",
+      "cs_cp_03_ctf",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "cp_02": [
+      "cs_cp_02_motion"
+    ],
+    "medium": [
+      "cs_cp_02_motion",
+      "cs_cp_04_picking",
+      "cs_cp_05_extract"
+    ],
+    "high": [
+      "cs_cp_03_ctf",
+      "cs_cp_06_2d",
+      "cs_cp_07_abinitio",
+      "cs_cp_08_3dclass",
+      "cs_cp_09_refine",
+      "cs_cp_10_ctfrefine",
+      "cs_cp_11_postprocess",
+      "cs_cp_12_model"
+    ],
+    "cp_03": [
+      "cs_cp_03_ctf"
+    ],
+    "CTF 估计与照片筛选": [
+      "cs_cp_03_ctf"
+    ],
+    "cp_04": [
+      "cs_cp_04_picking"
+    ],
+    "cp_05": [
+      "cs_cp_05_extract"
+    ],
+    "cp_06": [
+      "cs_cp_06_2d"
+    ],
+    "2D 分类与精选": [
+      "cs_cp_06_2d"
+    ],
+    "cp_07": [
+      "cs_cp_07_abinitio"
+    ],
+    "Ab-initio 初始模型": [
+      "cs_cp_07_abinitio"
+    ],
+    "3D 分类（异质性精修）": [
+      "cs_cp_08_3dclass"
+    ],
+    "cp_08": [
+      "cs_cp_08_3dclass"
+    ],
+    "cp_09": [
+      "cs_cp_09_refine"
+    ],
+    "3D 精修（Homogeneous + Non-uniform）": [
+      "cs_cp_09_refine"
+    ],
+    "cp_10": [
+      "cs_cp_10_ctfrefine"
+    ],
+    "CTF 精修": [
+      "cs_cp_10_ctfrefine"
+    ],
+    "cp_11": [
+      "cs_cp_11_postprocess"
+    ],
+    "后处理与锐化": [
+      "cs_cp_11_postprocess"
+    ],
+    "cp_12": [
+      "cs_cp_12_model"
+    ],
+    "模型构建与验证": [
+      "cs_cp_12_model"
     ]
   },
   "answer_summaries": {
@@ -646,9 +878,129 @@
       "status": "formal_ready_with_caution_v0",
       "risk_grade": "medium",
       "evidence_grade": "A"
+    },
+    "cs_cp_01_import": {
+      "checkpoint_id": "cp_01",
+      "checkpoint_cn": "数据导入",
+      "question": "cryoSPARC 导入数据时需要设置哪些关键采集参数？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_02_motion": {
+      "checkpoint_id": "cp_02",
+      "checkpoint_cn": "运动校正",
+      "question": "Patch Motion Correction 默认参数能用吗？什么情况下需要调整？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_03_ctf": {
+      "checkpoint_id": "cp_03",
+      "checkpoint_cn": "CTF 估计与照片筛选",
+      "question": "Patch CTF 估计后如何做 Manual Curate Exposures 筛选？",
+      "status": "expert_approved",
+      "risk_grade": "high",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_04_picking": {
+      "checkpoint_id": "cp_04",
+      "checkpoint_cn": "颗粒挑选",
+      "question": "Blob Picker、Topaz、Template Picker 三种方法怎么选？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_05_extract": {
+      "checkpoint_id": "cp_05",
+      "checkpoint_cn": "颗粒提取",
+      "question": "Extract 时 box size 怎么算？为什么要做两轮提取？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_06_2d": {
+      "checkpoint_id": "cp_06",
+      "checkpoint_cn": "2D 分类与精选",
+      "question": "cryoSPARC 两轮 2D 分类的参数怎么设？怎么判断哪些类该保留？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_07_abinitio": {
+      "checkpoint_id": "cp_07",
+      "checkpoint_cn": "Ab-initio 初始模型",
+      "question": "Ab-Initio Reconstruction 前为什么要 Remove Duplicates？参数怎么设？",
+      "status": "expert_approved",
+      "risk_grade": "high",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_08_3dclass": {
+      "checkpoint_id": "cp_08",
+      "checkpoint_cn": "3D 分类（异质性精修）",
+      "question": "Heterogeneous Refinement 为什么要输入所有 Ab-Initio 模型？怎么选最好的 class？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_09_refine": {
+      "checkpoint_id": "cp_09",
+      "checkpoint_cn": "3D 精修（Homogeneous + Non-uniform）",
+      "question": "Homogeneous 和 Non-uniform Refinement 有什么区别？三步管线为什么要做完？",
+      "status": "expert_approved",
+      "risk_grade": "high",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_10_ctfrefine": {
+      "checkpoint_id": "cp_10",
+      "checkpoint_cn": "CTF 精修",
+      "question": "cryoSPARC 的 Global/Local CTF Refinement 什么时候做？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_11_postprocess": {
+      "checkpoint_id": "cp_11",
+      "checkpoint_cn": "后处理与锐化",
+      "question": "cryoSPARC Sharpening Tools 的 B-factor 怎么定？怎么避免过度锐化？",
+      "status": "expert_approved",
+      "risk_grade": "medium",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
+    },
+    "cs_cp_12_model": {
+      "checkpoint_id": "cp_12",
+      "checkpoint_cn": "模型构建与验证",
+      "question": "cryoSPARC 最终 map 怎么导出到 Coot/Phenix 建模？验证标准是什么？",
+      "status": "expert_approved",
+      "risk_grade": "high",
+      "evidence_grade": "A",
+      "software": "cryosparc",
+      "source": "lab_sop_cryosparc"
     }
   },
   "stats": {
-    "total_formal_answers": 34
+    "total_formal_answers": 46
   }
 }

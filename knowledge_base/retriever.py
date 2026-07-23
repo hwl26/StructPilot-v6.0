@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
@@ -23,22 +24,32 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from knowledge_base.importer import doc_to_text, load_knowledge_index, TIER_WEIGHTS
+from knowledge_base.importer import doc_to_text, TIER_WEIGHTS
 from knowledge_base.paths import (
     iter_runtime_allowed_docs,
     load_json_with_fallback,
+    load_sharded_knowledge_index,
 )
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _KNOWLEDGE_DIR = os.path.join(_BASE_DIR, "knowledge_base")
 _CHECKPOINTS_PATH = os.path.join(_KNOWLEDGE_DIR, "pipeline_checkpoints.json")
 _INDEX_PATH = os.path.join(_BASE_DIR, "knowledge_base", "knowledge_index.json")
+# P1-10: knowledge_index.json 已按 checkpoint 拆分到 knowledge_index/ 目录，
+# retriever 现在通过 load_sharded_knowledge_index 遍历分片加载；保留 _INDEX_PATH
+# 仅作为占位文件引用，不再用于读取语料。
+_INDEX_DIR = os.path.join(_KNOWLEDGE_DIR, "knowledge_index")
 _CACHE_PATH = os.path.join(_BASE_DIR, "config", "embeddings_cache.json")
 _CORPUS_CACHE_PATH = os.path.join(_BASE_DIR, "config", "corpus_cache.json")
 _RUNTIME_ROOT = os.getenv("STRUCTPILOT_RUNTIME_DIR", os.path.join(_BASE_DIR, "runtime"))
 _HIT_COUNTS_PATH = os.path.join(_RUNTIME_ROOT, "knowledge_hit_counts.json")
 _CORPUS_CACHE_VERSION = 2
 _DEFAULT_MIN_SCORE = 0.30
+
+# P2-9: _record_hits 热路径改为内存累积 + 定时落盘，避免每次检索同步写文件。
+_hits_buffer: Dict[str, Dict[str, Any]] = {}
+_hits_last_flush: float = 0.0
+_HITS_FLUSH_INTERVAL = 30.0  # 30 秒落盘一次
 
 
 def _tokenize(text: str) -> List[str]:
@@ -105,8 +116,32 @@ def _lexical_search(corpus: List[Tuple[str, str, float]], query: str, top_k: int
 
 
 def _record_hits(results: List[Tuple[str, str, float]]) -> None:
-    """Best-effort retrieval telemetry for the review panel."""
+    """Best-effort retrieval telemetry for the review panel.
+
+    P2-9: 改为内存累积 + 定时落盘，避免热路径上同步写文件。
+    命中记录先累积到 _hits_buffer，每隔 _HITS_FLUSH_INTERVAL 秒落盘一次；
+    进程退出时通过 atexit 保证剩余缓冲写入磁盘。
+    """
+    global _hits_last_flush
     if not results:
+        return
+    now_str = time.strftime("%Y-%m-%dT%H:%M:%S")
+    for doc_id, _text, score in results:
+        if not doc_id:
+            continue
+        item = _hits_buffer.setdefault(str(doc_id), {"hits": 0, "last_hit_at": "", "last_score": 0})
+        item["hits"] = int(item.get("hits") or 0) + 1
+        item["last_hit_at"] = now_str
+        item["last_score"] = round(float(score), 4)
+    now = time.time()
+    if now - _hits_last_flush > _HITS_FLUSH_INTERVAL:
+        _flush_hits_to_disk()
+        _hits_last_flush = now
+
+
+def _flush_hits_to_disk() -> None:
+    """将内存缓冲的命中计数合并落盘（定时 / 进程退出时调用）。"""
+    if not _hits_buffer:
         return
     try:
         os.makedirs(os.path.dirname(_HIT_COUNTS_PATH), exist_ok=True)
@@ -116,20 +151,22 @@ def _record_hits(results: List[Tuple[str, str, float]]) -> None:
                 loaded = json.load(f)
             if isinstance(loaded, dict):
                 data = loaded
-        now = time.strftime("%Y-%m-%dT%H:%M:%S")
         counts = data.setdefault("counts", {})
-        for doc_id, _text, score in results:
-            if not doc_id:
-                continue
-            item = counts.setdefault(str(doc_id), {"hits": 0, "last_hit_at": "", "last_score": 0})
-            item["hits"] = int(item.get("hits") or 0) + 1
-            item["last_hit_at"] = now
-            item["last_score"] = round(float(score), 4)
-        data["updated_at"] = now
+        for doc_id, buf_item in _hits_buffer.items():
+            existing = counts.get(doc_id, {"hits": 0, "last_hit_at": "", "last_score": 0})
+            existing["hits"] = int(existing.get("hits") or 0) + int(buf_item.get("hits") or 0)
+            existing["last_hit_at"] = buf_item.get("last_hit_at", "")
+            existing["last_score"] = buf_item.get("last_score", 0)
+            counts[doc_id] = existing
+        data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         with open(_HIT_COUNTS_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        _hits_buffer.clear()
     except Exception:
-        pass
+        pass  # 遥测失败不影响主路径
+
+
+atexit.register(_flush_hits_to_disk)
 
 
 def _sha256(text: str) -> str:
@@ -287,7 +324,10 @@ class KnowledgeRetriever:
                 pass
 
             try:
-                for doc in load_knowledge_index(_INDEX_PATH):
+                # P1-10: 改为从 knowledge_index/ 分片目录加载并合并。
+                # load_sharded_knowledge_index 遍历目录下所有 *.json 并返回扁平 doc 列表，
+                # 无分片目录时自动回退到旧的 knowledge_index.json（仅当其仍为 list）。
+                for doc in load_sharded_knowledge_index(_KNOWLEDGE_DIR):
                     text = doc_to_text(doc)
                     if text.strip():
                         w = _doc_weight(doc)

@@ -32,6 +32,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 import streamlit as st
 
+from components.qa_card import render_qa_card
+
 # ---------------------------------------------------------------------------
 # Card type registry
 # ---------------------------------------------------------------------------
@@ -535,30 +537,12 @@ def _render_decision_card(items: List[Any], content: str, key: str) -> None:
 
 
 def _render_qc_card(items: List[Any], content: str, key: str) -> None:
-    """Render quality-control checks as a checklist."""
-    if content:
-        st.markdown(content)
+    """Render quality-control checks as a checklist.
 
-    if not items:
-        return
-
-    for item in items:
-        if isinstance(item, dict):
-            check = item.get("check") or item.get("item") or item.get("text") or ""
-            passed = item.get("passed")
-            threshold = item.get("threshold") or item.get("criterion") or ""
-            if passed is True:
-                icon = "✅"
-            elif passed is False:
-                icon = "❌"
-            else:
-                icon = "☐"
-            line = f"{icon} {check}"
-            if threshold:
-                line += f"  _(标准: {threshold})_"
-            st.markdown(line)
-        elif isinstance(item, str):
-            st.markdown(f"☐ {item}")
+    Thin wrapper: 核心渲染委托给 components.qa_card.render_qa_card，
+    以统一三态（pass / warn / fail）颜色与图标规范。
+    """
+    render_qa_card(items, content=content, key=key)
 
 
 def _render_log_card(content: str, key: str) -> None:

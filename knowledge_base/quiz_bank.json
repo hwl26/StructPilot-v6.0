@@ -1,0 +1,125 @@
+{
+  "cp_03": {
+    "step_name": "CTF Estimation",
+    "questions": [
+      {
+        "id": "ctf_q1",
+        "question": "CTF Estimation 的主要目的是什么？",
+        "options": [
+          "A. 挑选好的颗粒",
+          "B. 估算对比度传递函数以校正影像",
+          "C. 对齐所有影像",
+          "D. 分类不同形态的颗粒"
+        ],
+        "correct": 1,
+        "explanation": "CTF 是电镜成像的固有特性，估算 CTF 参数后才能在后续处理中「去模糊」，补偿光学系统造成的信号失真。"
+      },
+      {
+        "id": "ctf_q2",
+        "question": "如果 CTF 拟合率很低（< 40%），最可能的原因是什么？",
+        "options": [
+          "A. 颗粒数量太少",
+          "B. 像素尺寸填错或冰层过厚",
+          "C. 分辨率设置太高",
+          "D. 电压选错"
+        ],
+        "correct": 1,
+        "explanation": "CTF 拟合依赖准确的像素尺寸，且冰层过厚会降低衬度，使 CTF 环不清晰。"
+      },
+      {
+        "id": "ctf_q3",
+        "question": "Max resolution 参数的含义是？",
+        "options": [
+          "A. CTF 拟合时考虑的最高分辨率范围",
+          "B. 最终重构的分辨率上限",
+          "C. 颗粒尺寸的上限",
+          "D. 影像尺寸的上限"
+        ],
+        "correct": 0,
+        "explanation": "Max resolution 设置 CTF 拟合时搜索的最高分辨率，初始通常 4-5 Å，后续根据数据质量调整。"
+      }
+    ]
+  },
+  "cp_02": {
+    "step_name": "Motion Correction",
+    "questions": [
+      {
+        "id": "mc_q1",
+        "question": "Motion Correction 主要校正什么？",
+        "options": [
+          "A. 颗粒的取向偏差",
+          "B. 样品的机械漂移和电子束诱导运动",
+          "C. CTF 造成的相位偏移",
+          "D. 冰层厚度不均"
+        ],
+        "correct": 1,
+        "explanation": "Motion Correction 对齐电影帧，校正采集过程中的漂移，得到清晰的静止影像。"
+      },
+      {
+        "id": "mc_q2",
+        "question": "如果漂移轨迹显示总漂移量 > 100 Å，应该怎么办？",
+        "options": [
+          "A. 跳过这张影像",
+          "B. 增大 B-factor 重新运行",
+          "C. 减小 B-factor",
+          "D. 直接进入下一步"
+        ],
+        "correct": 1,
+        "explanation": "漂移过大时增大 B-factor 可使轨迹更平滑，但如果仍无效，说明影像质量差，应跳过。"
+      },
+      {
+        "id": "mc_q3",
+        "question": "Dose weighting 的作用是？",
+        "options": [
+          "A. 降低早期帧的权重",
+          "B. 根据累积剂量保护高分辨信息",
+          "C. 增加低分辨信息的权重",
+          "D. 平滑漂移轨迹"
+        ],
+        "correct": 1,
+        "explanation": "Dose weighting 根据累积剂量调整帧权重，避免高剂量后期帧破坏高频信息。"
+      }
+    ]
+  },
+  "cp_06": {
+    "step_name": "2D Classification",
+    "questions": [
+      {
+        "id": "2d_q1",
+        "question": "2D Classification 的主要目的是？",
+        "options": [
+          "A. 估算 CTF 参数",
+          "B. 去除低质量颗粒和污染物",
+          "C. 重构 3D 结构",
+          "D. 校正颗粒取向"
+        ],
+        "correct": 1,
+        "explanation": "2D Classification 按相似性分类颗粒，筛选出高质量数据，去除冰晶、污染物和模糊颗粒。"
+      },
+      {
+        "id": "2d_q2",
+        "question": "如果颗粒数少于 5000，分类数（Number of classes）应该设为多少？",
+        "options": [
+          "A. 100-200",
+          "B. 50-100",
+          "C. 20-30",
+          "D. 5-10"
+        ],
+        "correct": 2,
+        "explanation": "颗粒少时减少分类数可保证每个类别有足够颗粒，避免过度分散。"
+      },
+      {
+        "id": "2d_q3",
+        "question": "好的 2D 类别应该具有什么特征？",
+        "options": [
+          "A. 所有颗粒完全一致",
+          "B. 清晰的颗粒轮廓和结构细节",
+          "C. 颗粒数量最多",
+          "D. 分辨率最高"
+        ],
+        "correct": 1,
+        "explanation": "好的类别显示清晰的颗粒特征，可区分不同投影方向，而非仅看数量。"
+      }
+    ]
+  }
+}

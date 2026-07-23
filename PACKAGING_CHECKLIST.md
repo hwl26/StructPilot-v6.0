@@ -143,8 +143,8 @@ eval_cases/                         # 评估用例
 - `.vscode/` - VSCode 配置
 - `.idea/` - PyCharm 配置
 - `*.zip` - 旧版本压缩包
-- `修复实施记录.md` - 内部开发记录
-- `软件体验评估与诊断报告.md` - 内部评估文档
+- `docs/reports/` - 内部开发/评估文档（已移至此目录）
+- `knowledge_base/rules/parameter_settings.xlsx` - 参数设置表（已移至知识库）
 
 ---
 

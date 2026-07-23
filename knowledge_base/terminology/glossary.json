@@ -7,7 +7,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "pixel size",
@@ -17,7 +17,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "box size",
@@ -27,7 +27,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "EER",
@@ -37,7 +37,7 @@
     "software": "both",
     "related_file_formats": [".eer"],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "MRC",
@@ -47,7 +47,7 @@
     "software": "both",
     "related_file_formats": [".mrc", ".mrcs"],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "STAR",
@@ -57,7 +57,7 @@
     "software": "relion",
     "related_file_formats": [".star"],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "defocus",
@@ -67,7 +67,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "micrograph",
@@ -77,7 +77,7 @@
     "software": "both",
     "related_file_formats": [".mrc"],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "particle",
@@ -87,7 +87,7 @@
     "software": "both",
     "related_file_formats": [".star", ".mrcs"],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "2D classification",
@@ -97,7 +97,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "ab-initio model",
@@ -107,7 +107,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "3D classification",
@@ -117,7 +117,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "refinement",
@@ -127,7 +127,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "FSC",
@@ -137,7 +137,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "B-factor",
@@ -147,7 +147,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "dose",
@@ -157,7 +157,7 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   },
   {
     "term": "gold-standard FSC",
@@ -167,6 +167,6 @@
     "software": "both",
     "related_file_formats": [],
     "runtime_allowed": true,
-    "review_status": "seed_pending_expert_review"
+    "review_status": "formal_ready"
   }
 ]

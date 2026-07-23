@@ -59,7 +59,7 @@ def render_desk_pet(
     pet_css = f"""<style>
 .sp-pet {{
     position: fixed !important;
-    right: 16px; bottom: 16px;
+    right: 16px; bottom: 96px;
     z-index: 99999;
     user-select: none;
     touch-action: none;
@@ -170,7 +170,7 @@ def render_desk_pet(
 
 /* ===== Quick panel ===== */
 .sp-pet-quick-panel {{
-    position: absolute; right: 90px; bottom: 40px;
+    position: absolute; right: 90px; bottom: 120px;
     background: {t['sidebar']}; border: 1px solid {t['sidebar_border']};
     border-radius: 14px; padding: 12px 14px;
     box-shadow: 0 8px 28px rgba(0,0,0,{panel_shadow_alpha});
@@ -333,6 +333,12 @@ def render_desk_pet(
 }}
 .sp-pet-hint-btn:hover {{ transform: scale(1.3) rotate(-5deg); }}
 @keyframes sp-hint-bounce {{ 0%,100% {{ transform: translateY(0) scale(1); }} 50% {{ transform: translateY(-6px) scale(1.1); }} }}
+
+/* ===== Mobile responsive: avoid overlapping input box ===== */
+@media (max-width: 768px) {{
+    .sp-pet {{ bottom: 88px !important; right: 8px !important; }}
+    .sp-pet-quick-panel {{ bottom: 112px !important; right: 72px !important; }}
+}}
 </style>"""
 
     # =======================================================================

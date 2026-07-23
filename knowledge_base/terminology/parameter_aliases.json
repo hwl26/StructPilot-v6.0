@@ -2,5 +2,20 @@
   "pixel_size": ["pixel size", "A/pix", "angstrom per pixel", "像素尺寸"],
   "box_size": ["box size", "particle box", "box", "盒子大小"],
   "ctf": ["CTF", "ctf fit", "contrast transfer function"],
-  "dose": ["dose", "electron dose", "e/A^2", "电子剂量"]
+  "dose": ["dose", "electron dose", "e/A^2", "电子剂量"],
+  "defocus": ["defocus", "defocusU", "defocusV", "散焦", "焦距", "RF"],
+  "voltage": ["voltage", "kV", "电压", "HT", "加速电压"],
+  "cs": ["cs", "Cs", "球差", "spherical_aberration"],
+  "optics_group": ["optics_group", "opticsGroup", "光学组", "beam_image_shift"],
+  "symmetry": ["symmetry", "sym", "对称性", "point_group", "PG"],
+  "resolution": ["resolution", "res", "分辨率", "Angstrom", "A"],
+  "mask": ["mask", "Mask", "掩膜", "mask_radius", "mask_resolution"],
+  "sampling": ["sampling", "pixel_size", "像素大小", "apix", "A/pix"],
+  "iterations": ["iterations", "iter", "迭代次数", "n_iter", "num_iter"],
+  "num_classes": ["num_classes", "K", "分类数", "classes", "n_classes"],
+  "batch_size": ["batch_size", "batch", "批次大小", "mini_batch_size"],
+  "dose_rate": ["dose_rate", "dose_per_frame", "剂量率", "e/A2/frame"],
+  "particle_diameter": ["particle_diameter", "diameter", "颗粒直径", "diam"],
+  "low_pass": ["low_pass", "lowpass", "低通滤波", "low_pass_filter"],
+  "high_pass": ["high_pass", "highpass", "高通滤波", "high_pass_filter"]
 }

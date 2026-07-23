@@ -1,0 +1,338 @@
+[
+  {
+    "doc_id": "formal_cp_02_cf31640c",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "motion_correction",
+    "screen_name": "Motion correction, Movie compression / polishing related frame information",
+    "checkpoint_id": "cp_02",
+    "title_cn": "运动校正后主要看哪些 QC 图？",
+    "title_en": "",
+    "summary": "Q: 运动校正后主要看哪些 QC 图？\nA: 运动校正后的 QC 检查顺序：\n1. Corrected micrographs 视觉质量：无明显拖影、图像清晰。\n2. 运动轨迹/位移统计：查看 logfile.pdf 的位移曲线，不应有大面积异常漂移。\n3. 输出 STAR 路径：确认输出能被 CTF estimation 正常接续。\n4. 坏帧检查：是否存在个别帧位移异常大的 movies。\n若 QC 图显示异常，不应直接进入颗粒挑选，应回查 gain reference、dose/frame、pixel size 和输入 movies。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/MotionCorrection.html; https://relion.readthedocs.io/en/release-5.0/Onthefly.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html",
+    "ui_keywords": [
+      "Dose per frame",
+      "Patch/grid settings",
+      "Binning",
+      "Gain reference",
+      "Output micrograph STAR",
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "ui_elements": [
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "action_steps": [
+      "运动校正后的 QC 检查顺序：\n1. Corrected micrographs 视觉质量：无明显拖影、图像清晰。\n2. 运动轨迹/位移统计：查看 logfile.pdf 的位移曲线，不应有大面积异常漂移。\n3. 输出 STAR 路径：确认输出能被 CTF estimation 正常接续。\n4. 坏帧检查：是否存在个别帧位移异常大的 movies。\n若 QC 图显示异常，不应直接进入颗粒挑选，应回查 gain reference、dose/frame、pixel size 和输入 movies。"
+    ],
+    "qc_checks": [
+      "校正后 micrograph 无明显拖影",
+      "运动轨迹合理，没有大面积异常漂移",
+      "输出文件和 STAR 路径完整",
+      "坏帧或异常电影被记录或排除"
+    ],
+    "common_errors": [
+      "gain reference 或像素尺寸不匹配",
+      "dose 信息错误导致后续 dose weighting 或 polishing 受影响",
+      "异常 movies 混入后续流程",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_02"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_02_c065e7e8",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "motion_correction",
+    "screen_name": "Motion correction, Movie compression / polishing related frame information",
+    "checkpoint_id": "cp_02",
+    "title_cn": "motion correction 参数异常会影响 CTF 吗？",
+    "title_en": "",
+    "summary": "Q: motion correction 参数异常会影响 CTF 吗？\nA: 会。motion correction 的输出 micrographs 是 CTF estimation 的直接输入：\n1. gain reference 异常：图像有条纹或网格噪声，Thon rings 质量下降。\n2. dose/frame 错误：dose weighting 失效，高频信号被错误加权。\n3. binning 或 pixel size 错误：输出图像尺度与 metadata 不一致，CTF 拟合在错误尺度上进行。\n当 CTF 拟合普遍变差时，不只看 CTF 参数，也要回看 motion correction 的输入信息和输出 QC。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/MotionCorrection.html; https://relion.readthedocs.io/en/release-5.0/Onthefly.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html",
+    "ui_keywords": [
+      "Dose per frame",
+      "Patch/grid settings",
+      "Binning",
+      "Gain reference",
+      "Output micrograph STAR",
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "ui_elements": [
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "action_steps": [
+      "会。motion correction 的输出 micrographs 是 CTF estimation 的直接输入：\n1. gain reference 异常：图像有条纹或网格噪声，Thon rings 质量下降。\n2. dose/frame 错误：dose weighting 失效，高频信号被错误加权。\n3. binning 或 pixel size 错误：输出图像尺度与 metadata 不一致，CTF 拟合在错误尺度上进行。\n当 CTF 拟合普遍变差时，不只看 CTF 参数，也要回看 motion correction 的输入信息和输出 QC。"
+    ],
+    "qc_checks": [
+      "校正后 micrograph 无明显拖影",
+      "运动轨迹合理，没有大面积异常漂移",
+      "输出文件和 STAR 路径完整",
+      "坏帧或异常电影被记录或排除"
+    ],
+    "common_errors": [
+      "gain reference 或像素尺寸不匹配",
+      "dose 信息错误导致后续 dose weighting 或 polishing 受影响",
+      "异常 movies 混入后续流程",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_02"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_02_32e0ad08",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "motion_correction",
+    "screen_name": "Motion correction, Movie compression / polishing related frame information",
+    "checkpoint_id": "cp_02",
+    "title_cn": "什么时候需要重新做运动校正？",
+    "title_en": "",
+    "summary": "Q: 什么时候需要重新做运动校正？\nA: 需要重新做 motion correction 的判断标准：\n1. Corrected micrographs 仍有明显拖影。\n2. 运动轨迹异常（位移曲线有突变）。\n3. gain reference 或 pixel size 被发现错误。\n4. dose/frame 信息与采集记录不一致。\n5. 输出 STAR 路径/文件缺失。\n不要只因为后续某一步效果差就自动重跑，应先确认异常是否确实来自运动校正。结合本批数据的 QC 图和日志判断。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/Reference/MovieCompression.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/MotionCorrection.html; https://relion.readthedocs.io/en/release-5.0/Onthefly.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfEstimation.html",
+    "ui_keywords": [
+      "Dose per frame",
+      "Patch/grid settings",
+      "Binning",
+      "Gain reference",
+      "Output micrograph STAR",
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "ui_elements": [
+      "Motion correction",
+      "Movie compression / polishing related frame information"
+    ],
+    "action_steps": [
+      "需要重新做 motion correction 的判断标准：\n1. Corrected micrographs 仍有明显拖影。\n2. 运动轨迹异常（位移曲线有突变）。\n3. gain reference 或 pixel size 被发现错误。\n4. dose/frame 信息与采集记录不一致。\n5. 输出 STAR 路径/文件缺失。\n不要只因为后续某一步效果差就自动重跑，应先确认异常是否确实来自运动校正。结合本批数据的 QC 图和日志判断。"
+    ],
+    "qc_checks": [
+      "校正后 micrograph 无明显拖影",
+      "运动轨迹合理，没有大面积异常漂移",
+      "输出文件和 STAR 路径完整",
+      "坏帧或异常电影被记录或排除"
+    ],
+    "common_errors": [
+      "gain reference 或像素尺寸不匹配",
+      "dose 信息错误导致后续 dose weighting 或 polishing 受影响",
+      "异常 movies 混入后续流程",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_02"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_02",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "motion_correction",
+    "screen_name": "Patch Motion Correction",
+    "checkpoint_id": "cp_02",
+    "title_cn": "cryoSPARC 运动校正 — 实验室真实SOP（外部 MotionCorr 为主）",
+    "title_en": "",
+    "summary": "实验室标准流程是在 cryoSPARC 外部用 MotionCor2/RELION MotionCorr 完成影片帧对齐并输出 .mrc，随后导入 cryoSPARC。如在 cryoSPARC 内做 Patch Motion Correction，需基于 300kV/0.96Å/50e⁻ 参数；注意输入必须是原始影片帧，不要把已校正的 .mrc 再喂给 Patch Motion。",
+    "ui_keywords": [
+      "pixel_size",
+      "accelerating_voltage",
+      "dose_rate",
+      "Patch Motion Correction",
+      "MotionCorr",
+      "movie_frames",
+      "Import Movies"
+    ],
+    "ui_elements": [
+      "Patch Motion Correction",
+      "Import Movies"
+    ],
+    "action_steps": [
+      "实验室标准路径：外部 MotionCor2/RELION MotionCorr 校正 → 输出 MotionCorr/job002/Movies/*EER.mrc → Import Movies 导入 cryoSPARC。",
+      "若在 cryoSPARC 内使用 Patch Motion Correction：输入应为原始影片帧（.eer/.tiff），pixel=0.96Å、voltage=300kV、dose=50 e⁻/Å²。",
+      "不要将已 motion-corrected 的 .mrc 再次送入 Patch Motion Correction（会重复处理）。",
+      "确认 MotionCorr 输出 .mrc 文件正常后再进入 Import（ls MotionCorr/job002/Movies/*.mrc）。"
+    ],
+    "qc_checks": [
+      "MotionCorr 输出 .mrc 文件数量与原始影片一致",
+      "校正后 micrograph 预览正常（无全黑/全白/严重拖影）",
+      "若用 Patch Motion：输出 movies 的累计剂量与 50 e⁻/Å² 设置一致"
+    ],
+    "common_errors": [
+      "T10 导入显示异常：误把原始 .eer 当 motion-corrected .mrc 导入 → 确认路径指向 MotionCorr/job002/Movies/*EER.mrc",
+      "重复运动校正：把已校正 .mrc 又送入 Patch Motion Correction → 检查输入是否为原始帧"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_02"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Preprocessing (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_02",
+    "title_cn": "RELION 预处理：运动校正(MotionCorr)与CTF估计(CtfFind)",
+    "title_en": "RELION SPA Tutorial — Preprocessing",
+    "summary": "从 Import 原始电影到 beam-induced motion correction（MotionCorr job）与 CTF estimation（CtfFind job）。导入 Movies/*.tiff 后，用 RELION 自身 motioncor2 实现做运动校正并输出功率谱，再调用 ctffind 4.1 估计 CTF 参数。",
+    "action_steps": [
+      "Import：Movies tab 设 Raw input files: Movies/*.tiff，Are these multi-frame movies?: Yes，Pixel size: 0.885",
+      "MotionCorr：Input movies STAR: Import/job001/movies.star，First/Last frame: 1/-1，Dose per frame: 1.277，Save sum of power spectra: Yes",
+      "MotionCorr Motion tab：Bfactor: 150，Number of patches X,Y: 5 5，Gain-reference: Movies/gain.mrc，Use RELION's own implementation?: Yes",
+      "CtfFind：Input micrographs STAR: Motioncorr/job002/corrected_micrographs.star，Amount of astigmatism: 100",
+      "CtfFind CTFFIND-4.1 tab：Use power spectra from MotionCorr?: Yes，FFT box size: 512，Min/Max defocus: 5000/50000",
+      "Display 查看 Thon 环质控；不满意可删 .log 后 Continue! 重跑"
+    ],
+    "qc_checks": [
+      "Display 选 out: micrographs_ctf.star 查看 Thon 环确认 CTF 拟合质量",
+      "CTF 拟合差可删 .log 重跑或 Subset selection 舍弃"
+    ],
+    "common_errors": [
+      "Symbolic links 必须用 absolute path，relative path 致后续错误",
+      "Write output in float16?: Yes 省磁盘但 Gctf 不兼容且 UCSF MotionCor2 不支持；CTF 需用 CTFFIND-4.1",
+      "RELION 5.0 已移除 GCTF 支持，仅 ctffind 4.1 开源且可读 MotionCorr 功率谱"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_02",
+      "cp_03",
+      "preprocessing",
+      "motioncorrection",
+      "ctf"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Preprocessing.html",
+    "imported_at": "2026-07-10T10:52:44"
+  },
+  {
+    "doc_id": "exp_20260713_205033",
+    "software": "relion",
+    "version": "",
+    "module": "",
+    "screen_name": "",
+    "checkpoint_id": "cp_02",
+    "title_cn": "RELION运动校正参数设置与质控",
+    "title_en": "",
+    "summary": "根据截图显示的MotionCor2参数，当前设置（B-factor=150, patches=7×7, Gain-ref指定, binning=1）合理，可直接运行，但需检查漂移曲线和输出图像质量。",
+    "ui_keywords": [],
+    "ui_elements": [],
+    "action_steps": [
+      "确认输入原始电影帧路径正确，未误用已校正图像",
+      "检查参数：B-factor=150（默认合理），patches=7×7（适合高分辨率/大漂移），Gain-reference已指定，binning=1（保留原始分辨率）",
+      "点击Run!启动运动校正任务",
+      "运行后检查输出：漂移曲线是否平滑、校正图像是否清晰、输出路径是否正确"
+    ],
+    "qc_checks": [
+      "查看drift plot，确认无剧烈跳变或异常漂移",
+      "观察校正后micrographs是否清晰，无模糊或残余运动",
+      "确认输出路径正确（如MotionCorr/jobXXX/Movies/）",
+      "检查Gain-reference图像是否被正确加载"
+    ],
+    "common_errors": [
+      "忘记设置Gain-reference image，导致图像对比度异常",
+      "Number of patches过小（如3×3），无法有效校正局部运动",
+      "B-factor过低（如50），对噪声敏感，可能引入伪影",
+      "输出路径错误或混乱，导致后续步骤找不到图像"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "RELION",
+      "运动校正",
+      "MotionCor2",
+      "参数设置",
+      "质控",
+      "cryo-EM",
+      "新手引导"
+    ],
+    "tier": "note",
+    "status": "draft",
+    "source": "distill",
+    "imported_at": "2026-07-13T20:51:06",
+    "source_url": "",
+    "source_grade": "",
+    "evidence_grade": "",
+    "risk_grade": "",
+    "review_status": ""
+  },
+  {
+    "doc_id": "exp_20260715_092732",
+    "software": "relion",
+    "version": "",
+    "module": "",
+    "screen_name": "",
+    "checkpoint_id": "cp_02",
+    "title_cn": "RELION运动校正参数设置指南",
+    "title_en": "",
+    "summary": "在RELION的运动校正步骤（cp_02）中，需确认增益参考图像和补丁数量，保持默认参数运行一次后根据结果调整。",
+    "ui_keywords": [],
+    "ui_elements": [],
+    "action_steps": [
+      "确认Gain-reference image，点击Browse选择正确的增益参考文件（如GainReference.gain）。",
+      "检查B-factor，默认150通常无需修改。",
+      "设置Number of patches X, Y，根据数据分辨率和漂移情况选择7×7或9×9。",
+      "点击Run!提交任务，等待完成并观察漂移曲线和校正后图像质量。"
+    ],
+    "qc_checks": [
+      "确认Gain-reference image已正确指定，避免图像亮度不均。",
+      "观察漂移曲线是否平滑，判断校正效果。",
+      "检查校正后图像是否清晰，无明显模糊或残余漂移。"
+    ],
+    "common_errors": [
+      "忘记填写Gain-reference image，导致图像出现亮斑或暗斑。",
+      "补丁数过小（如3×3）导致校正不精细，漂移残留明显。",
+      "补丁数过大（如15×15）导致计算量暴增，可能内存不足崩溃。",
+      "B-factor设置过高或过低，影响图像细节或放大噪声。"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "RELION",
+      "运动校正",
+      "cryo-EM",
+      "参数设置",
+      "质控",
+      "cp_02"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "distill",
+    "imported_at": "2026-07-15T09:27:42",
+    "source_url": "",
+    "source_grade": "",
+    "evidence_grade": "",
+    "risk_grade": "",
+    "review_status": ""
+  }
+]

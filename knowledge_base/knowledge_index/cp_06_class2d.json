@@ -1,0 +1,241 @@
+[
+  {
+    "doc_id": "formal_cp_06_db470300",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_2d",
+    "screen_name": "2D classification, Reference-free 2D class averaging",
+    "checkpoint_id": "cp_06",
+    "title_cn": "2D 分类中哪些 class 应该保留？",
+    "title_en": "",
+    "summary": "Q: 2D 分类中哪些 class 应该保留？\nA: 2D 分类的核心目的是「扔掉坏颗粒」(RELION 官方原话：throw away bad particles)。保留标准：\n1. 结构特征清晰：class average 显示可辨识的二级结构或 domain 边界，而非噪声团块。\n2. 颗粒数合理：坏颗粒往往聚集成「小且丑」的 class（官方：bad particles go to relatively small classes that yield ugly 2D class averages）。颗粒数极少（<总颗粒1%）且外观差的 class 应剔除。\n3. 对比度与锐度：保留的 class 应有合理 contrast，边缘锐利；糊状或过曝的 class 剔除。\n4. 多视图覆盖：保留的 class 集合应覆盖不同投影方向，避免后续 3D 重构角度缺失。\n在 Select job 中按 class 显示，手动勾选保留的 class；或用 \"Select classes with at least N particles\" 自动过滤。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask diameter",
+      "Number of iterations",
+      "Particle subset size",
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "ui_elements": [
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "action_steps": [
+      "2D 分类的核心目的是「扔掉坏颗粒」(RELION 官方原话：throw away bad particles)。保留标准：\n1. 结构特征清晰：class average 显示可辨识的二级结构或 domain 边界，而非噪声团块。\n2. 颗粒数合理：坏颗粒往往聚集成「小且丑」的 class（官方：bad particles go to relatively small classes that yield ugly 2D class averages）。颗粒数极少（<总颗粒1%）且外观差的 class 应剔除。\n3. 对比度与锐度：保留的 class 应有合理 contrast，边缘锐利；糊状或过曝的 class 剔除。\n4. 多视图覆盖：保留的 class 集合应覆盖不同投影方向，避免后续 3D 重构角度缺失。\n在 Select job 中按 class 显示，手动勾选保留的 class；或用 \"Select classes with at least N particles\" 自动过滤。"
+    ],
+    "qc_checks": [
+      "好类显示清晰结构特征而非噪声",
+      "坏类或污染类被剔除",
+      "每个保留类颗粒数足够",
+      "不同视角覆盖合理"
+    ],
+    "common_errors": [
+      "类别数过少导致异质性混在一起",
+      "类别数过多导致每类颗粒不足",
+      "把漂亮但非目标的污染类误保留",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_06"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_06_6b88f1f5",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_2d",
+    "screen_name": "2D classification, Reference-free 2D class averaging",
+    "checkpoint_id": "cp_06",
+    "title_cn": "class 数量应该怎么设？",
+    "title_en": "",
+    "summary": "Q: class 数量应该怎么设？\nA: RELION 官方 SPA tutorial 的做法：\n1. 初始 2D 分类（用于生成 auto-picking 模板）：Number of classes = 50。\n2. 第二轮 2D 分类（用更多颗粒做清理）：Number of classes = 100，官方原话 \"because we now have more particles, we can allow more classes than before\"。\n3. 经验范围：颗粒数 / class ≈ 100–500 为宜。几千颗粒用 50 class，几万到十万颗粒用 100 class。\n4. Regularisation parameter T：cryo-EM 2D 分类官方推荐 T=2–3（tutorial 中用 2）；class 太噪则降 T，分辨率上不去则升 T。\n5. class 太少（如 10）会让坏颗粒污染好 class；太多（如 500）会让好颗粒被碎片化。保守做法是从 50 开始，根据结果再调。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask diameter",
+      "Number of iterations",
+      "Particle subset size",
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "ui_elements": [
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "action_steps": [
+      "RELION 官方 SPA tutorial 的做法：\n1. 初始 2D 分类（用于生成 auto-picking 模板）：Number of classes = 50。\n2. 第二轮 2D 分类（用更多颗粒做清理）：Number of classes = 100，官方原话 \"because we now have more particles, we can allow more classes than before\"。\n3. 经验范围：颗粒数 / class ≈ 100–500 为宜。几千颗粒用 50 class，几万到十万颗粒用 100 class。\n4. Regularisation parameter T：cryo-EM 2D 分类官方推荐 T=2–3（tutorial 中用 2）；class 太噪则降 T，分辨率上不去则升 T。\n5. class 太少（如 10）会让坏颗粒污染好 class；太多（如 500）会让好颗粒被碎片化。保守做法是从 50 开始，根据结果再调。"
+    ],
+    "qc_checks": [
+      "好类显示清晰结构特征而非噪声",
+      "坏类或污染类被剔除",
+      "每个保留类颗粒数足够",
+      "不同视角覆盖合理"
+    ],
+    "common_errors": [
+      "类别数过少导致异质性混在一起",
+      "类别数过多导致每类颗粒不足",
+      "把漂亮但非目标的污染类误保留",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_06"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_06_d6b2403f",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "class_2d",
+    "screen_name": "2D classification, Reference-free 2D class averaging",
+    "checkpoint_id": "cp_06",
+    "title_cn": "2D 结果差是挑选问题还是样品问题？",
+    "title_en": "",
+    "summary": "Q: 2D 结果差是挑选问题还是样品问题？\nA: 判断顺序：\n1. 先看 class average 是否有任何可辨识结构。如果所有 class 都是噪声或糊状，且颗粒数分布均匀，大概率是样品问题(orientation preferred、ice 太厚、颗粒变性、负染染料问题)。\n2. 如果部分 class 有结构但大部分 class 颗粒稀少且丑，可能是 picking 问题（假阳性多、坐标偏移、box 太小）。\n3. 检查输入：particles.star 中 rlnCoordinateX/Y 是否对应颗粒中心；box size 是否 ≥颗粒直径×1.5；pixel size 是否正确。\n4. 检查参数：mask diameter 是否过小切掉颗粒；T 过高让噪声 class 也看起来「有结构」。\n5. 如果上述都正常但仍无好 class，回看 motion correction 和 CTF QC：Thon rings 差的 micrographs 上的颗粒做不出好 2D class。\n6. 最终判断：换一批 micrographs 重做 picking+2D，若依然差，基本可断定样品问题。\nEvidence grade: B\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Number of classes",
+      "Regularisation T",
+      "Mask diameter",
+      "Number of iterations",
+      "Particle subset size",
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "ui_elements": [
+      "2D classification",
+      "Reference-free 2D class averaging"
+    ],
+    "action_steps": [
+      "判断顺序：\n1. 先看 class average 是否有任何可辨识结构。如果所有 class 都是噪声或糊状，且颗粒数分布均匀，大概率是样品问题(orientation preferred、ice 太厚、颗粒变性、负染染料问题)。\n2. 如果部分 class 有结构但大部分 class 颗粒稀少且丑，可能是 picking 问题（假阳性多、坐标偏移、box 太小）。\n3. 检查输入：particles.star 中 rlnCoordinateX/Y 是否对应颗粒中心；box size 是否 ≥颗粒直径×1.5；pixel size 是否正确。\n4. 检查参数：mask diameter 是否过小切掉颗粒；T 过高让噪声 class 也看起来「有结构」。\n5. 如果上述都正常但仍无好 class，回看 motion correction 和 CTF QC：Thon rings 差的 micrographs 上的颗粒做不出好 2D class。\n6. 最终判断：换一批 micrographs 重做 picking+2D，若依然差，基本可断定样品问题。"
+    ],
+    "qc_checks": [
+      "好类显示清晰结构特征而非噪声",
+      "坏类或污染类被剔除",
+      "每个保留类颗粒数足够",
+      "不同视角覆盖合理"
+    ],
+    "common_errors": [
+      "类别数过少导致异质性混在一起",
+      "类别数过多导致每类颗粒不足",
+      "把漂亮但非目标的污染类误保留",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "b",
+      "high",
+      "cp_06"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_06",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "class_2d",
+    "screen_name": "2D Classification",
+    "checkpoint_id": "cp_06",
+    "title_cn": "cryoSPARC 2D 分类 — 实验室两轮策略（bin 粗筛 → 无 bin 精挑）",
+    "title_en": "",
+    "summary": "实验室标准两轮 2D：第一轮 100 类、res=5Å（低频粗筛）配合 Fourier crop 加速；第二轮 50 类、res=3Å（push 高频）关闭 bin 精挑。Circular mask=颗粒直径÷0.9，online-EM iterations=40，Cache on SSD=OFF。两轮后 Select 2D 挑不同 view、轮廓清晰、二级结构明显的 class。",
+    "ui_keywords": [
+      "num_2d_classes",
+      "max_resolution",
+      "circular_mask_diameter",
+      "num_online_em_iterations",
+      "cache_particles_on_ssd",
+      "num_gpus",
+      "2D Classification",
+      "Select 2D Classes"
+    ],
+    "ui_elements": [
+      "2D Classification",
+      "Select 2D Classes"
+    ],
+    "action_steps": [
+      "第一轮 2D Classification：Number of 2D classes=100；Maximum resolution=5Å（低频信号分轮廓）；Circular mask diameter=颗粒直径÷0.9；Number of online-EM iterations=40；Cache particle images on SSD=OFF；配合第一轮 Fourier crop 加速。",
+      "第一轮 Select 2D：交互式挑不同 view 覆盖、轮廓清晰、二级结构明显的好 class。",
+      "第二轮 2D Classification：Number of 2D classes=50（第一轮已分走坏的）；Maximum resolution=3Å（push 高频信号，比第一轮精细得多）；Circular mask 同第一轮；iterations=40；Cache=OFF；第二轮 Extract 关闭 Fourier crop。",
+      "第二轮 Select 2D：在更高分辨率下进一步精选。"
+    ],
+    "qc_checks": [
+      "第一轮 class average 多数清晰（若 >50% 模糊则参数或 SNR 有问题，见 T04）",
+      "Select 2D 覆盖不同 view（取向），无取向严重偏向",
+      "第二轮在 3Å 下 class average 二级结构可见",
+      "每类颗粒数足够（每类 < 50 个颗粒时减少 class 数）"
+    ],
+    "common_errors": [
+      "T04 大量 2D class 模糊：排查顺序——颗粒太少/质量差 → class 数太多（每类<50）→ mask diameter 不对 → SNR 太低（改用 Topaz）→ CTF 估算有问题",
+      "快速试错：减少 class 数（100→50）、降低 mask diameter；都无效则检查原始 micrograph 质量和 CTF fit",
+      "两轮策略未执行：只做一轮会丢失精度（实验室标准是 bin 粗筛 + 无 bin 精挑）"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_06"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·Class2D (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_06",
+    "title_cn": "RELION 2D 分类(Class2D)与优类筛选",
+    "title_en": "RELION SPA Tutorial — Class2D",
+    "summary": "参考自由 2D 类平均，用于剔除坏颗粒。坏颗粒平均差会落入小类，剔除即数据清洗。使用 VDAM 算法（relion-4.0 引入）比 EM 更快且类平均更好。",
+    "action_steps": [
+      "I/O tab：Input images STAR: Extract/job012/particles.star",
+      "Optimisation tab：Number of classes: 100，Regularisation parameter T: 2",
+      "Use EM algorithm?: No，Use VDAM algorithm?: Yes，Number of VDAM mini-batches: 100",
+      "Mask diameter (A): 200，Mask individual particles with zeros?: Yes",
+      "Center class averages?: Yes",
+      "Compute tab：Use GPU acceleration?: Yes；Running tab：Number of MPI procs: 1，threads: 12",
+      "Subset selection (Select/job014)：Automatically select 2D classes?: Yes，Minimum threshold: 0.1"
+    ],
+    "qc_checks": [
+      "类平均应像低通滤波原子模型投影，溶剂区应平坦",
+      "溶剂区径向条纹是过拟合典型信号，可限制 E-step 分辨率(10-15A)"
+    ],
+    "common_errors": [
+      "类平均过噪→降低 T；分辨率不足→提高 T",
+      "VDAM 算法不能 MPI 并行，须单 MPI",
+      "2D 分类与 Subset selection 可重复多次，但勿丢弃少数视角"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_06",
+      "class2d",
+      "classification",
+      "vdam"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Class2D.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

@@ -1,0 +1,249 @@
+[
+  {
+    "doc_id": "formal_cp_10_5b4307ee",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_refinement",
+    "screen_name": "CTF refinement, Higher-order aberrations, Anisotropic magnification, Per-particle defocus refinement",
+    "checkpoint_id": "cp_10",
+    "title_cn": "什么时候适合做 CTF refinement？",
+    "title_en": "",
+    "summary": "Q: 什么时候适合做 CTF refinement？\nA: CTF refinement 在 3D auto-refine + PostProcess 收敛后进行，官方 tutorial 在分辨率 3.0–3.5 Å 时执行。适合条件：\n1. 参考分辨率优于 4 Å：\"Provided the resolution of the reference extends well beyond 4 Å, per-particle defocus estimation seems to be relatively stable.\"低于 4 Å 时 defocus 拟合不稳定。\n2. 冰层不水平：per-particle defocus 能修正倾斜冰层导致的 defocus 误差。\n3. 电镜对中不佳：beamtilt、trefoil、tetrafoil 等像差可通过 CTF refinement 估计并修正。\n4. anisotropic magnification：如果探测器有各向异性放大，需专门估计。\n5. 官方执行顺序：先估 beamtilt+trefoil（asymmetric aberrations）→ 再估 anisotropic magnification → 最后 per-particle defocus。\"In general, one would try to first estimate the source of the largest errors.\"\n6. 结果验证：CTF refinement 后重新 3D auto-refine + PostProcess，分辨率应提升（tutorial 从 3.5 Å 到 3.0 Å）。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+    "ui_keywords": [
+      "Aberration refinement options",
+      "Anisotropic magnification",
+      "Per-particle defocus",
+      "Optics groups",
+      "Resolution limits",
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "ui_elements": [
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "action_steps": [
+      "CTF refinement 在 3D auto-refine + PostProcess 收敛后进行，官方 tutorial 在分辨率 3.0–3.5 Å 时执行。适合条件：\n1. 参考分辨率优于 4 Å：\"Provided the resolution of the reference extends well beyond 4 Å, per-particle defocus estimation seems to be relatively stable.\"低于 4 Å 时 defocus 拟合不稳定。\n2. 冰层不水平：per-particle defocus 能修正倾斜冰层导致的 defocus 误差。\n3. 电镜对中不佳：beamtilt、trefoil、tetrafoil 等像差可通过 CTF refinement 估计并修正。\n4. anisotropic magnification：如果探测器有各向异性放大，需专门估计。\n5. 官方执行顺序：先估 beamtilt+trefoil（asymmetric aberrations）→ 再估 anisotropic magnification → 最后 per-particle defocus。\"In general, one would try to first estimate the source of the largest errors.\"\n6. 结果验证：CTF refinement 后重新 3D auto-refine + PostProcess，分辨率应提升（tutorial 从 3.5 Å 到 3.0 Å）。"
+    ],
+    "qc_checks": [
+      "CTF refinement 后 FSC 或 map 质量有真实改善",
+      "参数变化幅度物理合理",
+      "不同 optics group 行为一致或可解释",
+      "没有因过拟合导致局部假改善"
+    ],
+    "common_errors": [
+      "过早做 CTF refinement，信号不足",
+      "optics group 设置混乱",
+      "把 CTF refinement 当作修复坏数据的万能步骤",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_10"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_10_0a6c564e",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_refinement",
+    "screen_name": "CTF refinement, Higher-order aberrations, Anisotropic magnification, Per-particle defocus refinement",
+    "checkpoint_id": "cp_10",
+    "title_cn": "高阶像差和 anisotropic magnification 有什么区别？",
+    "title_en": "",
+    "summary": "Q: 高阶像差和 anisotropic magnification 有什么区别？\nA: 两者都是 CTF refinement 的子任务，但影响机制不同：\n1. 高阶像差（aberrations）：\n   - asymmetric：beamtilt（光束倾斜）、trefoil（三叶草像差），表现为 logfile.pdf 中 asymmetric aberration 图像一侧蓝一侧红。\n   - symmetric：tetrafoil（四叶草）、spherical aberration 误差，表现为对称 aberration 图像圆形对称的蓝/红分布。\n   - 影响：CTF 相位偏移，高频信号错位。\n2. anisotropic magnification：探测器在不同方向放大倍数不同，表现为 _rlnMagMat 元素偏离单位矩阵。\n   - 影响：图像在 X/Y 方向尺度不一致，像素尺寸失真。\n   - 官方做法：单独估计，不能与 aberrations 同时拟合（\"simultaneous magnification and aberration refinement is unstable\"）。\n3. 顺序：先 aberrations → 再 magnification → 最后 defocus。\n4. tutorial 数据中 beamtilt ≈ -0.2 mrad（Y 方向），magnification anisotropy 很小。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+    "ui_keywords": [
+      "Aberration refinement options",
+      "Anisotropic magnification",
+      "Per-particle defocus",
+      "Optics groups",
+      "Resolution limits",
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "ui_elements": [
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "action_steps": [
+      "两者都是 CTF refinement 的子任务，但影响机制不同：\n1. 高阶像差（aberrations）：\n   - asymmetric：beamtilt（光束倾斜）、trefoil（三叶草像差），表现为 logfile.pdf 中 asymmetric aberration 图像一侧蓝一侧红。\n   - symmetric：tetrafoil（四叶草）、spherical aberration 误差，表现为对称 aberration 图像圆形对称的蓝/红分布。\n   - 影响：CTF 相位偏移，高频信号错位。\n2. anisotropic magnification：探测器在不同方向放大倍数不同，表现为 _rlnMagMat 元素偏离单位矩阵。\n   - 影响：图像在 X/Y 方向尺度不一致，像素尺寸失真。\n   - 官方做法：单独估计，不能与 aberrations 同时拟合（\"simultaneous magnification and aberration refinement is unstable\"）。\n3. 顺序：先 aberrations → 再 magnification → 最后 defocus。\n4. tutorial 数据中 beamtilt ≈ -0.2 mrad（Y 方向），magnification anisotropy 很小。"
+    ],
+    "qc_checks": [
+      "CTF refinement 后 FSC 或 map 质量有真实改善",
+      "参数变化幅度物理合理",
+      "不同 optics group 行为一致或可解释",
+      "没有因过拟合导致局部假改善"
+    ],
+    "common_errors": [
+      "过早做 CTF refinement，信号不足",
+      "optics group 设置混乱",
+      "把 CTF refinement 当作修复坏数据的万能步骤",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_10"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_10_235bbfb2",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ctf_refinement",
+    "screen_name": "CTF refinement, Higher-order aberrations, Anisotropic magnification, Per-particle defocus refinement",
+    "checkpoint_id": "cp_10",
+    "title_cn": "CTF refinement 后一定要重新 refine 吗？",
+    "title_en": "",
+    "summary": "Q: CTF refinement 后一定要重新 refine 吗？\nA: 官方明确推荐重新 refine：\n1. 官方原话：\"It is probably a good idea to re-run 3D auto-refine and Post-processing at this stage, so we can confirm that the new particle STAR file actually gives better results.\"\n2. CTF refinement 输出 particles_ctf_refine.star，含修正后的 defocus、像差参数。用这个文件作为 3D auto-refine 的 input。\n3. Ref. map 选项：\"Ref. map is on absolute greyscale? = Yes\"（因为 map 来自同一数据集）。\n4. 结果验证：tutorial 中 CTF refinement 后重新 refine，分辨率从 3.5 Å 提升到 3.0 Å。如果分辨率没提升甚至下降，说明 CTF refinement 可能引入错误（如 defocus 拟合发散），需回查 logfile.pdf。\n5. 不重新 refine 的风险：CTF refinement 的修正未体现在 map 中，相当于浪费了这一步的计算。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/index.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Polish.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html",
+    "ui_keywords": [
+      "Aberration refinement options",
+      "Anisotropic magnification",
+      "Per-particle defocus",
+      "Optics groups",
+      "Resolution limits",
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "ui_elements": [
+      "CTF refinement",
+      "Higher-order aberrations",
+      "Anisotropic magnification",
+      "Per-particle defocus refinement"
+    ],
+    "action_steps": [
+      "官方明确推荐重新 refine：\n1. 官方原话：\"It is probably a good idea to re-run 3D auto-refine and Post-processing at this stage, so we can confirm that the new particle STAR file actually gives better results.\"\n2. CTF refinement 输出 particles_ctf_refine.star，含修正后的 defocus、像差参数。用这个文件作为 3D auto-refine 的 input。\n3. Ref. map 选项：\"Ref. map is on absolute greyscale? = Yes\"（因为 map 来自同一数据集）。\n4. 结果验证：tutorial 中 CTF refinement 后重新 refine，分辨率从 3.5 Å 提升到 3.0 Å。如果分辨率没提升甚至下降，说明 CTF refinement 可能引入错误（如 defocus 拟合发散），需回查 logfile.pdf。\n5. 不重新 refine 的风险：CTF refinement 的修正未体现在 map 中，相当于浪费了这一步的计算。"
+    ],
+    "qc_checks": [
+      "CTF refinement 后 FSC 或 map 质量有真实改善",
+      "参数变化幅度物理合理",
+      "不同 optics group 行为一致或可解释",
+      "没有因过拟合导致局部假改善"
+    ],
+    "common_errors": [
+      "过早做 CTF refinement，信号不足",
+      "optics group 设置混乱",
+      "把 CTF refinement 当作修复坏数据的万能步骤",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_10"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_10",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "ctf_refinement",
+    "screen_name": "Global/Local CTF Refinement",
+    "checkpoint_id": "cp_10",
+    "title_cn": "cryoSPARC CTF 精修 — 实验室真实SOP（Homogeneous 内置 Per-particle CTF）",
+    "title_en": "",
+    "summary": "本 SOP 未单独列出 Global/Local CTF Refinement 步骤，但 Homogeneous Refinement 已内置 Per-Particle CTF Correction（每张 micrograph CTF 不同、每个颗粒位置不同→逐颗粒校正比全局 CTF 精确得多）。若转 RELION，CTF 需在 RELION 端用 Ctffind4/Gctf 重算（cryoSPARC CTF 嵌入 .cs 不直接兼容）。基于 300kV/0.96Å/50e⁻ 采集参数。",
+    "ui_keywords": [
+      "Per-Particle CTF Correction",
+      "Homogeneous Refinement",
+      "Ctffind4",
+      "Gctf",
+      "ctf_refinement",
+      "defocus",
+      "csparc2star.py"
+    ],
+    "ui_elements": [
+      "Homogeneous Refinement",
+      "CTF Refinement"
+    ],
+    "action_steps": [
+      "本 SOP 未单独设置 Global/Local CTF Refinement Job；Homogeneous Refinement 内置 Per-Particle CTF Correction 已逐颗粒校正 CTF。",
+      "Homogeneous 中 Per-Particle CTF Correction：每张 micrograph 的 CTF 不同、每个颗粒在 micrograph 上的位置不同→每个颗粒的 CTF 也不同，逐颗粒校正比全局 CTF 精确得多。",
+      "RELION 桥接后 CTF 需重算：cryoSPARC CTF 参数嵌入 .cs 文件，RELION 不直接兼容→在 RELION 中用 Ctffind4 或 Gctf 对同一批 micrographs 重新跑 CTF 估计，用 --ctf 指定重算后的值。"
+    ],
+    "qc_checks": [
+      "Homogeneous 输出 FSC 曲线正常（CTF 校正有效的间接证据）",
+      "转 RELION 后 CTF 已在 RELION 端重算（Ctffind4/Gctf）"
+    ],
+    "common_errors": [
+      "跨软件后直接用 cryoSPARC CTF → RELION 不兼容报错，必须重算",
+      "pixel_size 错误导致 defocus 拟合偏移 → 核对 Import 时 0.96Å"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_10"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·CtfRefine (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_10",
+    "title_cn": "RELION CTF 与像差精修(CtfRefine)",
+    "title_en": "RELION SPA Tutorial — CtfRefine",
+    "summary": "用 CTF refinement job-type 估计数据集中的对称/非对称像差、各向异性放大、并重新估计每颗粒 defocus。可从 3D auto-refine 与对应 Post-processing 运行，以较小计算成本进一步提升分辨率。",
+    "action_steps": [
+      "高阶像差：I/O 选 Refine3D particles + Postprocess STAR；Fit tab：Estimate beamtilt?: Yes，Also estimate trefoil?: Yes，estimate 4th order aberrations?: Yes，Minimum resolution for fits (A): 30",
+      "各向异性放大：Estimate anisotropic magnification?: Yes（禁用其他选项），Minimum resolution: 30",
+      "每颗粒 defocus：Perform CTF parameter fitting?: Yes，Fit defocus?: Per-particle，Fit astigmatism?: Per-micrograph，Fit B-factor/phase-shift/beamtilt/4th: No，Minimum resolution: 30",
+      "建议重跑 3D auto-refine + Post-processing 确认改进"
+    ],
+    "qc_checks": [
+      "查看 logfile.pdf 分析像差（beamtilt 非对称图蓝红不对称，trefoil 3-fold，tetrafoil 4-fold）",
+      "各向异性查看 optics 表 _rlnMagMat 接近单位矩阵",
+      "每颗粒 defocus 按微图着色查看倾斜冰层"
+    ],
+    "common_errors": [
+      "先估计最大误差源（一般先 beamtilt）",
+      "各向异性放大与像差同时精修不稳定，须分开",
+      "per-particle defocus 需参考分辨率远超 4 Å 才稳定",
+      "建议迭代：CTF 精修后可再 Bayesian polishing，反之亦可"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_10",
+      "cp_09",
+      "ctfrefine",
+      "aberration",
+      "beamtilt",
+      "defocus"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/CtfRefine.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

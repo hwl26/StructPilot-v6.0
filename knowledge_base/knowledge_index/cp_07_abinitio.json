@@ -1,0 +1,236 @@
+[
+  {
+    "doc_id": "formal_cp_07_2732b33c",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ab_initio",
+    "screen_name": "Initial model, De novo 3D model generation",
+    "checkpoint_id": "cp_07",
+    "title_cn": "初始模型生成失败通常说明什么？",
+    "title_en": "",
+    "summary": "Q: 初始模型生成失败通常说明什么？\nA: RELION 3D initial model 用 VDAM 算法从 2D 颗粒直接生成 de novo 模型。失败常见原因：\n1. 视角分布不均：官方原话 \"Provided you have a reasonable distribution of viewing directions... this algorithm is likely to yield a suitable model\"。如果 2D class 显示明显 preferred orientation，initial model 难收敛。\n2. 2D class 质量不足：input particles 的 2D class average 若分辨率太低或结构特征弱，initial model 会得到噪声球。\n3. 参数问题：Number of classes 设太多（官方默认1，homogeneous 数据用1即可）；Symmetry 设错；mask diameter 过大或过小。\n4. 计算问题：VDAM 不能用多 MPI（官方：gradient-driven algorithm cannot be run with multiple MPI processes），必须 1 MPI。\n5. 判断方法：看 logfile.pdf 的模型 slices，若迭代多轮仍为噪声或形状畸变，说明失败。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Initial angular sampling",
+      "Mask diameter",
+      "Number of classes/models",
+      "Particle subset",
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "ui_elements": [
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "action_steps": [
+      "RELION 3D initial model 用 VDAM 算法从 2D 颗粒直接生成 de novo 模型。失败常见原因：\n1. 视角分布不均：官方原话 \"Provided you have a reasonable distribution of viewing directions... this algorithm is likely to yield a suitable model\"。如果 2D class 显示明显 preferred orientation，initial model 难收敛。\n2. 2D class 质量不足：input particles 的 2D class average 若分辨率太低或结构特征弱，initial model 会得到噪声球。\n3. 参数问题：Number of classes 设太多（官方默认1，homogeneous 数据用1即可）；Symmetry 设错；mask diameter 过大或过小。\n4. 计算问题：VDAM 不能用多 MPI（官方：gradient-driven algorithm cannot be run with multiple MPI processes），必须 1 MPI。\n5. 判断方法：看 logfile.pdf 的模型 slices，若迭代多轮仍为噪声或形状畸变，说明失败。"
+    ],
+    "qc_checks": [
+      "模型整体形状与预期分子大小一致",
+      "没有明显 mirror、handedness 或塌缩异常",
+      "不同初始模型结果相互支持",
+      "能作为 3D 分类或 refinement 的稳定参考"
+    ],
+    "common_errors": [
+      "颗粒异质性太强导致初始模型模糊",
+      "对称性设置不当引入伪结构",
+      "使用偏置参考造成 model bias",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_07"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_07_ff391e78",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ab_initio",
+    "screen_name": "Initial model, De novo 3D model generation",
+    "checkpoint_id": "cp_07",
+    "title_cn": "什么时候需要多个 initial models？",
+    "title_en": "",
+    "summary": "Q: 什么时候需要多个 initial models？\nA: 官方说法：\"Sometimes, using more than one class may help in providing a sink for sub-optimal particles\"。场景：\n1. 样品已知有构象异质性或寡聚态混合，用多个 class 让不同构象分到不同初始模型。\n2. 2D 分类后仍残留坏颗粒，多 class initial model 可让坏颗粒集中到一个「垃圾 class」。\n3. homogeneous 数据（如 tutorial 中的 beta-galactosidase）官方明确用 1 class 即可。\n4. 多 class 会增加计算时间和不确定性，每个 class 颗粒更少，收敛更难。保守做法：先用 1 class，若 3D 分类效果差再回过头试 2–3 class。\n5. Regularisation parameter T 官方默认 4 for 3D runs。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Initial angular sampling",
+      "Mask diameter",
+      "Number of classes/models",
+      "Particle subset",
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "ui_elements": [
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "action_steps": [
+      "官方说法：\"Sometimes, using more than one class may help in providing a sink for sub-optimal particles\"。场景：\n1. 样品已知有构象异质性或寡聚态混合，用多个 class 让不同构象分到不同初始模型。\n2. 2D 分类后仍残留坏颗粒，多 class initial model 可让坏颗粒集中到一个「垃圾 class」。\n3. homogeneous 数据（如 tutorial 中的 beta-galactosidase）官方明确用 1 class 即可。\n4. 多 class 会增加计算时间和不确定性，每个 class 颗粒更少，收敛更难。保守做法：先用 1 class，若 3D 分类效果差再回过头试 2–3 class。\n5. Regularisation parameter T 官方默认 4 for 3D runs。"
+    ],
+    "qc_checks": [
+      "模型整体形状与预期分子大小一致",
+      "没有明显 mirror、handedness 或塌缩异常",
+      "不同初始模型结果相互支持",
+      "能作为 3D 分类或 refinement 的稳定参考"
+    ],
+    "common_errors": [
+      "颗粒异质性太强导致初始模型模糊",
+      "对称性设置不当引入伪结构",
+      "使用偏置参考造成 model bias",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_07"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_07_e393bc9c",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "ab_initio",
+    "screen_name": "Initial model, De novo 3D model generation",
+    "checkpoint_id": "cp_07",
+    "title_cn": "初始模型阶段能不能设置对称性？",
+    "title_en": "",
+    "summary": "Q: 初始模型阶段能不能设置对称性？\nA: 可以，但官方推荐做法是「先 C1 再 apply symmetry」：\n1. 官方 tutorial 设置：Symmetry = D2，但 Run in C1 and apply symmetry later? = Yes。\n2. 原因：\"The actual refinement will be run in C1, which has been observed to converge better than running VDAM in higher symmetry groups.\"VDAM 在 C1 下收敛更好，迭代结束后 relion_align_symmetry 自动检测对称轴并应用。\n3. 如果不知道对称性：Symmetry = C1，apply later = No，让模型在 C1 下自由收敛，后续通过 3D 分类或 map 检查确认对称性。\n4. 错误做法：直接在高对称性（如 D6）下 refine，可能因对称轴偏移导致模型畸变。\n5. 确认对称性的方法：在 chimera 中观察 map 是否有旋转对称轴，或用 relion_align_symmetry 测试。\nEvidence grade: A\nRisk grade: high\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Validation.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html; https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/ModelBuilding.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/InitialModel.html",
+    "ui_keywords": [
+      "Symmetry",
+      "Initial angular sampling",
+      "Mask diameter",
+      "Number of classes/models",
+      "Particle subset",
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "ui_elements": [
+      "Initial model",
+      "De novo 3D model generation"
+    ],
+    "action_steps": [
+      "可以，但官方推荐做法是「先 C1 再 apply symmetry」：\n1. 官方 tutorial 设置：Symmetry = D2，但 Run in C1 and apply symmetry later? = Yes。\n2. 原因：\"The actual refinement will be run in C1, which has been observed to converge better than running VDAM in higher symmetry groups.\"VDAM 在 C1 下收敛更好，迭代结束后 relion_align_symmetry 自动检测对称轴并应用。\n3. 如果不知道对称性：Symmetry = C1，apply later = No，让模型在 C1 下自由收敛，后续通过 3D 分类或 map 检查确认对称性。\n4. 错误做法：直接在高对称性（如 D6）下 refine，可能因对称轴偏移导致模型畸变。\n5. 确认对称性的方法：在 chimera 中观察 map 是否有旋转对称轴，或用 relion_align_symmetry 测试。"
+    ],
+    "qc_checks": [
+      "模型整体形状与预期分子大小一致",
+      "没有明显 mirror、handedness 或塌缩异常",
+      "不同初始模型结果相互支持",
+      "能作为 3D 分类或 refinement 的稳定参考"
+    ],
+    "common_errors": [
+      "颗粒异质性太强导致初始模型模糊",
+      "对称性设置不当引入伪结构",
+      "使用偏置参考造成 model bias",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "high",
+      "cp_07"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_07",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "ab_initio",
+    "screen_name": "Ab-Initio Reconstruction",
+    "checkpoint_id": "cp_07",
+    "title_cn": "cryoSPARC Ab-Initio 初始模型 — 实验室真实SOP",
+    "title_en": "",
+    "summary": "对 Remove Duplicates 去重后的好颗粒做 Ab-Initio Reconstruction，通过 SGD 从 2D 颗粒反推 3D 密度图，无需先验结构。实验室参数：3 类、Maximum resolution=10Å、Symmetry 视蛋白（不对称选 C1）、Class similarity=0.1（想分得更开可调 0.03）。输出 3 个初始 3D 模型供 Heterogeneous 使用。",
+    "ui_keywords": [
+      "num_ab_initio_classes",
+      "max_resolution",
+      "symmetry",
+      "class_similarity",
+      "Ab-Initio Reconstruction",
+      "Remove Duplicates"
+    ],
+    "ui_elements": [
+      "Ab-Initio Reconstruction",
+      "Remove Duplicates"
+    ],
+    "action_steps": [
+      "前置 Remove Duplicates：把距离小于阈值（约颗粒直径 0.5-1 倍）的重复坐标合并，参数保持 default；不合并会污染 2D/3D、导致过度拟合和分辨率虚高。",
+      "Ab-Initio Reconstruction：Number of Ab-Initio classes=3；Maximum resolution=10Å（初始模型分辨率设低）；Symmetry 视蛋白而定（不对称选 C1）；Class similarity=0.1（default，想分得更开调 0.03）。",
+      "原理：SGD 生成随机模型与投影叠加，迭代猜测角度+反向投影逼近真相，输出 3 个初始 3D 模型 + 颗粒集。",
+      "输出全部 3 个模型（含看似像垃圾的）供下游 Heterogeneous Refinement 当作分类参考/海绵吸收坏颗粒。"
+    ],
+    "qc_checks": [
+      "Remove Duplicates 后颗粒数合理（无重复污染）",
+      "Ab-Initio 输出 3 个模型中至少有 1 个二级结构可辨",
+      "Class similarity 0.1 下分类合理（不过激拆分）"
+    ],
+    "common_errors": [
+      "未先 Remove Duplicates 直接 Ab-Initio → 一个颗粒被反复计算，污染初始模型、过度拟合、分辨率虚高",
+      "Class similarity 调太低（0.03）→ 分类过激，可能把一个好构象硬拆成两个",
+      "只把最好的 Ab-Initio class 传给下游 Heterogeneous → 缺少垃圾类吸收坏颗粒，好类混噪声"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_07"
+    ]
+  },
+  {
+    "doc_id": "[官方文档] RELION-SPA·InitialModel (https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html)",
+    "software": "relion",
+    "checkpoint_id": "cp_07",
+    "title_cn": "RELION 初始模型生成(InitialModel/Ab-initio)",
+    "title_en": "RELION SPA Tutorial — InitialModel",
+    "summary": "relion-4.0 用梯度驱动算法从 2D 颗粒生成 de novo 3D 初始参考（不同于 CryoSPARC 的 SGD）。需合理视角分布与良好 2D 类平均，产出可用于 3D 分类或 3D auto-refine 的低分辨率模型。",
+    "action_steps": [
+      "I/O tab：Select/job014/particles.star",
+      "Optimisation tab：Number of VDAM mini-batches: 100，Regularisation parameter T: 4，Number of classes: 1，Mask diameter (A): 200",
+      "Flatten and enforce non-negative solvent?: Yes，Symmetry: D2，Run in C1 and apply symmetry later?: Yes",
+      "Compute tab：Use GPU acceleration?: Yes；Running tab：Number of MPI procs: 1，threads: 12",
+      "Display 查看 InitialModel/job015/initial_model.mrc 评估伪影"
+    ],
+    "qc_checks": [
+      "在 2D slices 中查看 3D map 评估伪影（如溶剂区条纹）",
+      "可用 UCSF chimera 在 3D 查看"
+    ],
+    "common_errors": [
+      "梯度驱动算法不能多 MPI 并行",
+      "C1 运行再后续应用对称性收敛更好",
+      "均匀数据集单类(class=1)即可"
+    ],
+    "tags": [
+      "official_doc",
+      "relion",
+      "cp_07",
+      "initialmodel",
+      "abinitio",
+      "vdam"
+    ],
+    "tier": "sop",
+    "status": "formal_ready",
+    "source": "official_doc_relion",
+    "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/InitialModel.html",
+    "imported_at": "2026-07-10T10:52:44"
+  }
+]

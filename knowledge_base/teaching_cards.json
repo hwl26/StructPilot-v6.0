@@ -1,0 +1,147 @@
+{
+  "cp_01": {
+    "step_name": "Import Movies",
+    "beginner_instructions": [
+      "① 在 cryoSPARC/RELION 中新建项目，选择 Import Movies",
+      "② 指定原始电影文件路径（通常是 .mrc 或 .tif 格式）",
+      "③ 填写像素尺寸（Pixel size）和加速电压（Acceleration voltage），这两个参数必须准确",
+      "④ 设置总剂量（Total dose）用于后续 dose weighting",
+      "⑤ 点击 Queue / Continue 导入"
+    ],
+    "teaching_card": {
+      "what": "将电镜采集的原始电影文件导入处理软件，关联必要的采集参数（像素尺寸、加速电压、剂量等）。这些元数据是后续所有处理步骤的基础，错误会导致全流程偏差。",
+      "key_params": [
+        {
+          "name": "Pixel size (Å/pix)",
+          "meaning": "每个像素对应的物理尺寸。错误会导致分辨率估算、CTF 拟合、颗粒尺寸判断全部失准。",
+          "range": "通常 0.4-1.5 Å/pix，取决于放大倍数和探测器。请向电镜管理员确认。"
+        },
+        {
+          "name": "Acceleration voltage (kV)",
+          "meaning": "电镜加速电压，影响电子波长和 CTF 形状。",
+          "range": "通常 200 或 300 kV"
+        },
+        {
+          "name": "Total dose (e-/Å²)",
+          "meaning": "样品接收的总电子剂量。用于dose weighting，保护高分辨信息。",
+          "range": "通常 40-60 e-/Å²"
+        }
+      ],
+      "common_problems": [
+        "像素尺寸填反（如把 0.86 写成 1.16）→ 后续所有参数全错",
+        "忘记勾选 dose weighting → 高分辨信息丢失",
+        "文件路径错误 → 导入失败或导入空数据"
+      ],
+      "success_criteria": "导入完成后，软件显示正确的影像缩略图，元数据（像素尺寸、电压）与电镜记录一致，无报错信息。"
+    },
+    "quality_check": {
+      "rules": [
+        {
+          "condition": "pixel_size_matches_metadata",
+          "status": "pass",
+          "message": "参数与采集元数据一致"
+        },
+        {
+          "condition": "pixel_size_uncertain",
+          "status": "warn",
+          "message": "像素尺寸是关键参数，请与电镜管理员确认"
+        }
+      ]
+    }
+  },
+  "cp_02": {
+    "step_name": "Motion Correction",
+    "beginner_instructions": [
+      "① 确认 Import Movies 已完成，输入文件已关联",
+      "② 选择 Motion Correction 作业类型",
+      "③ 保持默认参数（首次运行通常无需修改）",
+      "④ 提交作业，等待运行完成",
+      "⑤ 检查输出：漂移轨迹图应平滑，总漂移量 < 50 Å"
+    ],
+    "teaching_card": {
+      "what": "校正采集过程中样品的机械漂移和电子束诱导运动，将每张电影帧对齐后求和，得到清晰的单帧影像（micrograph）。",
+      "key_params": [
+        {
+          "name": "B-factor",
+          "meaning": "平滑因子，控制运动轨迹的平滑程度。值越大越平滑，但过大会欠拟合。",
+          "range": "通常 150-500，漂移大时可增加到 500-1000"
+        },
+        {
+          "name": "Dose weighting",
+          "meaning": "根据累积剂量降低高分辨帧的权重，保护高频信息。",
+          "range": "建议开启"
+        }
+      ],
+      "common_problems": [
+        "漂移过大（>100 Å）→ 增大 B-factor 或检查样品网格质量",
+        "某些影像校正失败 → 可能是冰层破损或严重污染，跳过这些影像"
+      ],
+      "success_criteria": "漂移轨迹平滑，总漂移量 < 50 Å（大分子可放宽到 < 100 Å），输出影像清晰可见颗粒轮廓。"
+    }
+  },
+  "cp_03": {
+    "step_name": "CTF Estimation",
+    "beginner_instructions": [
+      "① 确认 Motion Correction 已完成",
+      "② 选择 CTF Estimation，保持 CTFFIND4 为默认方法",
+      "③ 检查 Min resolution（通常 30 Å）和 Max resolution（初始 4-5 Å）",
+      "④ 提交作业",
+      "⑤ 检查输出：CTF 拟合环清晰，分辨率估算合理"
+    ],
+    "teaching_card": {
+      "what": "估算每张影像的对比度传递函数（CTF），用于后续相位校正。CTF 描述了电镜光学系统如何改变图像信号，必须准确估算才能在重构中'去模糊'。",
+      "key_params": [
+        {
+          "name": "CTF estimation method",
+          "meaning": "CTF 拟合算法，CTFFIND4 是最通用的选择。",
+          "range": "CTFFIND4（推荐）"
+        },
+        {
+          "name": "Min / Max resolution (Å)",
+          "meaning": "CTF 拟合的分辨率范围。Min 通常 30-50 Å，Max 初始 4-5 Å。",
+          "range": "Min: 30-50 / Max: 4-5（后续根据结果调整）"
+        },
+        {
+          "name": "Amplitude contrast",
+          "meaning": "振幅衬度比例，冰层厚度和样品性质会影响此值。",
+          "range": "默认 0.1，冰层薄时可调到 0.07-0.08"
+        }
+      ],
+      "common_problems": [
+        "CTF 拟合率低（< 40%）→ 检查像素尺寸是否正确、冰层是否过厚",
+        "CTF 环不清晰 → 增大 defocus 搜索范围或调整 Max resolution"
+      ],
+      "success_criteria": "CTF 拟合率 > 70%，分辨率估算与预期接近，CTF 拟合环在功率谱中清晰可见。"
+    }
+  },
+  "cp_06": {
+    "step_name": "2D Classification",
+    "beginner_instructions": [
+      "① 确认已完成颗粒提取（Extract）",
+      "② 选择 2D Classification 作业",
+      "③ 设置分类数（Number of classes），通常 50-100",
+      "④ 提交作业，等待完成",
+      "⑤ 检查输出：好的类别应显示清晰的颗粒轮廓和结构细节"
+    ],
+    "teaching_card": {
+      "what": "将提取的颗粒按相似性分类，去除冰晶、污染物和低质量颗粒，保留高质量数据用于 3D 重构。",
+      "key_params": [
+        {
+          "name": "Number of classes",
+          "meaning": "分类数量，数量越多分类越细，但计算量增加。",
+          "range": "通常 50-100，颗粒少时可减到 20-30"
+        },
+        {
+          "name": "Mask diameter",
+          "meaning": "颗粒掩膜直径，应略大于颗粒实际尺寸。",
+          "range": "预估颗粒直径 × 1.2"
+        }
+      ],
+      "common_problems": [
+        "大部分类别模糊不清 → 颗粒质量差或提取参数不当",
+        "颗粒数少（< 5000）→ 减少分类数到 20-30"
+      ],
+      "success_criteria": "至少 30% 的类别显示清晰的颗粒特征，可区分不同投影方向或构象。"
+    }
+  }
+}

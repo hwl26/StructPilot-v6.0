@@ -1,0 +1,153 @@
+[
+  {
+    "doc_id": "formal_cp_05_ab8042df",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "particle_extraction",
+    "screen_name": "Particle extraction, Extract subtomos for STA",
+    "checkpoint_id": "cp_05",
+    "title_cn": "提取时是否要 downsample？",
+    "title_en": "",
+    "summary": "Q: 提取时是否要 downsample？\nA: downsample 取决于当前阶段目标：\n1. 早期 2D/3D 分类：常使用下采样颗粒提高速度，pixel size 可降到 3–4 Å，box size 相应缩小。\n2. 高分辨 refinement 前：必须回到合适像素尺寸（通常 ≤1.5 Å/pix），重新提取或使用未过度降采样的数据。\n3. 官方 tutorial 做法：Refine3D 前重新提取，box size 360，rescale 到 256（pixel size 1.244 Å），限制最高分辨率到 2.5 Å。\n4. 判断依据：目标分辨率、box size、颗粒尺寸和后续 job 需求。如果目标分辨率 3 Å，pixel size 1.5 Å 即可；目标 2 Å 需 pixel size ≤1.0 Å。\n5. 注意：downsample 后要同步更新 STAR 文件中的 rlnImagePixelSize。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ExtractSubtomos.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+    "ui_keywords": [
+      "Box size",
+      "Downsampling / binning",
+      "Normalize particles",
+      "Coordinate scale",
+      "Optics group inheritance",
+      "Particle extraction",
+      "Extract subtomos for STA"
+    ],
+    "ui_elements": [
+      "Particle extraction",
+      "Extract subtomos for STA"
+    ],
+    "action_steps": [
+      "downsample 取决于当前阶段目标：\n1. 早期 2D/3D 分类：常使用下采样颗粒提高速度，pixel size 可降到 3–4 Å，box size 相应缩小。\n2. 高分辨 refinement 前：必须回到合适像素尺寸（通常 ≤1.5 Å/pix），重新提取或使用未过度降采样的数据。\n3. 官方 tutorial 做法：Refine3D 前重新提取，box size 360，rescale 到 256（pixel size 1.244 Å），限制最高分辨率到 2.5 Å。\n4. 判断依据：目标分辨率、box size、颗粒尺寸和后续 job 需求。如果目标分辨率 3 Å，pixel size 1.5 Å 即可；目标 2 Å 需 pixel size ≤1.0 Å。\n5. 注意：downsample 后要同步更新 STAR 文件中的 rlnImagePixelSize。"
+    ],
+    "qc_checks": [
+      "box 能完整包含颗粒和足够边缘",
+      "提取颗粒数量与 picks 数量一致或差异可解释",
+      "随机查看 particles 没有明显裁切或偏心",
+      "下采样后仍保留后续分类所需信息"
+    ],
+    "common_errors": [
+      "box size 太小切掉颗粒信号",
+      "box size 太大增加噪声和计算负担",
+      "坐标缩放或导入坐标单位不一致",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_05"
+    ]
+  },
+  {
+    "doc_id": "formal_cp_05_0e4a412a",
+    "software": "RELION",
+    "version": "5.0",
+    "module": "particle_extraction",
+    "screen_name": "Particle extraction, Extract subtomos for STA",
+    "checkpoint_id": "cp_05",
+    "title_cn": "从外部坐标导入时最容易错哪里？",
+    "title_en": "",
+    "summary": "Q: 从外部坐标导入时最容易错哪里？\nA: 外部坐标导入最常见的错误：\n1. 坐标系不匹配：坐标对应原始 micrograph 还是 binning 后图像？坐标原点是左上还是左下？\n2. 缩放关系：坐标单位是否与 RELION 当前 optics/pixel size 一致？如果坐标是像素单位，需确认对应的 pixel size。\n3. 文件路径：STAR 或坐标文件中的 micrograph 名称是否能匹配 RELION 项目中的实际路径？\n4. 坐标格式：RELION 期望 rlnCoordinateX/rlnCoordinateY，单位为像素；某些 picker 输出是物理坐标或归一化坐标。\n5. 导入后必查：随机查看多个 micrographs，确认 picks 落在颗粒中心；检查坐标分布是否有系统性偏移。\nEvidence grade: A\nRisk grade: medium\nSources: https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Refine3D.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/ExtractSubtomos.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/Refine3DHighRes.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/CtfRefine.html; https://relion.readthedocs.io/en/release-5.0/STA_tutorial/BayesianPolishing.html",
+    "ui_keywords": [
+      "Box size",
+      "Downsampling / binning",
+      "Normalize particles",
+      "Coordinate scale",
+      "Optics group inheritance",
+      "Particle extraction",
+      "Extract subtomos for STA"
+    ],
+    "ui_elements": [
+      "Particle extraction",
+      "Extract subtomos for STA"
+    ],
+    "action_steps": [
+      "外部坐标导入最常见的错误：\n1. 坐标系不匹配：坐标对应原始 micrograph 还是 binning 后图像？坐标原点是左上还是左下？\n2. 缩放关系：坐标单位是否与 RELION 当前 optics/pixel size 一致？如果坐标是像素单位，需确认对应的 pixel size。\n3. 文件路径：STAR 或坐标文件中的 micrograph 名称是否能匹配 RELION 项目中的实际路径？\n4. 坐标格式：RELION 期望 rlnCoordinateX/rlnCoordinateY，单位为像素；某些 picker 输出是物理坐标或归一化坐标。\n5. 导入后必查：随机查看多个 micrographs，确认 picks 落在颗粒中心；检查坐标分布是否有系统性偏移。"
+    ],
+    "qc_checks": [
+      "box 能完整包含颗粒和足够边缘",
+      "提取颗粒数量与 picks 数量一致或差异可解释",
+      "随机查看 particles 没有明显裁切或偏心",
+      "下采样后仍保留后续分类所需信息"
+    ],
+    "common_errors": [
+      "box size 太小切掉颗粒信号",
+      "box size 太大增加噪声和计算负担",
+      "坐标缩放或导入坐标单位不一致",
+      "回答必须保留来源链接或可追溯来源 ID",
+      "不提供来源未支持的硬性参数阈值",
+      "遇到用户上传 QC 图或异常结果时，应提示进入具体图像/日志判断"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "relion",
+      "formal_ready_v0",
+      "a",
+      "medium",
+      "cp_05"
+    ]
+  },
+  {
+    "doc_id": "cryosparc_cp_05",
+    "software": "cryoSPARC",
+    "version": "v4.x",
+    "module": "particle_extraction",
+    "screen_name": "Extract From Micrographs",
+    "checkpoint_id": "cp_05",
+    "title_cn": "cryoSPARC 颗粒提取 — 实验室两轮策略 + RELION 桥接",
+    "title_en": "",
+    "summary": "实验室采用两轮 Extract：第一轮 Fourier crop 到 100~120px（2的幂，不超过 128）加速粗筛；第二轮关闭 Fourier crop 保留原始分辨率精挑。Box size 公式：particle直径(Å)÷0.96×(1.5~2.0) 取 64 的倍数。如需转 RELION，csparc2star.py 的 --box 必须与 Extract box size 一致。",
+    "ui_keywords": [
+      "extraction_box_size",
+      "fourier_crop_box_size",
+      "num_gpus",
+      "Extract From Micrographs",
+      "csparc2star.py",
+      "box",
+      "swapxy",
+      "inverty"
+    ],
+    "ui_elements": [
+      "Extract From Micrographs"
+    ],
+    "action_steps": [
+      "Box size 公式：extraction_box_size = particle_diameter(Å) ÷ 0.96(Å/pix) × (1.5~2.0)，取 64 的倍数。例：直径 120Å ÷ 0.96 × 1.5 ≈ 188 → 取 192。",
+      "第一轮 Extract（粗筛）：Fourier crop to box size=100~120px（2的幂，不超过 2^8=128 保证效率），GPU 视情况。",
+      "第二轮 Extract（精挑）：Extraction box size 同第一轮；Fourier crop 关闭（不 bin）保留原始分辨率。",
+      "RELION 桥接（补充）：conda activate pyem → csparc2star.py --box 【实际box】 --swapxy --inverty 【particles_kept.cs】 【passthrough_particles_kept.cs】 【输出.star】 --strip-uid。",
+      "桥接后 vi 修改 star 路径：:%s #J3/Import/ #MotionCorr/job002/Movies/ #g；再到 RELION 端用 Ctffind4/Gctf 重算 CTF。"
+    ],
+    "qc_checks": [
+      "第一轮 Fourier crop box 在 100~120px 且为 2 的幂（不超过 128）",
+      "第二轮 Fourier crop 已关闭（保留原始分辨率）",
+      "Box size 与颗粒直径匹配（公式：直径÷0.96×1.5~2 取 64 倍数）",
+      "转 RELION 时 csparc2star.py --box 与 cryoSPARC Extract box size 一致"
+    ],
+    "common_errors": [
+      "T07 csparc2star.py box size 不匹配：RELION Extract 报 Box size exceeds micrograph dimensions 或颗粒位置偏移 → 回 cryoSPARC 查 Extract Job 的 box size 重新转换",
+      "T05 RELION opticsGroup1 命名不一致：不同批次数据混用 → vi 统一 opticsGroup 命名，不同采集参数分别建 RELION 项目",
+      "T06 RELION Cannot open image file：star 路径替换不正确 → 重新 :%s 路径前缀替换并逐条 ls 验证",
+      "桥接后 CTF 不兼容：cryoSPARC CTF 嵌入 .cs，RELION 需用 Ctffind4/Gctf 重算"
+    ],
+    "rollback_nodes": [],
+    "image_refs": [],
+    "tags": [
+      "cryosparc",
+      "lab_sop",
+      "batch3",
+      "cp_05"
+    ]
+  }
+]
