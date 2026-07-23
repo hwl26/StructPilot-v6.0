@@ -34,7 +34,7 @@ def _load_lab_experiences(cp_id: str) -> list[dict]:
 
 
 def _render_sop_instructions(cp_id: str, card: dict) -> None:
-    """渲染傻瓜式操作指令区块。"""
+    """渲染傻瓜式操作指令区块（默认折叠，减少界面噪音）。"""
     instructions = card.get("beginner_instructions", [])
     if not instructions:
         instructions = [
@@ -43,9 +43,9 @@ def _render_sop_instructions(cp_id: str, card: dict) -> None:
             "③ 点击 Continue / Queue Job 提交作业",
             "④ 等待运行完成后，点击下方「检查结果」",
         ]
-    st.markdown("**操作指令**")
-    for instr in instructions:
-        st.markdown(f"- {instr}")
+    with st.expander("📋 查看操作指令", expanded=False):
+        for instr in instructions:
+            st.markdown(f"- {instr}")
 
 
 def _render_beginner_params(params: list[dict]) -> None:
@@ -117,6 +117,39 @@ def render_beginner_view(
 
     首次使用时展示需求问答，完成后才进入实际流程。
     """
+    # ── 任务完成页 ────────────────────────────────────────────
+    if st.session_state.get("_bg_task_done"):
+        goal = st.session_state.get("user_profile", {}).get("goal", "当前任务")
+        st.success(f"🎉 **{goal}任务已完成！**")
+        st.markdown("---")
+        st.markdown("### 接下来，你想做什么？")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("🔬 解读我的结果", use_container_width=True, type="primary",
+                         key="done_interpret"):
+                st.session_state["_bg_task_done"] = False
+                st.session_state["_bg_qa_visible"] = True
+                # 预填一个结果解读的提示
+                st.session_state["_bg_prefill_q"] = f"我完成了{goal}任务，帮我解读一下结果"
+                st.rerun()
+        with c2:
+            if st.button("💬 开启提问模式", use_container_width=True,
+                         key="done_chat"):
+                st.session_state["_bg_task_done"] = False
+                st.session_state["_bg_qa_visible"] = True
+                st.rerun()
+        with c3:
+            if st.button("🏠 返回首页", use_container_width=True,
+                         key="done_home"):
+                st.session_state["_bg_task_done"] = False
+                st.session_state.onboarding_completed = False
+                st.session_state.user_profile = {}
+                st.session_state.recommended_workflow = {}
+                st.session_state.onboarding_step = 1
+                st.session_state["_onboarding_mode"] = "v3"
+                st.rerun()
+        return
+
     # ── 首次使用检测：展示需求问答 ──────────────────────────────
     if not st.session_state.get("onboarding_completed", False):
         # 问卷模式：v3=对话式（默认）/ v2=快速选择
@@ -142,15 +175,28 @@ def render_beginner_view(
     skip_steps = workflow.get("skip_steps", [])
 
     if cp_id in skip_steps:
-        # 当前步骤在跳过列表中，显示跳过提示
+        # 检查这是否是流程中最后一个需要跳过的步骤（即用户定制流程已全部完成）
+        workflow_steps = set(workflow.get("steps", []))
+        all_cp_ids = [cp.get("checkpoint_id") for cp in state.checkpoints] if hasattr(state, "checkpoints") else []
+        completed = set(state.completed) if hasattr(state, "completed") else set()
+        # 判断：定制流程的步骤是否已全部完成
+        workflow_done = bool(workflow_steps) and workflow_steps.issubset(completed | {cp_id})
+
         st.info(
             f"**✓ 此步骤已根据你的需求自动跳过**  \n"
             f"你的目标是「{st.session_state.user_profile.get('goal', '')}」，"
             f"本步骤不在推荐流程中。"
         )
-        if st.button("➡ 继续下一步", use_container_width=True, type="primary"):
-            run_command_fn("跳过")
-            st.rerun()
+
+        col_next, col_end = st.columns(2)
+        with col_next:
+            if st.button("➡ 继续下一步", use_container_width=True, type="secondary"):
+                run_command_fn("跳过")
+                st.rerun()
+        with col_end:
+            if st.button("✅ 结束当前任务", use_container_width=True, type="primary"):
+                st.session_state["_bg_task_done"] = True
+                st.rerun()
         return
 
     # ── 正常步骤渲染 ──────────────────────────────────────────
@@ -188,7 +234,7 @@ def render_beginner_view(
             key_prefix="bg_ws",
         )
     except Exception as exc:
-        st.error(f"截图加载失败：{exc}")
+        st.caption(f"截图加载失败：{exc}")
 
     # ── 参数面板（简化版） ─────────────────────────────────────
     raw_tabs = current_cp.get("tabs", [])

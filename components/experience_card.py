@@ -12,6 +12,7 @@ import streamlit as st
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _IMG_DIR = BASE_DIR / "runtime" / "experience_images"
+_VIDEO_DIR = BASE_DIR / "runtime" / "experience_videos"
 
 
 def render_experience_card(exp: dict, expanded: bool = False) -> None:
@@ -63,12 +64,49 @@ def render_experience_card(exp: dict, expanded: bool = False) -> None:
             tags_display = " · ".join(f"`{t}`" for t in tags)
             st.markdown(f"**标签**：{tags_display}")
 
-        # 作者和日期
+        # 📹 短视频（支持本地文件路径和外部链接）
+        video_url = exp.get("video_url", "")
+        video_path = exp.get("video_path", "")
+        if video_url or video_path:
+            st.markdown("**📹 操作演示视频**")
+            try:
+                if video_url:
+                    # 外部链接：B站/YouTube/腾讯视频等，用 iframe 嵌入
+                    st.video(video_url)
+                elif video_path:
+                    # 本地文件路径
+                    from pathlib import Path
+                    vp = Path(video_path)
+                    if not vp.is_absolute():
+                        vp = BASE_DIR / "runtime" / "experience_videos" / video_path
+                    if vp.exists():
+                        st.video(str(vp))
+                    else:
+                        st.caption(f"视频文件不存在：{video_path}")
+            except Exception as e:
+                st.caption(f"视频加载失败：{e}")
+
+        # 作者和日期（增强显示：来源、角色、机构）
         author = exp.get("author", "匿名")
         date = exp.get("date", "")
         author_role = exp.get("author_role", "")
-        author_display = f"{author} · {author_role}" if author_role else author
-        st.caption(f"{author_display} · {date}")
+        institution = exp.get("institution", "")
+        source_type = exp.get("source", "")
+        source_label = {
+            "lab_experience": "🏫 课题组",
+            "open_source": "🌐 开源知识库",
+            "teacher": "👨‍🏫 老师",
+            "senior": "🎓 师兄/师姐",
+        }.get(source_type, "")
+
+        # 拼接显示
+        meta_parts = [p for p in [author, author_role, institution] if p]
+        meta_line = " · ".join(meta_parts)
+        if date:
+            meta_line += f"　{date}"
+        if source_label:
+            meta_line = f"{source_label} | " + meta_line
+        st.caption(meta_line)
 
 
 def render_experience_list(

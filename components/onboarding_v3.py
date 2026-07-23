@@ -167,20 +167,23 @@ def render_conversational_onboarding(app: Any = None) -> bool:
                 if audio_bytes:
                     with st.spinner("正在识别语音..."):
                         import tempfile
-                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                            tmp.write(audio_bytes)
-                            tmp_path = tmp.name
+                        import os
+                        # audio-recorder-streamlit 输出格式可能是 WAV/WebM/Ogg，用通用后缀让 API 自动识别
+                        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".webm")
                         try:
+                            os.write(tmp_fd, audio_bytes)
+                            os.close(tmp_fd)  # Windows 必须先关闭句柄才能被其他进程读取
                             transcript = app.llm.transcribe_audio(tmp_path, language="zh")
                             if transcript.strip():
                                 st.session_state["_v3_input"] = transcript
                                 st.success(f"✓ 已识别 {len(transcript)} 字")
                                 st.rerun()
+                            else:
+                                st.warning("识别结果为空，请重新录音或检查麦克风")
                         except Exception as exc:
-                            st.error(f"识别失败：{exc}")
+                            st.error(f"识别失败：{exc}\n\n请检查：\n1. 高级模式是否配置了 Audio Model\n2. API Key 是否有效\n3. 麦克风权限是否授予")
                         finally:
                             try:
-                                import os
                                 os.unlink(tmp_path)
                             except Exception:
                                 pass

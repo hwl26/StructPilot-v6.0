@@ -2738,66 +2738,46 @@ with tab_chat:
             if st.session_state.get("distill_draft"):
                 draft = st.session_state.distill_draft
                 with st.form("distill_form"):
-                    st.markdown("**预览并编辑这条经验，确认后写入知识库：**")
-                    st.caption("💡 「草稿」仅个人可用；选「共享到课题组」会升级为正式 SOP，所有成员均可检索到")
-                    d_doc_id = st.text_input("doc_id", value=draft.get("doc_id", ""))
-                    d_title = st.text_input("标题 title_cn", value=draft.get("title_cn", ""))
-                    d_cp = st.text_input("关联检查点", value=draft.get("checkpoint_id", ""))
-                    d_summary = st.text_area("摘要 summary", value=draft.get("summary", ""), height=100)
-
-                    def _join(v):
-                        return "\n".join(v) if isinstance(v, list) else (v or "")
-
-                    d_steps = st.text_area("操作步骤（每行一条）", value=_join(draft.get("action_steps")), height=80)
-                    d_qc = st.text_area("质控要点（每行一条）", value=_join(draft.get("qc_checks")), height=70)
-                    d_err = st.text_area("常见陷阱（每行一条）", value=_join(draft.get("common_errors")), height=70)
-                    d_tags = st.text_input("标签 tags（逗号分隔）", value=", ".join(draft.get("tags", []) if isinstance(draft.get("tags"), list) else []))
-                    _dc1, _dc2 = st.columns(2)
-                    with _dc1:
-                        d_tier = st.selectbox("权重", options=["note", "sop"], format_func=lambda x: TIER_LABELS.get(x, x), index=0)
-                    with _dc2:
-                        d_status = st.selectbox("状态", options=["draft", "formal_ready"],
-                                                format_func=lambda x: "草稿（待审核）" if x == "draft" else "正式可用", index=0)
-                    # 共享到课题组：一键设为 sop + formal_ready
-                    d_share = st.checkbox(
-                        "📤 共享到课题组（升级为正式 SOP，所有成员可检索）",
-                        value=False,
-                        help="勾选后本条经验将标记为「正式SOP」并立即生效，无需额外审核"
-                    )
+                    st.markdown("**沉淀这条经验到知识库**")
+                    d_title = st.text_input("标题（原话）", value=draft.get("title_cn", ""),
+                                            placeholder="用自己的话描述这条经验")
+                    d_polish = st.toggle("✨ AI润色内容", value=True,
+                                         help="开启后 AI 会自动整理摘要、步骤等字段；关闭则直接保存原始提取内容")
                     fc1, fc2 = st.columns(2)
                     submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
                     cancelled = fc2.form_submit_button("取消", use_container_width=True)
                 if submitted:
-                    def _lines(s):
-                        return [x.strip() for x in (s or "").splitlines() if x.strip()]
-
-                    # 若勾选「共享到课题组」，强制覆盖为 sop + formal_ready
-                    final_tier = "sop" if d_share else d_tier
-                    final_status = "formal_ready" if d_share else d_status
-
+                    _title = d_title.strip() or draft.get("title_cn", "")
+                    if d_polish:
+                        # AI润色：用 LLM 重新提取，覆盖草稿内容
+                        try:
+                            polished = app.llm.extract_knowledge_doc(
+                                draft.get("_raw_snippet", _title)
+                            )
+                            draft.update({k: v for k, v in polished.items() if k != "doc_id"})
+                        except Exception:
+                            pass  # 润色失败时静默降级，使用原始草稿
                     doc = KnowledgeDoc(
-                        doc_id=d_doc_id.strip() or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                        doc_id=draft.get("doc_id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                         software=draft.get("software", ""),
-                        checkpoint_id=d_cp.strip(),
-                        title_cn=d_title.strip(),
-                        summary=d_summary.strip(),
-                        action_steps=_lines(d_steps),
-                        qc_checks=_lines(d_qc),
-                        common_errors=_lines(d_err),
-                        tags=[x.strip() for x in d_tags.split(",") if x.strip()],
-                        tier=final_tier,
-                        status=final_status,
+                        checkpoint_id=draft.get("checkpoint_id", ""),
+                        title_cn=_title,
+                        summary=draft.get("summary", ""),
+                        action_steps=draft.get("action_steps", []),
+                        qc_checks=draft.get("qc_checks", []),
+                        common_errors=draft.get("common_errors", []),
+                        tags=draft.get("tags", []),
+                        tier=draft.get("tier", "note"),
+                        status=draft.get("status", "draft"),
                         source="distill",
                         imported_at=datetime.now().isoformat(timespec="seconds"),
                     )
                     add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
                     app.retriever.invalidate_corpus_cache()
                     st.session_state.distill_draft = None
-                    status_label = "正式可用（已共享到课题组）" if d_share else ("正式可用" if final_status == "formal_ready" else "草稿（待审核）")
-                    # 改动4：写入成功后显示可见性提示，告知用户在哪里查看记录
                     st.session_state.last_feedback = (
-                        f"✅ 已沉淀经验：{doc.doc_id}（{TIER_LABELS.get(final_tier, final_tier)} / {status_label}）"
-                        f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看并审核所有沉淀记录"
+                        f"✅ 已沉淀经验：{doc.doc_id}"
+                        f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看"
                     )
                     st.rerun()
                 if cancelled:
