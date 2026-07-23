@@ -230,8 +230,25 @@ def render_beginner_view(
                           placeholder=f"例：{cp_cn} 时参数怎么设？")
         if st.button("提问", key="bg_ask"):
             if q.strip():
+                st.session_state["_bg_qa_visible"] = True
                 run_command_fn(q)
                 st.rerun()
+
+    # ── 最近问答展示（点击「提问」后展开） ─────────────────────
+    if st.session_state.get("_bg_qa_visible"):
+        st.markdown("---")
+        st.markdown("#### 💬 最近对话")
+        # 渲染最近 2 轮对话（用户问题 + AI 回复）
+        messages = state.messages[-4:] if hasattr(state, "messages") else []
+        for msg in messages:
+            role_icon = "👤" if msg.role == "user" else "🤖"
+            role_label = "你" if msg.role == "user" else "StructPilot"
+            with st.chat_message(msg.role):
+                st.markdown(f"**{role_icon} {role_label}**")
+                st.markdown(msg.content)
+        if st.button("收起对话", key="bg_hide_qa"):
+            st.session_state["_bg_qa_visible"] = False
+            st.rerun()
 
     # 智能滚动锚点：供 inject_smart_scroll() 定位聊天底部
     st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
