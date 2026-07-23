@@ -35,6 +35,7 @@ from knowledge_base.importer import (
 from knowledge_base.paths import (
     load_sharded_knowledge_index, add_doc_to_sharded_index,
     delete_doc_from_sharded_index, update_doc_status_in_sharded_index,
+    update_doc_fields_in_sharded_index,
 )
 from knowledge_base.corrections import append_correction, load_corrections, make_correction, normalize_query
 from knowledge_base.document_ingest import build_ingest_draft
@@ -3697,7 +3698,10 @@ with tab_settings:
                         if summary:
                             st.caption(summary)
                         st.caption(f"来源等级 {source_grade} · 证据等级 {evidence_grade} · 风险等级 {risk_grade} · 审核状态 {d.get('review_status') or status_label}")
-                        bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 1, 1, 1])
+                        bc0, bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 1, 1, 1, 1])
+                        with bc0:
+                            if st.button("✏️编辑", key=f"kb_edit_{i}", use_container_width=True):
+                                st.session_state[f"kb_editing_{i}"] = not st.session_state.get(f"kb_editing_{i}", False)
                         with bc1:
                             if st.button("👁️查看", key=f"kb_view_{i}", use_container_width=True):
                                 st.session_state[f"kb_detail_{i}"] = not st.session_state.get(f"kb_detail_{i}", False)
@@ -3726,6 +3730,50 @@ with tab_settings:
                             if st.button("🗑️删除", key=f"kb_del_{i}", use_container_width=True):
                                 delete_doc_from_sharded_index(str(BASE_DIR / "knowledge_base"), did)
                                 app.retriever.invalidate_corpus_cache()
+                                st.rerun()
+                        # ── 内联编辑表单 ──────────────────────────
+                        if st.session_state.get(f"kb_editing_{i}", False):
+                            with st.form(key=f"kb_edit_form_{i}"):
+                                st.caption(f"编辑知识条目 `{did}`")
+                                edit_title = st.text_input(
+                                    "标题", value=d.get("title_cn") or d.get("title_en") or "",
+                                    key=f"kb_edit_title_{i}",
+                                )
+                                edit_summary = st.text_area(
+                                    "摘要 / 内容", value=d.get("summary") or "",
+                                    height=120, key=f"kb_edit_summary_{i}",
+                                )
+                                ec1, ec2 = st.columns(2)
+                                with ec1:
+                                    _status_opts = ["formal_ready", "draft", "deprecated"]
+                                    edit_status = st.selectbox(
+                                        "状态", options=_status_opts,
+                                        index=_status_opts.index(status) if status in _status_opts else 0,
+                                        format_func=lambda x: {"formal_ready": "✅ 正式", "draft": "📝 草稿", "deprecated": "🚫 废弃"}.get(x, x),
+                                        key=f"kb_edit_status_{i}",
+                                    )
+                                with ec2:
+                                    _tier_opts = ["sop", "note"]
+                                    edit_tier = st.selectbox(
+                                        "权重", options=_tier_opts,
+                                        index=_tier_opts.index(tier) if tier in _tier_opts else 1,
+                                        format_func=lambda x: TIER_LABELS.get(x, x),
+                                        key=f"kb_edit_tier_{i}",
+                                    )
+                                _saved = st.form_submit_button("💾 保存修改", use_container_width=True)
+                            if _saved:
+                                update_doc_fields_in_sharded_index(
+                                    str(BASE_DIR / "knowledge_base"), did,
+                                    {
+                                        "title_cn": edit_title,
+                                        "summary": edit_summary,
+                                        "status": edit_status,
+                                        "tier": edit_tier,
+                                    },
+                                )
+                                app.retriever.invalidate_corpus_cache()
+                                st.session_state[f"kb_editing_{i}"] = False
+                                st.success(f"已保存：{edit_title}")
                                 st.rerun()
                         if st.session_state.get(f"kb_detail_{i}", False):
                             st.json({k: v for k, v in d.items() if k not in ("ui_keywords", "ui_elements")}, expanded=False)

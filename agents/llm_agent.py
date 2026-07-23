@@ -338,6 +338,46 @@ class LLMAgent:
             return "*" * len(self.api_key)
         return self.api_key[:4] + "..." + self.api_key[-4:]
 
+    def extract_json(self, system_prompt: str, user_text: str,
+                     temperature: float = 0.1) -> Optional[Dict[str, Any]]:
+        """通用结构化抽取：让 LLM 返回 JSON 并解析。
+
+        用于对话式问卷从自然语言中提取结构化信息（样品类型、目标、数量等）。
+        仅支持 openai_compatible 端点；未启用或非兼容端点或解析失败时返回 None，
+        由调用方降级为规则解析。
+        """
+        if not self.enabled or self.provider in {"anthropic", "claude", "gemini", "google_gemini"}:
+            return None
+        try:
+            endpoint = self.base_url.rstrip("/") + "/chat/completions"
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_text},
+                ],
+                "temperature": temperature,
+                "response_format": {"type": "json_object"},
+            }
+            response = self._request_with_retry(
+                endpoint,
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json_data=payload,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"].strip()
+            # 部分模型会用 ```json 包裹，剥离后再解析
+            if content.startswith("```"):
+                content = content.split("```", 2)[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            import json as _json
+            return _json.loads(content)
+        except Exception:
+            return None
+
     def rewrite(self, user_text: str, rule_reply: str, context: str = "",
                 image_paths: Optional[List[str]] = None, references: str = "",
                 response_profile: str = "teaching") -> str:

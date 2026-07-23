@@ -8,7 +8,7 @@ font = "sans serif"
 [server]
 headless = true
 port = 8501
-enableCORS = false
+# 保留 XSRF 防护（Cloud 部署必需），CORS 由其自动管理，不显式关闭以免冲突
 enableXsrfProtection = true
 
 [browser]

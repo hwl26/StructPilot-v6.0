@@ -117,12 +117,23 @@ def render_beginner_view(
 
     首次使用时展示需求问答，完成后才进入实际流程。
     """
-    from components.onboarding_v2 import render_onboarding_dialog
-
     # ── 首次使用检测：展示需求问答 ──────────────────────────────
     if not st.session_state.get("onboarding_completed", False):
-        if render_onboarding_dialog():
-            st.rerun()  # 完成问答后刷新页面
+        # 问卷模式：v3=对话式（默认）/ v2=快速选择
+        onboarding_mode = st.session_state.get("_onboarding_mode", "v3")
+
+        if onboarding_mode == "v3":
+            from components.onboarding_v3 import render_conversational_onboarding
+            if render_conversational_onboarding(app):
+                st.rerun()  # 完成问答后刷新页面
+        else:
+            from components.onboarding_v2 import render_onboarding_dialog
+            # 提供切回对话式的入口
+            if st.button("💬 改用对话式规划", key="switch_to_v3"):
+                st.session_state["_onboarding_mode"] = "v3"
+                st.rerun()
+            if render_onboarding_dialog():
+                st.rerun()
         return  # 问答未完成时阻止后续内容渲染
 
     # ── 问答已完成，检查是否需要跳过当前步骤 ────────────────────

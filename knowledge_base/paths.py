@@ -220,6 +220,45 @@ def delete_doc_from_sharded_index(knowledge_dir: str, doc_id: str) -> bool:
     return removed
 
 
+def update_doc_fields_in_sharded_index(
+    knowledge_dir: str, doc_id: str, fields: Dict[str, Any]
+) -> bool:
+    """Update arbitrary content fields (title/summary/…) of a doc in the sharded index.
+
+    Mirrors update_doc_status_in_sharded_index but merges an arbitrary field dict,
+    used by the inline knowledge editor in the advanced-mode settings tab.
+    """
+    paths = KnowledgeBasePaths(knowledge_dir)
+    shard_dir = paths.path("knowledge_index")
+    if not os.path.isdir(shard_dir):
+        legacy_path = paths.path("knowledge_index.json")
+        docs = _read_shard_list(legacy_path)
+        updated = False
+        for d in docs:
+            if d.get("doc_id") == doc_id:
+                d.update(fields)
+                updated = True
+        if updated:
+            _write_shard_list(legacy_path, docs)
+        return updated
+
+    updated = False
+    for name in sorted(os.listdir(shard_dir)):
+        if not name.endswith(".json"):
+            continue
+        shard_path = os.path.join(shard_dir, name)
+        docs = _read_shard_list(shard_path)
+        changed = False
+        for d in docs:
+            if d.get("doc_id") == doc_id:
+                d.update(fields)
+                updated = True
+                changed = True
+        if changed:
+            _write_shard_list(shard_path, docs)
+    return updated
+
+
 def update_doc_status_in_sharded_index(
     knowledge_dir: str, doc_id: str, status: str, tier: Optional[str] = None
 ) -> bool:
