@@ -231,24 +231,46 @@ def render_beginner_view(
         if st.button("提问", key="bg_ask"):
             if q.strip():
                 st.session_state["_bg_qa_visible"] = True
-                run_command_fn(q)
+                # 入门模式显式传 teaching profile，确保 LLM 润色
+                run_command_fn(q, response_profile="teaching")
                 st.rerun()
 
-    # ── 最近问答展示（点击「提问」后展开） ─────────────────────
+    # ── 最近问答展示（点击「提问」后展开，限高滚动） ───────────
     if st.session_state.get("_bg_qa_visible"):
         st.markdown("---")
         st.markdown("#### 💬 最近对话")
-        # 渲染最近 2 轮对话（用户问题 + AI 回复）
+
+        # 只显示最近 2 轮（最多 4 条消息：Q→A→Q→A）
         messages = state.messages[-4:] if hasattr(state, "messages") else []
-        for msg in messages:
-            role_icon = "👤" if msg.role == "user" else "🤖"
-            role_label = "你" if msg.role == "user" else "StructPilot"
-            with st.chat_message(msg.role):
-                st.markdown(f"**{role_icon} {role_label}**")
-                st.markdown(msg.content)
-        if st.button("收起对话", key="bg_hide_qa"):
-            st.session_state["_bg_qa_visible"] = False
-            st.rerun()
+
+        # 固定高度容器 + 自动滚动，避免挤占页面
+        with st.container():
+            # 使用 HTML + CSS 实现限高滚动（Streamlit 原生 container 不支持高度限制）
+            chat_html = '<div style="max-height:400px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#fafafa;">'
+            for msg in messages:
+                role_icon = "👤" if msg.role == "user" else "🤖"
+                role_label = "你" if msg.role == "user" else "StructPilot"
+                role_color = "#3b82f6" if msg.role == "user" else "#10b981"
+                chat_html += f'<div style="margin-bottom:12px;"><strong style="color:{role_color};">{role_icon} {role_label}</strong><br>'
+                # 简单转义防止 HTML 注入（生产环境应使用更严格的 sanitizer）
+                content = str(msg.content).replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+                chat_html += f'<span style="color:#1e293b;">{content}</span></div>'
+            chat_html += '</div>'
+            st.markdown(chat_html, unsafe_allow_html=True)
+
+        col_hide, col_tip = st.columns([1, 3])
+        with col_hide:
+            if st.button("收起对话", key="bg_hide_qa"):
+                st.session_state["_bg_qa_visible"] = False
+                st.rerun()
+        with col_tip:
+            # LLM 降级提示（仅当最新回复是规则回复时）
+            if messages:
+                last_msg = messages[-1]
+                if last_msg.role == "assistant":
+                    trace = getattr(last_msg, "metadata", {}).get("qa_trace", {})
+                    if trace.get("fallback") and "llm" in str(trace.get("fallback_reason", "")):
+                        st.caption("⚠️ LLM 未启用或调用失败，已使用规则回复。前往「高级模式·设置」配置 API。")
 
     # 智能滚动锚点：供 inject_smart_scroll() 定位聊天底部
     st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)

@@ -148,6 +148,47 @@ def render_conversational_onboarding(app: Any = None) -> bool:
         "例：我在做 TRPV1 离子通道，是膜蛋白。已经在 Krios 上拍了大概 5000 张 movies，"
         "想解出高分辨率结构。之前用过一次 RELION，但很多参数不太懂。"
     )
+
+    # 语音输入（复用高级模式的 LLM Whisper 配置）
+    audio_ready = bool(getattr(getattr(app, "llm", None), "audio_enabled", False))
+    if audio_ready:
+        with st.expander("🎤 用语音描述（点击展开录音）", expanded=False):
+            st.caption("录音完成后会自动识别并填入下方输入框，识别后可手动编辑。")
+            try:
+                from audio_recorder_streamlit import audio_recorder
+                audio_bytes = audio_recorder(
+                    text="",
+                    recording_color="#e74c3c",
+                    neutral_color="#6aa84f",
+                    icon_name="microphone",
+                    icon_size="2x",
+                    key="_v3_audio_recorder",
+                )
+                if audio_bytes:
+                    with st.spinner("正在识别语音..."):
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                            tmp.write(audio_bytes)
+                            tmp_path = tmp.name
+                        try:
+                            transcript = app.llm.transcribe_audio(tmp_path, language="zh")
+                            if transcript.strip():
+                                st.session_state["_v3_input"] = transcript
+                                st.success(f"✓ 已识别 {len(transcript)} 字")
+                                st.rerun()
+                        except Exception as exc:
+                            st.error(f"识别失败：{exc}")
+                        finally:
+                            try:
+                                import os
+                                os.unlink(tmp_path)
+                            except Exception:
+                                pass
+            except ImportError:
+                st.warning("语音录音组件未安装，请先运行 `pip install audio-recorder-streamlit`")
+    else:
+        st.caption("💡 提示：配置 LLM 的 Audio Model 后可启用语音输入（在高级模式·设置中配置）")
+
     user_text = st.text_area(
         "描述你的项目背景和目标",
         height=140,
