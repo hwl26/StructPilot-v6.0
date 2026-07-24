@@ -3165,48 +3165,66 @@ if tab_report is not None:
         st.markdown("### 📥 导出实验数据")
 
         report_text = build_session_report(state, cp_total)
-        col_md, col_wf = st.columns(2)
-        with col_md:
+
+        # CryoSPARC Workflow 导出（仅 CryoSPARC 用户）
+        if state.software.lower() in ("cryosparc", "cryosparc4", "cs"):
+            from utils.cryosparc_workflow import generate_cryosparc_workflow
+            import json
+
+            workflow = st.session_state.get("recommended_workflow", {})
+            params = {
+                "pixel_size": getattr(state, "pixel_size", None),
+                "voltage": getattr(state, "voltage", None),
+                "Cs": getattr(state, "Cs", None),
+                "total_dose": getattr(state, "total_dose", None),
+                "particle_diameter": getattr(state, "particle_diameter", None),
+                "bfactor": getattr(state, "bfactor", None),
+                "box_size": getattr(state, "box_size", None),
+            }
+            wf_json = generate_cryosparc_workflow(workflow, params,
+                                                  workflow_name=f"StructPilot_{state.session_id[:8]}",
+                                                  software=state.software)
+            if wf_json:
+                col_md, col_wf = st.columns(2)
+                with col_md:
+                    st.download_button(
+                        "📄 Markdown 实验记录",
+                        data=report_text,
+                        file_name=f"StructPilot_Report_{state.session_id}.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        help="人类可读的实验报告（不能导入CryoSPARC）",
+                    )
+                with col_wf:
+                    st.download_button(
+                        "📦 CryoSPARC Workflow",
+                        data=json.dumps(wf_json, ensure_ascii=False, indent=2),
+                        file_name=f"StructPilot_Workflow_{state.session_id[:8]}.json",
+                        mime="application/json",
+                        use_container_width=True,
+                        help="可直接导入 CryoSPARC → Workflows → Import",
+                    )
+            else:
+                st.download_button(
+                    "📄 Markdown 实验记录",
+                    data=report_text,
+                    file_name=f"StructPilot_Report_{state.session_id}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                    help="人类可读的实验报告",
+                )
+                st.info("💡 完成入门模式问答后可导出 CryoSPARC Workflow")
+        else:
+            # RELION 用户只有 Markdown 报告
             st.download_button(
                 "📄 Markdown 实验记录",
                 data=report_text,
                 file_name=f"StructPilot_Report_{state.session_id}.md",
                 mime="text/markdown",
                 use_container_width=True,
-                help="导出人类可读的实验报告（不能导入CryoSPARC）",
+                help="人类可读的实验报告",
             )
-        with col_wf:
-            # ✨ 导出 CryoSPARC Workflow JSON（仅 cryosparc 用户可见）
-            if state.software.lower() in ("cryosparc", "cryosparc4", "cs"):
-                from utils.cryosparc_workflow import generate_cryosparc_workflow
-                import json
-
-                workflow = st.session_state.get("recommended_workflow", {})
-                params = {
-                    "pixel_size": getattr(state, "pixel_size", None),
-                    "voltage": getattr(state, "voltage", None),
-                    "Cs": getattr(state, "Cs", None),
-                    "total_dose": getattr(state, "total_dose", None),
-                    "particle_diameter": getattr(state, "particle_diameter", None),
-                    "bfactor": getattr(state, "bfactor", None),
-                    "box_size": getattr(state, "box_size", None),
-                }
-                wf_json = generate_cryosparc_workflow(workflow, params,
-                                                      workflow_name=f"StructPilot_{state.session_id[:8]}",
-                                                      software=state.software)
-                if wf_json:
-                    st.download_button(
-                        "📦 CryoSPARC Workflow (JSON)",
-                        data=json.dumps(wf_json, ensure_ascii=False, indent=2),
-                        file_name=f"StructPilot_Workflow_{state.session_id[:8]}.json",
-                        mime="application/json",
-                        use_container_width=True,
-                        help="可直接导入 CryoSPARC GUI → Workflows → Import Workflow",
-                    )
-                else:
-                    st.caption("（当前软件不支持）")
-            else:
-                st.caption("（CryoSPARC 专属功能）")
+            st.info("💡 CryoSPARC Workflow 导出功能仅在选择 cryoSPARC 软件时可用")
 
         if st.button("💾 保存当前会话", use_container_width=True):
             capture_state_safely(state)

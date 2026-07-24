@@ -116,24 +116,27 @@ def _render_export_panel(current_cp: dict) -> None:
     cp_cn = current_cp.get("checkpoint_cn", cp_id)
 
     st.markdown("#### 📥 导出当前步骤参数")
+    st.caption("仅导出本步骤的参数设置（用于记录/对比），不是完整 Workflow")
     col_csv, col_json = st.columns(2)
     with col_csv:
         csv_data = _export_params_csv(current_cp)
         st.download_button(
-            "📄 CSV 格式",
+            "📄 CSV 表格",
             csv_data,
             file_name=f"{cp_id}_params.csv",
             mime="text/csv",
             use_container_width=True,
+            help="参数表格，可用 Excel 打开",
         )
     with col_json:
         json_data = _export_params_json(current_cp)
         st.download_button(
-            "📋 JSON 格式",
+            "📋 JSON 数据",
             json_data,
             file_name=f"{cp_id}_params.json",
             mime="application/json",
             use_container_width=True,
+            help="参数 JSON，便于程序读取",
         )
 
 
