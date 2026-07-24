@@ -3638,6 +3638,21 @@ with tab_settings:
                                         e["approved_at"] = datetime.now().isoformat()
                                         break
                                 _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+                                # 🆕 企业微信推送通知
+                                from utils.wework_bot import load_wework_config as _ww_cfg_load, send_wework_message as _ww_msg
+                                _ww_cfg_notify = _ww_cfg_load()
+                                if _ww_cfg_notify.get("enabled") and _ww_cfg_notify.get("webhook_url"):
+                                    _notify_content = (
+                                        f"✅ **新经验已审核通过**\n\n"
+                                        f"**标题**：{exp.get('title', '')}\n"
+                                        f"**作者**：{exp.get('author', '')}\n"
+                                        f"**步骤**：{exp.get('step', '')}\n"
+                                        f"**标签**：{', '.join(exp.get('tags', []))}\n\n"
+                                        f"[查看详情](http://localhost:8501)"  # TODO: 替换为实际部署URL
+                                    )
+                                    _ww_msg(_ww_cfg_notify["webhook_url"], _notify_content)
+
                                 st.success("✅ 已通过审核")
                                 st.rerun()
                         with col_reject:
@@ -4221,6 +4236,65 @@ with tab_settings:
                 "症状：漂移过大\n"
                 "解决：增大 B-factor 到 300",
                 language="text",
+            )
+
+        # ── 企业微信群机器人 ────────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 💬 企业微信群机器人")
+        st.caption("审核通过经验后，自动推送到企业微信群（单向推送，无需服务器）")
+
+        from utils.wework_bot import load_wework_config as _ww_load, save_wework_config as _ww_save, send_wework_message as _ww_send
+
+        _ww_cfg = _ww_load()
+
+        with st.expander("⚙️ Webhook 配置", expanded=not _ww_cfg.get("webhook_url")):
+            st.markdown(
+                "**配置步骤**：\n"
+                "1. 企业微信群 → 群设置 → 群机器人 → 添加机器人\n"
+                "2. 复制 Webhook URL 粘贴到下方\n"
+                "3. 启用后，经验审核通过时自动推送到群"
+            )
+            _ww_webhook = st.text_input(
+                "Webhook URL",
+                value=_ww_cfg.get("webhook_url", ""),
+                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+                key="ww_webhook_input"
+            )
+            _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
+
+            col_save, col_test = st.columns(2)
+            with col_save:
+                if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
+                    if _ww_save(_ww_webhook, _ww_enabled):
+                        st.success("✅ 配置已保存")
+                    else:
+                        st.error("保存失败")
+            with col_test:
+                if st.button("🧪 测试连接", use_container_width=True, key="ww_test_btn"):
+                    if _ww_webhook.strip():
+                        ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
+                        if ok:
+                            st.success("✅ 测试成功，企业微信群应收到消息")
+                        else:
+                            st.error("❌ 测试失败，请检查 Webhook URL")
+                    else:
+                        st.warning("请先填写 Webhook URL")
+
+        with st.expander("📖 使用说明", expanded=False):
+            st.markdown(
+                "**自动推送场景**：\n"
+                "- 管理员审核通过经验时\n"
+                "- 新成员贡献经验时（提醒管理员审核）\n"
+                "- 系统维护通知\n\n"
+                "**推送消息格式示例**：\n"
+                "```\n"
+                "✅ 新经验已审核通过\n\n"
+                "标题：Motion Correction 漂移过大\n"
+                "作者：张三\n"
+                "步骤：cp_02\n"
+                "标签：运动校正, 漂移\n"
+                "```\n\n"
+                "**完整指南**：`docs/wechat_qq_integration_guide.md`"
             )
 
         # ── 邮件转经验配置 ─────────────────────────────────────────────────────
