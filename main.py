@@ -3161,15 +3161,19 @@ if tab_report is not None:
 
         st.markdown(app.navigator.generate_report(state))
         st.divider()
+
+        st.markdown("### 📥 导出实验数据")
+
         report_text = build_session_report(state, cp_total)
         col_md, col_wf = st.columns(2)
         with col_md:
             st.download_button(
-                "📄 导出实验记录报告（.md）",
+                "📄 Markdown 实验记录",
                 data=report_text,
-                file_name=f"StructPilot_Experiment_Record_{state.session_id}.md",
+                file_name=f"StructPilot_Report_{state.session_id}.md",
                 mime="text/markdown",
                 use_container_width=True,
+                help="导出人类可读的实验报告（不能导入CryoSPARC）",
             )
         with col_wf:
             # ✨ 导出 CryoSPARC Workflow JSON（仅 cryosparc 用户可见）
@@ -3192,12 +3196,12 @@ if tab_report is not None:
                                                       software=state.software)
                 if wf_json:
                     st.download_button(
-                        "📦 导出 CryoSPARC Workflow",
+                        "📦 CryoSPARC Workflow (JSON)",
                         data=json.dumps(wf_json, ensure_ascii=False, indent=2),
                         file_name=f"StructPilot_Workflow_{state.session_id[:8]}.json",
                         mime="application/json",
                         use_container_width=True,
-                        help="下载后可在 CryoSPARC GUI → Workflows → Import Workflow 导入，一键创建所有 Job 并连线",
+                        help="可直接导入 CryoSPARC GUI → Workflows → Import Workflow",
                     )
                 else:
                     st.caption("（当前软件不支持）")
@@ -3746,6 +3750,54 @@ with tab_settings:
                     else:
                         st.error("密码至少6位")
 
+
+        st.divider()
+        st.markdown("### 📥 导出 CryoSPARC Workflow")
+        if state.software.lower() in ("cryosparc", "cryosparc4", "cs"):
+            st.caption("将 StructPilot 推荐的流程和参数导出为 CryoSPARC Workflow JSON，可直接导入 CryoSPARC GUI")
+            from utils.cryosparc_workflow import generate_cryosparc_workflow
+            import json
+
+            workflow = st.session_state.get("recommended_workflow", {})
+            params = {
+                "pixel_size": getattr(state, "pixel_size", None),
+                "voltage": getattr(state, "voltage", None),
+                "Cs": getattr(state, "Cs", None),
+                "total_dose": getattr(state, "total_dose", None),
+                "particle_diameter": getattr(state, "particle_diameter", None),
+                "bfactor": getattr(state, "bfactor", None),
+                "box_size": getattr(state, "box_size", None),
+            }
+            wf_json = generate_cryosparc_workflow(workflow, params,
+                                                  workflow_name=f"StructPilot_{state.session_id[:8]}",
+                                                  software=state.software)
+            if wf_json:
+                st.download_button(
+                    "📦 下载 Workflow JSON",
+                    data=json.dumps(wf_json, ensure_ascii=False, indent=2),
+                    file_name=f"StructPilot_Workflow_{state.session_id[:8]}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                    key="expert_download_workflow",
+                )
+                with st.expander("📖 如何导入 CryoSPARC", expanded=False):
+                    st.markdown(
+                        "**导入步骤**：\n"
+                        "1. 打开 CryoSPARC GUI（Web界面）\n"
+                        "2. 进入 Project → Workflows\n"
+                        "3. 点击右上角「Import Workflow」\n"
+                        "4. 上传刚下载的 JSON 文件\n"
+                        "5. 导入后点击「Apply」，一键创建所有 Job 并自动连线\n\n"
+                        "**包含内容**：\n"
+                        f"- {len(workflow.get('steps', []))} 个步骤的 Job 定义\n"
+                        "- 自动数据流连接\n"
+                        "- 预填推荐参数（Voltage, Cs, Pixel Size等）\n\n"
+                        "💡 **优势**：省去每步手动创建 Job 和连线的操作，节省时间"
+                    )
+            else:
+                st.info("当前未生成推荐工作流，请先在入门模式完成需求问答")
+        else:
+            st.info("CryoSPARC Workflow 导出功能仅在选择「cryoSPARC」软件时可用")
 
         st.divider()
         st.markdown("### 📚 知识文档导入")
