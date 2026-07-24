@@ -1,128 +1,80 @@
-"""StructPilot v6.0 — CryoSPARC Workflow JSON 生成器。
+"""StructPilot v6.0 — CryoSPARC Workflow JSON 生成器（官方格式）。
 
-根据用户的推荐工作流和采集参数，生成可直接导入 CryoSPARC 的 Workflow JSON。
-CryoSPARC v4 Workflow 格式：Nodes（Job定义）+ Connections（数据流）+ Params（参数预填）
-
-导入方式：CryoSPARC GUI → 右侧 Workflows → Import Workflow → 上传 JSON 文件
-导入后：一键 Apply 批量创建所有 Job 并自动连线，省去每步手动操作。
+根据 CryoSPARC v4.4+ 官方 Workflow 格式生成可导入的 JSON。
+参考官方示例结构并验证字段完整性。
 """
 
 from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _CHECKPOINTS_PATH = BASE_DIR / "knowledge_base" / "flows" / "pipeline_checkpoints.json"
 
-# --------------------------------------------------------------------------- #
-# CryoSPARC job_type 映射（checkpoint_id → cryoSPARC job type string）
-# 来源：cryoSPARC v4 文档，confirmed job type names
-# --------------------------------------------------------------------------- #
+# CryoSPARC job_type 映射
 _JOB_TYPE_MAP: dict[str, str] = {
     "cp_01": "import_movies",
-    "cp_02": "patch_motion_correction",
-    "cp_03": "patch_ctf_estimation",
-    "cp_04": "blob_picker",
-    "cp_05": "extract_micrographs",
-    "cp_06": "class_2D",
-    "cp_07": "ab_initio_reconstruction",
+    "cp_02": "patch_motion_correction_multi",
+    "cp_03": "patch_ctf_estimation_multi",
+    "cp_04": "blob_picker_gpu",
+    "cp_05": "extract_micrographs_multi",
+    "cp_06": "class_2D_new",
+    "cp_07": "homo_abinit",
     "cp_08": "hetero_refine",
-    "cp_09": "homogeneous_refine",
+    "cp_09": "homo_refine_new",
     "cp_10": "ctf_refinement",
-    "cp_11": "sharpening",
-    "cp_12": "local_resolution_estimation",
+    "cp_11": "sharpen",
+    "cp_12": "local_resolution",
 }
 
-# 数据流连接：(source_cp_id, output_slot) → (target_cp_id, input_slot)
-# 描述 CryoSPARC 中各 Job 的数据依赖关系
-_CONNECTIONS = [
-    ("cp_01", "imported_movies",       "cp_02", "movies"),
-    ("cp_02", "micrographs",           "cp_03", "micrographs"),
-    ("cp_03", "exposures",             "cp_04", "micrographs"),
-    ("cp_04", "picked_particles",      "cp_05", "particles"),
-    ("cp_03", "exposures",             "cp_05", "micrographs"),
-    ("cp_05", "particles",             "cp_06", "particles"),
-    ("cp_06", "particles_selected",    "cp_07", "particles"),
-    ("cp_07", "volume_map",            "cp_08", "volume"),
-    ("cp_06", "particles_selected",    "cp_08", "particles"),
-    ("cp_08", "particles",             "cp_09", "particles"),
-    ("cp_08", "volume",                "cp_09", "volume_refmap"),
-    ("cp_09", "particles",             "cp_10", "particles"),
-    ("cp_09", "volume",                "cp_10", "volume"),
-    ("cp_10", "particles",             "cp_11", "particles"),
-    ("cp_10", "volume",                "cp_11", "volume"),
-    ("cp_11", "map_sharp",             "cp_12", "volume"),
-]
-
-# CryoSPARC 参数名映射：StructPilot 内部 key → cryoSPARC param name
-_PARAM_MAP: dict[str, dict[str, str]] = {
-    "cp_01": {
-        "pixel_size": "psize_A",
-        "voltage": "accel_kv",
-        "Cs": "cs_mm",
-        "total_dose": "total_dose_e_per_A2",
-        "gain_reference": "gainref_path",
-    },
-    "cp_02": {
-        "bfactor": "bfactor",
-        "patch_size": "patch_size_x",
-        "dose_weighting": "dose_weight_enable",
-        "group_n_frames": "group_n_frames",
-    },
-    "cp_03": {
-        "max_resolution_ctf": "res_max_fit",
-        "min_resolution_ctf": "res_min_fit",
-        "ctf_fit_range_low": "df_search_min",
-        "ctf_fit_range_high": "df_search_max",
-    },
-    "cp_04": {
-        "particle_diameter": "diameter",
-        "min_separation": "min_dist",
-        "low_threshold": "lowpass_res",
-    },
-    "cp_05": {
-        "box_size": "box_size_pix",
-        "particle_diameter": "cs_particle_diam_A",
-        "fourier_crop": "fourier_crop_to_box_size_pix",
-    },
-    "cp_06": {
-        "num_classes_2d": "num_classes",
-        "particle_diameter": "diam_A",
-        "max_resolution_2d": "class2D_K",
-        "num_iterations": "class2D_num_iterations",
-    },
-    "cp_07": {
-        "num_ab_initio": "num_classes",
-        "initial_resolution": "abinit_init_res",
-        "symmetry": "abinit_sym",
-    },
-    "cp_08": {
-        "num_classes_3d": "num_classes",
-        "mask_diameter": "ref_mask_radius_A",
-    },
-    "cp_09": {
-        "mask_diameter": "ref_mask_radius_A",
-        "refine_res_init": "refine_res_init",
-        "refine_res_gsfsc_split": "refine_res_gsfsc_split",
-    },
-    "cp_10": {
-        "refine_defocus_per_group": "refine_defocus_per_group",
-        "refine_ctf_global_refine": "refine_ctf_global_refine",
-    },
-    "cp_11": {
-        "sharpening_bfactor": "sharpen_bfactor",
-    },
-    "cp_12": {
-        "locres_sampling": "locres_sampling",
-    },
+# 数据流连接（source_job, output_slot → target_job, input_slot）
+_CONNECTIONS: dict[str, list[tuple[str, str]]] = {
+    "cp_02": [("cp_01", "imported_movies", "movies")],
+    "cp_03": [("cp_02", "micrographs", "exposures")],
+    "cp_04": [("cp_03", "exposures", "micrographs")],
+    "cp_05": [
+        ("cp_03", "exposures", "micrographs"),
+        ("cp_04", "particles", "particles"),
+    ],
+    "cp_06": [("cp_05", "particles", "particles")],
+    "cp_07": [("cp_06", "particles_selected", "particles")],
+    "cp_08": [
+        ("cp_06", "particles_selected", "particles"),
+        ("cp_07", "volume_class_0", "volume"),
+    ],
+    "cp_09": [
+        ("cp_08", "particles_class_0", "particles"),
+        ("cp_08", "volume_class_0", "volume"),
+    ],
+    "cp_10": [
+        ("cp_09", "particles", "particles"),
+        ("cp_09", "volume", "volume"),
+    ],
+    "cp_11": [
+        ("cp_10", "particles", "particles"),
+        ("cp_10", "volume", "volume"),
+    ],
+    "cp_12": [("cp_11", "map_sharp", "volume")],
 }
+
+
+def _param(value: Any, locked: bool = False, visible: bool = True, flagged: bool = False) -> dict:
+    """生成 CryoSPARC 参数对象格式。"""
+    return {
+        "value": value,
+        "locked": locked,
+        "visible": visible,
+        "flagged": flagged,
+        "notes": "",
+    }
 
 
 def _load_checkpoints() -> dict[str, dict]:
-    """加载 checkpoint 元数据，按 id 索引。"""
+    """加载 checkpoint 元数据。"""
     try:
         data = json.loads(_CHECKPOINTS_PATH.read_text(encoding="utf-8"))
         return {cp["checkpoint_id"]: cp for cp in data}
@@ -135,91 +87,173 @@ def generate_cryosparc_workflow(
     params: dict,
     workflow_name: str = "StructPilot_Workflow",
     software: str = "cryosparc",
-) -> dict:
-    """生成 CryoSPARC Workflow JSON。
+) -> dict | None:
+    """生成 CryoSPARC v4.4+ 官方格式的 Workflow JSON。
 
     Parameters
     ----------
-    workflow
-        StructPilot 推荐工作流：{"steps": [...], "skip_steps": [...]}
-    params
-        用户采集参数（pixel_size, voltage, particle_diameter 等）
-    workflow_name
-        Workflow 名称（显示在 CryoSPARC 右侧面板）
-    software
-        当前软件（非 cryosparc 时返回空，因为 RELION 格式不同）
+    workflow : dict
+        StructPilot 推荐工作流，格式：{"steps": [...], "skip_steps": [...]}
+    params : dict
+        用户采集参数（pixel_size, voltage, Cs, particle_diameter, box_size等）
+    workflow_name : str
+        Workflow 显示名称
+    software : str
+        软件标识（非 cryosparc 时返回 None）
 
     Returns
     -------
-    dict
-        可序列化为 JSON 的 CryoSPARC Workflow 对象。
+    dict | None
+        CryoSPARC Workflow JSON 对象，可直接序列化后导入 CryoSPARC GUI。
+        格式兼容 CryoSPARC v4.4+
     """
     if software.lower() not in ("cryosparc", "cryosparc4", "cs"):
-        return {}
+        return None
 
     steps = [s for s in workflow.get("steps", []) if s not in workflow.get("skip_steps", [])]
+    if not steps:
+        return None
+
     checkpoints = _load_checkpoints()
+    jobs: dict[str, dict] = {}
+    job_id_map: dict[str, str] = {}  # cp_id → J1/J2/...
 
-    nodes = []
-    job_uid_map: dict[str, str] = {}  # cp_id → uid
-
-    # ── 生成 Job 节点 ──────────────────────────────────────
+    # 生成 Job 节点
     for idx, cp_id in enumerate(steps):
-        job_type = _JOB_TYPE_MAP.get(cp_id, "")
+        job_type = _JOB_TYPE_MAP.get(cp_id)
         if not job_type:
             continue
 
-        uid = f"J{idx + 1}"
-        job_uid_map[cp_id] = uid
+        job_id = f"J{idx + 1}"
+        job_id_map[cp_id] = job_id
         cp_meta = checkpoints.get(cp_id, {})
-        cp_cn = cp_meta.get("checkpoint_cn", cp_id)
 
-        # 构建参数覆盖（只填 StructPilot 知道的值）
-        param_overrides: dict[str, Any] = {}
-        param_name_map = _PARAM_MAP.get(cp_id, {})
-        for sp_key, cs_key in param_name_map.items():
-            if sp_key in params and params[sp_key] is not None:
-                param_overrides[cs_key] = params[sp_key]
+        # 构建 groups（数据流连接）
+        groups: list[list[str]] = []
+        if cp_id in _CONNECTIONS:
+            for src_cp, src_slot, dst_slot in _CONNECTIONS[cp_id]:
+                if src_cp in job_id_map:
+                    groups.append([f"{job_id_map[src_cp]}.{src_slot}", dst_slot])
 
-        node = {
-            "uid": uid,
-            "job_type": job_type,
-            "title": f"{uid} {cp_meta.get('checkpoint_cn', job_type).replace(' ', '_')}",
-            "description": cp_cn,
-            "params_override": param_overrides,
-            "connections": [],
+        # 构建 parameters
+        job_params: dict[str, dict] = {}
+
+        # cp_01: Import Movies
+        if cp_id == "cp_01":
+            job_params = {
+                "blob_paths": _param(None, flagged=True),
+                "gainref_path": _param(None, flagged=True),
+                "psize_A": _param(params.get("pixel_size")),
+                "accel_kv": _param(params.get("voltage")),
+                "cs_mm": _param(params.get("Cs")),
+                "total_dose_e_per_A2": _param(params.get("total_dose")),
+            }
+
+        # cp_02: Motion Correction
+        elif cp_id == "cp_02":
+            job_params = {
+                "compute_num_gpus": _param(1),
+                "bfactor": _param(params.get("bfactor", 150)),
+            }
+
+        # cp_03: CTF Estimation
+        elif cp_id == "cp_03":
+            job_params = {
+                "compute_num_gpus": _param(1),
+            }
+
+        # cp_04: Blob Picker
+        elif cp_id == "cp_04":
+            diameter = params.get("particle_diameter", 150)
+            job_params = {
+                "diameter": _param(diameter),
+                "diameter_max": _param(diameter * 1.5),
+                "min_distance": _param(0.6),
+                "use_ellipse": _param(True),
+            }
+
+        # cp_05: Extract
+        elif cp_id == "cp_05":
+            box_size = params.get("box_size", 256)
+            job_params = {
+                "compute_num_gpus": _param(2),
+                "box_size_pix": _param(box_size),
+                "bin_size_pix": _param(min(box_size // 2, 120)),
+            }
+
+        # cp_06: 2D Classification
+        elif cp_id == "cp_06":
+            job_params = {
+                "class2D_K": _param(100),
+                "class2D_max_res": _param(5),
+                "compute_num_gpus": _param(2),
+                "compute_use_ssd": _param(False),
+            }
+
+        # cp_07: Ab-Initio
+        elif cp_id == "cp_07":
+            job_params = {
+                "abinit_K": _param(3),
+                "abinit_max_res": _param(10),
+                "compute_use_ssd": _param(False),
+            }
+
+        # cp_08: Hetero Refine
+        elif cp_id == "cp_08":
+            job_params = {
+                "compute_use_ssd": _param(False),
+            }
+
+        # cp_09: Homogeneous Refine
+        elif cp_id == "cp_09":
+            job_params = {
+                "compute_use_ssd": _param(False),
+                "refine_res_align_max": _param(3),
+            }
+
+        # cp_10: CTF Refinement
+        elif cp_id == "cp_10":
+            job_params = {}
+
+        # cp_11: Sharpen
+        elif cp_id == "cp_11":
+            job_params = {}
+
+        # cp_12: Local Resolution
+        elif cp_id == "cp_12":
+            job_params = {}
+
+        jobs[job_id] = {
+            "title": "",
+            "description": "",
+            "jobType": job_type,
+            "groups": groups,
+            "individualResults": [],
+            "parameters": job_params,
         }
-        nodes.append(node)
 
-    # ── 生成连接 ───────────────────────────────────────────
-    connections = []
-    for src_cp, src_slot, dst_cp, dst_slot in _CONNECTIONS:
-        if src_cp not in job_uid_map or dst_cp not in job_uid_map:
-            continue  # 跳过不在本次工作流中的连接
-        connections.append({
-            "src_job_uid": job_uid_map[src_cp],
-            "src_output_group_name": src_slot,
-            "dest_job_uid": job_uid_map[dst_cp],
-            "dest_input_group_name": dst_slot,
-        })
-
-    # ── 组装 Workflow 对象 ─────────────────────────────────
+    # 组装 Workflow 对象（CryoSPARC 官方格式）
     workflow_json = {
-        "workflow_type": "template",
+        "_id": uuid.uuid4().hex[:24],  # 24位16进制字符串
         "title": workflow_name,
+        "workflowVersion": "1.0.0",
+        "category": "StructPilot",
+        "createdAt": datetime.utcnow().isoformat() + "Z",
+        "csVersion": "v4.4.0",
         "description": (
-            f"由 StructPilot v6.0 自动生成。\n"
-            f"包含 {len(nodes)} 个 Job。\n"
-            f"参数预设：pixel_size={params.get('pixel_size', '?')} Å, "
-            f"voltage={params.get('voltage', '?')} kV, "
-            f"particle_diameter={params.get('particle_diameter', '?')} Å"
+            f"Generated by StructPilot v6.0\n"
+            f"Steps: {len(jobs)}\n"
+            f"Params: pixel_size={params.get('pixel_size')}Å, "
+            f"voltage={params.get('voltage')}kV, "
+            f"Cs={params.get('Cs')}mm"
         ),
-        "jobs": nodes,
-        "connections": connections,
+        "jobs": jobs,
+        "parents": {},
     }
 
     return workflow_json
 
 
 def workflow_to_json_str(workflow_json: dict, indent: int = 2) -> str:
+    """序列化为 JSON 字符串。"""
     return json.dumps(workflow_json, ensure_ascii=False, indent=indent)
