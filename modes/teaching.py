@@ -254,24 +254,39 @@ def render_teaching_view(
         else:
             st.info("本步骤暂无课题组经验记录。\n\n遇到问题后可通过「贡献经验」按钮添加。")
 
-        # ✨ GitHub Discussions 社区入口
+        # ✨ GitHub 社区入口
         st.markdown("---")
-        st.markdown("### 💬 课题组论坛（GitHub Discussions）")
+        st.markdown("### 💬 课题组社区交流")
         st.markdown(
-            "**在社区论坛中：**\n"
+            "**在 GitHub 社区中：**\n"
             "- 提问：遇到问题随时发帖求助\n"
             "- 分享：把踩坑经验发出来帮助他人\n"
             "- 讨论：和其他课题组交流技巧\n"
             "- 投票：给有用的经验点赞👍"
         )
-        discussions_url = "https://github.com/hwl26/StructPilot-v6.0/discussions"
-        st.link_button(
-            "🌐 打开课题组论坛（新窗口）",
-            url=discussions_url,
-            use_container_width=True,
-            help="管理员审核后的经验会被收录到正式知识库",
+
+        col_issues, col_disc = st.columns(2)
+        with col_issues:
+            # Issues 始终可用
+            st.link_button(
+                "💬 GitHub Issues（推荐）",
+                url="https://github.com/hwl26/StructPilot-v6.0/issues",
+                use_container_width=True,
+                help="发布问题、经验分享、功能建议",
+            )
+        with col_disc:
+            # Discussions 需要仓库管理员开启
+            st.link_button(
+                "🗨️ GitHub Discussions",
+                url="https://github.com/hwl26/StructPilot-v6.0/discussions",
+                use_container_width=True,
+                help="如显示404，说明仓库未开启 Discussions（需管理员在 Settings → Features 中开启）",
+            )
+
+        st.info(
+            "💡 **管理员操作**：在 [仓库设置](https://github.com/hwl26/StructPilot-v6.0/settings) → Features → "
+            "勾选 ✅ Discussions，即可启用论坛功能。启用前请先使用 Issues 交流。"
         )
-        st.caption("💡 Tip：未来将直接在此页面嵌入 Discussions，无需跳转")
 
 
     # ── 底部导航 ─────────────────────────────────────────────
