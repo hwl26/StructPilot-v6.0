@@ -153,42 +153,34 @@ def render_conversational_onboarding(app: Any = None) -> bool:
     audio_ready = bool(getattr(getattr(app, "llm", None), "audio_enabled", False))
     if audio_ready:
         with st.expander("🎤 用语音描述（点击展开录音）", expanded=False):
-            st.caption("录音完成后会自动识别并填入下方输入框，识别后可手动编辑。")
-            try:
-                from audio_recorder_streamlit import audio_recorder
-                audio_bytes = audio_recorder(
-                    text="",
-                    recording_color="#e74c3c",
-                    neutral_color="#6aa84f",
-                    icon_name="microphone",
-                    icon_size="2x",
-                    key="_v3_audio_recorder",
-                )
-                if audio_bytes:
-                    with st.spinner("正在识别语音..."):
-                        import tempfile
-                        import os
-                        # audio-recorder-streamlit 输出格式可能是 WAV/WebM/Ogg，用通用后缀让 API 自动识别
-                        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".webm")
+            st.caption("点击麦克风按钮开始录音，录音完成后会自动识别并填入下方输入框。")
+
+            # 使用 Streamlit 原生 audio_input（更稳定）
+            audio_bytes = st.audio_input("录音", key="_v3_audio_input", label_visibility="collapsed")
+
+            if audio_bytes:
+                with st.spinner("正在识别语音..."):
+                    import tempfile
+                    import os
+                    # st.audio_input 返回 UploadedFile 对象
+                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+                    try:
+                        os.write(tmp_fd, audio_bytes.read())
+                        os.close(tmp_fd)
+                        transcript = app.llm.transcribe_audio(tmp_path, language="zh")
+                        if transcript.strip():
+                            st.session_state["_v3_input"] = transcript
+                            st.success(f"✓ 已识别 {len(transcript)} 字")
+                            st.rerun()
+                        else:
+                            st.warning("识别结果为空，请重新录音或检查麦克风")
+                    except Exception as exc:
+                        st.error(f"识别失败：{exc}\n\n请检查：\n1. 高级模式是否配置了 Audio Model\n2. API Key 是否有效\n3. 麦克风权限是否授予")
+                    finally:
                         try:
-                            os.write(tmp_fd, audio_bytes)
-                            os.close(tmp_fd)  # Windows 必须先关闭句柄才能被其他进程读取
-                            transcript = app.llm.transcribe_audio(tmp_path, language="zh")
-                            if transcript.strip():
-                                st.session_state["_v3_input"] = transcript
-                                st.success(f"✓ 已识别 {len(transcript)} 字")
-                                st.rerun()
-                            else:
-                                st.warning("识别结果为空，请重新录音或检查麦克风")
-                        except Exception as exc:
-                            st.error(f"识别失败：{exc}\n\n请检查：\n1. 高级模式是否配置了 Audio Model\n2. API Key 是否有效\n3. 麦克风权限是否授予")
-                        finally:
-                            try:
-                                os.unlink(tmp_path)
-                            except Exception:
-                                pass
-            except ImportError:
-                st.warning("语音录音组件未安装，请先运行 `pip install audio-recorder-streamlit`")
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
     else:
         st.caption("💡 提示：配置 LLM 的 Audio Model 后可启用语音输入（在高级模式·设置中配置）")
 
