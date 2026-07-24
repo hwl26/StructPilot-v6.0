@@ -64,30 +64,59 @@ _PARAM_MAP: dict[str, dict[str, str]] = {
         "voltage": "accel_kv",
         "Cs": "cs_mm",
         "total_dose": "total_dose_e_per_A2",
+        "gain_reference": "gainref_path",
     },
     "cp_02": {
         "bfactor": "bfactor",
         "patch_size": "patch_size_x",
+        "dose_weighting": "dose_weight_enable",
+        "group_n_frames": "group_n_frames",
     },
     "cp_03": {
         "max_resolution_ctf": "res_max_fit",
+        "min_resolution_ctf": "res_min_fit",
+        "ctf_fit_range_low": "df_search_min",
+        "ctf_fit_range_high": "df_search_max",
     },
     "cp_04": {
         "particle_diameter": "diameter",
+        "min_separation": "min_dist",
+        "low_threshold": "lowpass_res",
     },
     "cp_05": {
         "box_size": "box_size_pix",
         "particle_diameter": "cs_particle_diam_A",
+        "fourier_crop": "fourier_crop_to_box_size_pix",
     },
     "cp_06": {
         "num_classes_2d": "num_classes",
         "particle_diameter": "diam_A",
+        "max_resolution_2d": "class2D_K",
+        "num_iterations": "class2D_num_iterations",
     },
     "cp_07": {
         "num_ab_initio": "num_classes",
+        "initial_resolution": "abinit_init_res",
+        "symmetry": "abinit_sym",
+    },
+    "cp_08": {
+        "num_classes_3d": "num_classes",
+        "mask_diameter": "ref_mask_radius_A",
     },
     "cp_09": {
         "mask_diameter": "ref_mask_radius_A",
+        "refine_res_init": "refine_res_init",
+        "refine_res_gsfsc_split": "refine_res_gsfsc_split",
+    },
+    "cp_10": {
+        "refine_defocus_per_group": "refine_defocus_per_group",
+        "refine_ctf_global_refine": "refine_ctf_global_refine",
+    },
+    "cp_11": {
+        "sharpening_bfactor": "sharpen_bfactor",
+    },
+    "cp_12": {
+        "locres_sampling": "locres_sampling",
     },
 }
 

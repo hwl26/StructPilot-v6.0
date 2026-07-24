@@ -261,6 +261,36 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
                 img_info = f"（含 {len(image_filenames)} 张截图）" if image_filenames else ""
                 tag_info = f"，自动生成 {len(auto_tags)} 个标签" if auto_tags else ""
                 st.success(f"✅ 经验已提交{img_info}{tag_info}，待管理员审核后生效（目前标注「待验证」，已可检索）")
+
+                # ✨ 新增：GitHub Issues 分享入口
+                st.markdown("---")
+                st.markdown("**📤 想让更多人受益？提交到课题组经验库：**")
+
+                # 构建预填的 GitHub Issue URL
+                import urllib.parse
+                issue_title = f"[经验贡献] {normalized_title}"
+                issue_body = f"""**分类**：{category}
+**步骤**：{cp_cn} ({cp_id})
+
+**症状**：
+{normalized_symptoms}
+
+**解决方案**：
+{normalized_solution}
+
+**标签**：{', '.join(all_tags)}
+
+---
+_本条经验由 StructPilot v6.0 用户贡献_
+"""
+                issue_url = f"https://github.com/hwl26/StructPilot-v6.0/issues/new?title={urllib.parse.quote(issue_title)}&body={urllib.parse.quote(issue_body)}&labels=经验贡献,{urllib.parse.quote(cp_id)}"
+
+                st.link_button(
+                    "📤 提交到 GitHub Issues（公开分享）",
+                    url=issue_url,
+                    help="管理员审核通过后会合并到正式知识库，全体用户可见",
+                    use_container_width=True,
+                )
             except Exception as exc:
                 st.error(f"提交失败：{exc}")
         else:

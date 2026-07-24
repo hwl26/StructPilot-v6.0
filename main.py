@@ -1705,6 +1705,31 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # ✨ 用户登录/笔记入口
+    from utils.user_manager import get_current_user, set_local_user
+    current_user = get_current_user()
+
+    with st.expander("👤 用户笔记", expanded=False):
+        if not current_user:
+            st.caption("本地模式：输入用户名后可保存个人笔记")
+            username_input = st.text_input("用户名", placeholder="例：张三", key="user_login_input", label_visibility="collapsed")
+            if st.button("登录", use_container_width=True, key="user_login_btn"):
+                if username_input.strip():
+                    set_local_user(username_input)
+                    st.rerun()
+                else:
+                    st.warning("请输入用户名")
+        else:
+            st.caption(f"当前用户：**{current_user}**")
+            from utils.user_manager import load_user_notes
+            notes = load_user_notes(current_user)
+            st.caption(f"已保存 {len(notes)} 条笔记")
+            if st.button("📝 查看我的笔记", use_container_width=True, key="view_my_notes"):
+                st.session_state["_show_user_notes"] = True
+            if st.button("🚪 退出登录", use_container_width=True, key="user_logout"):
+                set_local_user("")
+                st.rerun()
+
     # P0-A2: 软件切换入口（RELION / cryoSPARC）
     _software_options = {"RELION": "relion", "cryoSPARC": "cryosparc"}
     _sw_labels = list(_software_options.keys())
@@ -3395,7 +3420,53 @@ with tab_settings:
                              pet_enabled=_final_pet_enabled, pet_type=_final_pet_type,
                              pet_size=_final_pet_size)
             st.success("界面设置已保存")
-    
+
+        # ✨ 个人笔记管理
+        st.divider()
+        st.markdown("### 📝 个人笔记")
+        from utils.user_manager import get_current_user, load_user_notes, save_user_note, delete_user_note
+        current_user = get_current_user()
+
+        if not current_user:
+            st.info("请在左侧边栏「👤 用户笔记」中登录后使用此功能")
+        else:
+            notes = load_user_notes(current_user)
+            st.caption(f"共 {len(notes)} 条笔记")
+
+            # 新建笔记
+            with st.expander("➕ 新建笔记", expanded=False):
+                note_step = st.selectbox("关联步骤", options=[cp.get("checkpoint_id") for cp in state.checkpoints],
+                                         format_func=lambda cid: next((c.get("checkpoint_cn") for c in state.checkpoints if c.get("checkpoint_id")==cid), cid),
+                                         key="new_note_step")
+                note_content = st.text_area("笔记内容", height=100, key="new_note_content", placeholder="记录关键参数、踩坑经验、个人心得...")
+                note_tags_str = st.text_input("标签（逗号分隔）", key="new_note_tags", placeholder="例：CTF, 参数调优")
+                if st.button("💾 保存笔记", key="save_new_note", use_container_width=True):
+                    if note_content.strip():
+                        tags = [t.strip() for t in note_tags_str.split(",") if t.strip()]
+                        if save_user_note(current_user, note_step, note_content.strip(), tags):
+                            st.success("✅ 笔记已保存")
+                            st.rerun()
+                        else:
+                            st.error("保存失败")
+                    else:
+                        st.warning("请输入笔记内容")
+
+            # 查看已有笔记
+            if notes:
+                st.markdown("**我的笔记列表**")
+                for note in reversed(notes[-10:]):  # 最新10条
+                    with st.expander(f"📌 {note.get('step', '')} · {note.get('timestamp', '')[:16]}", expanded=False):
+                        st.markdown(note.get("content", ""))
+                        if note.get("tags"):
+                            st.caption(f"标签：{', '.join(note.get('tags'))}")
+                        if st.button("🗑️ 删除", key=f"del_note_{note.get('id')}"):
+                            if delete_user_note(current_user, note.get("id")):
+                                st.success("已删除")
+                                st.rerun()
+            else:
+                st.caption("暂无笔记")
+
+
         st.divider()
         st.markdown("### 📚 知识文档导入")
         _col_k1, _col_k2 = st.columns([1, 1])

@@ -254,6 +254,26 @@ def render_teaching_view(
         else:
             st.info("本步骤暂无课题组经验记录。\n\n遇到问题后可通过「贡献经验」按钮添加。")
 
+        # ✨ GitHub Discussions 社区入口
+        st.markdown("---")
+        st.markdown("### 💬 课题组论坛（GitHub Discussions）")
+        st.markdown(
+            "**在社区论坛中：**\n"
+            "- 提问：遇到问题随时发帖求助\n"
+            "- 分享：把踩坑经验发出来帮助他人\n"
+            "- 讨论：和其他课题组交流技巧\n"
+            "- 投票：给有用的经验点赞👍"
+        )
+        discussions_url = "https://github.com/hwl26/StructPilot-v6.0/discussions"
+        st.link_button(
+            "🌐 打开课题组论坛（新窗口）",
+            url=discussions_url,
+            use_container_width=True,
+            help="管理员审核后的经验会被收录到正式知识库",
+        )
+        st.caption("💡 Tip：未来将直接在此页面嵌入 Discussions，无需跳转")
+
+
     # ── 底部导航 ─────────────────────────────────────────────
     st.markdown("---")
     col_back, col_op = st.columns(2)
