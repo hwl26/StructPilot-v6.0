@@ -90,6 +90,15 @@ def save_user_note(user_id: str, step: str, content: str, tags: list[str]) -> bo
         是否成功
     """
     try:
+        # ✨ 输入验证
+        from utils.security import sanitize_user_input
+
+        if len(content) > 5000:
+            return False  # 笔记内容过长
+
+        content_safe = sanitize_user_input(content, max_length=5000)
+        tags_safe = [sanitize_user_input(t, max_length=50) for t in tags[:10]]  # 最多10个标签
+
         path = get_user_notes_path(user_id)
         notes = load_user_notes(user_id)
 
@@ -98,8 +107,8 @@ def save_user_note(user_id: str, step: str, content: str, tags: list[str]) -> bo
             "id": f"note_{len(notes)+1:03d}",
             "timestamp": datetime.datetime.now().isoformat(),
             "step": step,
-            "content": content,
-            "tags": tags,
+            "content": content_safe,
+            "tags": tags_safe,
         }
         notes.append(new_note)
 

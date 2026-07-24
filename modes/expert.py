@@ -212,7 +212,18 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
     if submitted:
         if title.strip() and solution.strip():
             try:
-                # ✨ 保存截图
+                # ✨ 输入验证和清理
+                from utils.security import sanitize_user_input, validate_json_size
+
+                # 长度限制检查
+                if len(title) > 200:
+                    st.error("标题过长（最多 200 字符）")
+                    return
+                if len(solution) > 5000:
+                    st.error("解决方案过长（最多 5000 字符）")
+                    return
+
+                # 保存截图
                 image_filenames = []
                 if uploaded_files:
                     image_filenames = _save_experience_images(uploaded_files, cp_id)
@@ -237,6 +248,22 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
 
                 # 合并标签（手动优先，去重）
                 all_tags = list(dict.fromkeys(manual_tags + auto_tags))[:10]  # 最多10个
+
+                # ✨ 去重检测
+                from utils.deduplication import find_similar_experiences
+                similar = find_similar_experiences(
+                    normalized_title,
+                    data.get("entries", []),
+                    threshold=0.80
+                )
+                if similar:
+                    st.warning(
+                        f"⚠️ 发现相似的经验（相似度 {similar[0]['similarity']:.0%}）：\n\n"
+                        f"**{similar[0]['entry'].get('title', '')}**\n\n"
+                        f"确定要继续提交吗？可能造成重复。"
+                    )
+                    if not st.button("✓ 确认提交（不是重复）", key=f"confirm_submit_{cp_id}"):
+                        st.stop()
 
                 import datetime
                 new_entry = {

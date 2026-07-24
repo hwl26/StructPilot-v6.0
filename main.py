@@ -1530,6 +1530,17 @@ def run_command(
         response_profile or get_state("output_mode", "teaching")
     )
     state.response_profile = response_profile
+
+    # ✨ 经验描述智能检测
+    from utils.intent_detection import detect_experience_sharing
+    if detect_experience_sharing(text):
+        # 检测到经验分享意图，提示用户保存
+        st.session_state["_detected_experience"] = {
+            "text": text,
+            "timestamp": datetime.now().isoformat(),
+        }
+        # 在下次渲染时显示提示（不中断当前流程）
+
     progress = st.status(
         "正在处理图片和问题…" if image_refs else "正在理解问题…",
         expanded=True,
@@ -2582,7 +2593,31 @@ with tab_chat:
                     if len(state.messages) > history_limit:
                         st.caption(f"显示最近 {history_limit} 条（共 {len(state.messages)} 条）。可在「设置」中调整条数。")
 
-    
+                # ✨ 经验分享智能提示
+                detected_exp = st.session_state.get("_detected_experience")
+                if detected_exp:
+                    from utils.intent_detection import extract_experience_snippet
+                    snippet = extract_experience_snippet(detected_exp.get("text", ""))
+                    st.info(
+                        f"💡 检测到你可能在分享经验：「{snippet}」\n\n"
+                        f"要保存到经验库吗？"
+                    )
+                    col_save, col_dismiss = st.columns(2)
+                    with col_save:
+                        if st.button("💾 保存为经验", key="save_detected_exp", use_container_width=True):
+                            st.session_state["_distill_prefill"] = {
+                                "question": "",
+                                "answer": detected_exp.get("text", ""),
+                                "checkpoint_id": state.current_cp_id or "",
+                            }
+                            st.session_state["_show_distill_form"] = True
+                            st.session_state["_detected_experience"] = None
+                            st.rerun()
+                    with col_dismiss:
+                        if st.button("忽略", key="dismiss_detected_exp", use_container_width=True):
+                            st.session_state["_detected_experience"] = None
+                            st.rerun()
+
                 # Folded older messages
                 if older_messages:
                     older_summary = get_older_summary(older_messages)
@@ -2679,6 +2714,25 @@ with tab_chat:
                             _render_qa_acceptance(msg, i, is_last)
                             render_answer_feedback(msg, f"{i}")
 
+                            # ✨ 新增：保存此条为经验
+                            if st.button("💾 保存为经验", key=f"save_exp_{i}", help="将此条回答保存到经验库"):
+                                # 提取用户问题（向前找最近的 user 消息）
+                                user_question = ""
+                                for j in range(i - 1, max(0, i - 5), -1):
+                                    if state.messages[j].role == "user":
+                                        user_question = state.messages[j].content
+                                        break
+
+                                # 预填到沉淀表单
+                                st.session_state["_distill_prefill"] = {
+                                    "question": user_question,
+                                    "answer": msg.content,
+                                    "checkpoint_id": checkpoint_id_from_metadata(msg) or state.current_stage,
+                                }
+                                st.session_state["_show_distill_form"] = True
+                                st.rerun()
+
+
                 # Bottom anchor + back-to-top
                 st.markdown(
                     '<div id="chat-bottom"></div>'
@@ -2760,54 +2814,68 @@ with tab_chat:
             if st.session_state.get("chat_stage_filter") != "全部":
                 st.session_state._sp_scroll_target = "chat_bottom"
 
-            if st.session_state.get("distill_draft"):
-                draft = st.session_state.distill_draft
-                with st.form("distill_form"):
-                    st.markdown("**沉淀这条经验到知识库**")
-                    d_title = st.text_input("标题（原话）", value=draft.get("title_cn", ""),
-                                            placeholder="用自己的话描述这条经验")
-                    d_polish = st.toggle("✨ AI润色内容", value=True,
-                                         help="开启后 AI 会自动整理摘要、步骤等字段；关闭则直接保存原始提取内容")
-                    fc1, fc2 = st.columns(2)
-                    submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
-                    cancelled = fc2.form_submit_button("取消", use_container_width=True)
-                if submitted:
-                    _title = d_title.strip() or draft.get("title_cn", "")
-                    if d_polish:
-                        # AI润色：用 LLM 重新提取，覆盖草稿内容
-                        try:
-                            polished = app.llm.extract_knowledge_doc(
-                                draft.get("_raw_snippet", _title)
-                            )
-                            draft.update({k: v for k, v in polished.items() if k != "doc_id"})
-                        except Exception:
-                            pass  # 润色失败时静默降级，使用原始草稿
-                    doc = KnowledgeDoc(
-                        doc_id=draft.get("doc_id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                        software=draft.get("software", ""),
-                        checkpoint_id=draft.get("checkpoint_id", ""),
-                        title_cn=_title,
-                        summary=draft.get("summary", ""),
-                        action_steps=draft.get("action_steps", []),
-                        qc_checks=draft.get("qc_checks", []),
-                        common_errors=draft.get("common_errors", []),
-                        tags=draft.get("tags", []),
-                        tier=draft.get("tier", "note"),
-                        status=draft.get("status", "draft"),
-                        source="distill",
-                        imported_at=datetime.now().isoformat(timespec="seconds"),
-                    )
-                    add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
-                    app.retriever.invalidate_corpus_cache()
-                    st.session_state.distill_draft = None
-                    st.session_state.last_feedback = (
-                        f"✅ 已沉淀经验：{doc.doc_id}"
-                        f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看"
-                    )
-                    st.rerun()
-                if cancelled:
-                    st.session_state.distill_draft = None
-                    st.rerun()
+            if st.session_state.get("distill_draft") or st.session_state.get("_show_distill_form"):
+                # ✨ 支持从「💾 保存为经验」按钮预填
+                prefill = st.session_state.get("_distill_prefill", {})
+                if prefill and not st.session_state.get("distill_draft"):
+                    # 从预填数据生成草稿
+                    snippet = f"user: {prefill.get('question', '')}\n\nassistant: {prefill.get('answer', '')}"
+                    draft = app.llm.extract_knowledge_doc(snippet)
+                    draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                    draft.setdefault("checkpoint_id", prefill.get("checkpoint_id", state.current_cp_id or ""))
+                    draft.setdefault("software", state.software or "")
+                    st.session_state.distill_draft = draft
+                    st.session_state["_distill_prefill"] = {}
+                    st.session_state["_show_distill_form"] = False
+
+                draft = st.session_state.get("distill_draft")
+                if draft:
+                    with st.form("distill_form"):
+                        st.markdown("**沉淀这条经验到知识库**")
+                        d_title = st.text_input("标题（原话）", value=draft.get("title_cn", ""),
+                                                placeholder="用自己的话描述这条经验")
+                        d_polish = st.toggle("✨ AI润色内容", value=True,
+                                             help="开启后 AI 会自动整理摘要、步骤等字段；关闭则直接保存原始提取内容")
+                        fc1, fc2 = st.columns(2)
+                        submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
+                        cancelled = fc2.form_submit_button("取消", use_container_width=True)
+                    if submitted:
+                        _title = d_title.strip() or draft.get("title_cn", "")
+                        if d_polish:
+                            # AI润色：用 LLM 重新提取，覆盖草稿内容
+                            try:
+                                polished = app.llm.extract_knowledge_doc(
+                                    draft.get("_raw_snippet", _title)
+                                )
+                                draft.update({k: v for k, v in polished.items() if k != "doc_id"})
+                            except Exception:
+                                pass  # 润色失败时静默降级，使用原始草稿
+                        doc = KnowledgeDoc(
+                            doc_id=draft.get("doc_id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                            software=draft.get("software", ""),
+                            checkpoint_id=draft.get("checkpoint_id", ""),
+                            title_cn=_title,
+                            summary=draft.get("summary", ""),
+                            action_steps=draft.get("action_steps", []),
+                            qc_checks=draft.get("qc_checks", []),
+                            common_errors=draft.get("common_errors", []),
+                            tags=draft.get("tags", []),
+                            tier=draft.get("tier", "note"),
+                            status=draft.get("status", "draft"),
+                            source="distill",
+                            imported_at=datetime.now().isoformat(timespec="seconds"),
+                        )
+                        add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                        app.retriever.invalidate_corpus_cache()
+                        st.session_state.distill_draft = None
+                        st.session_state.last_feedback = (
+                            f"✅ 已沉淀经验：{doc.doc_id}"
+                            f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看"
+                        )
+                        st.rerun()
+                    if cancelled:
+                        st.session_state.distill_draft = None
+                        st.rerun()
 
 
         st.session_state.setdefault("pending_pasted", [])
@@ -3038,6 +3106,38 @@ with tab_chat:
 if tab_report is not None:
     with tab_report:
         st.markdown("### 流程报告")
+
+        # ✨ 精美流程图可视化
+        st.markdown("#### 📊 Workflow 流程图")
+        from utils.workflow_visualizer import generate_cryosparc_workflow_graph, generate_compact_workflow_graph
+
+        viz_style = st.radio(
+            "显示风格",
+            options=["完整版（带步骤名称）", "紧凑版（仅编号）"],
+            index=0,
+            horizontal=True,
+            key="workflow_viz_style",
+        )
+
+        if viz_style == "完整版（带步骤名称）":
+            dot_graph = generate_cryosparc_workflow_graph(
+                state.checkpoints if hasattr(state, 'checkpoints') and state.checkpoints else app.navigator.checkpoints,
+                current_step=state.current_cp_id or ""
+            )
+        else:
+            dot_graph = generate_compact_workflow_graph(
+                state.checkpoints if hasattr(state, 'checkpoints') and state.checkpoints else app.navigator.checkpoints,
+                current_step=state.current_cp_id or ""
+            )
+
+        try:
+            st.graphviz_chart(dot_graph, use_container_width=True)
+            st.caption("💡 当前步骤用橙色高亮标注")
+        except Exception as exc:
+            st.warning(f"流程图渲染失败：{exc}\n\n如在 Streamlit Cloud 部署，请确保仓库根目录有 `packages.txt` 文件并包含 `graphviz`")
+
+        st.divider()
+
         st.markdown(app.navigator.generate_report(state))
         st.divider()
         report_text = build_session_report(state, cp_total)
@@ -3487,6 +3587,49 @@ with tab_settings:
                                 st.rerun()
             else:
                 st.caption("暂无笔记")
+
+        # ✨ 经验审核面板（管理员功能）
+        st.divider()
+        st.markdown("### 📋 经验审核（管理员）")
+        st.caption("审核用户贡献的经验，通过后改为「已验证」状态")
+
+        try:
+            exp_data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+            pending_exps = [e for e in exp_data.get("entries", []) if e.get("status") == "pending"]
+
+            if pending_exps:
+                st.info(f"📝 待审核：{len(pending_exps)} 条经验")
+                for exp in pending_exps[:10]:  # 最多显示10条
+                    with st.expander(f"⏳ {exp.get('title', '')}", expanded=False):
+                        st.markdown(f"**分类**：{exp.get('category', '')}")
+                        st.markdown(f"**步骤**：{exp.get('step', '')}")
+                        st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
+                        st.markdown(f"**解决方案**：{exp.get('solution', '')}")
+                        st.caption(f"提交者：{exp.get('author', '')} · {exp.get('date', '')}")
+
+                        col_approve, col_reject = st.columns(2)
+                        with col_approve:
+                            if st.button("✅ 通过", key=f"approve_{exp.get('id')}", use_container_width=True):
+                                # 修改状态为 approved
+                                for e in exp_data["entries"]:
+                                    if e.get("id") == exp.get("id"):
+                                        e["status"] = "approved"
+                                        e["approved_at"] = datetime.now().isoformat()
+                                        break
+                                _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                                st.success("✅ 已通过审核")
+                                st.rerun()
+                        with col_reject:
+                            if st.button("❌ 拒绝", key=f"reject_{exp.get('id')}", use_container_width=True):
+                                # 删除此条经验
+                                exp_data["entries"] = [e for e in exp_data["entries"] if e.get("id") != exp.get("id")]
+                                _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                                st.warning("❌ 已拒绝并删除")
+                                st.rerun()
+            else:
+                st.success("✅ 没有待审核的经验")
+        except Exception as exc:
+            st.error(f"加载审核列表失败：{exc}")
 
 
         st.divider()
