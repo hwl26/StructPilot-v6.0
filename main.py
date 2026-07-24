@@ -61,6 +61,10 @@ import importlib
 import version as _version_module
 importlib.reload(_version_module)
 APP_DISPLAY_NAME = _version_module.APP_DISPLAY_NAME
+
+# ✨ 全局路径常量
+BASE_DIR = Path(__file__).resolve().parent
+_LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
 from ui.components import (
     render_answer_cards, parse_answer_payload, ANSWER_CARD_TYPES, render_suppressed_cards,
     render_stage_workspace, render_parameter_panel, render_image_gallery,
@@ -1716,29 +1720,46 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # ✨ 用户登录/笔记入口
-    from utils.user_manager import get_current_user, set_local_user
-    current_user = get_current_user()
+    # ✨ 用户登录系统（三级权限：管理员/成员/访客）
+    from utils.auth import get_current_user as _auth_get_user, authenticate, has_permission, load_users
 
-    with st.expander("👤 用户笔记", expanded=False):
-        if not current_user:
-            st.caption("本地模式：输入用户名后可保存个人笔记")
-            username_input = st.text_input("用户名", placeholder="例：张三", key="user_login_input", label_visibility="collapsed")
-            if st.button("登录", use_container_width=True, key="user_login_btn"):
-                if username_input.strip():
-                    set_local_user(username_input)
+    # 初始化登录状态
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = None
+
+    _auth_user = _auth_get_user(st.session_state)
+    _role_icons = {"admin": "🔑", "member": "👤", "guest": "👁️"}
+    _role_labels = {"admin": "管理员", "member": "成员", "guest": "访客"}
+    _role = _auth_user.get("role", "guest")
+
+    with st.expander(f"{_role_icons.get(_role, '👁️')} {_auth_user.get('display_name', '访客')}", expanded=False):
+        if _role == "guest":
+            st.caption("登录后可参与课题组经验贡献和讨论")
+            with st.form("sidebar_login_form"):
+                _login_user = st.text_input("用户名", key="sb_login_user")
+                _login_pass = st.text_input("密码", type="password", key="sb_login_pass")
+                _login_btn = st.form_submit_button("🔐 登录", use_container_width=True)
+            if _login_btn:
+                _user = authenticate(_login_user, _login_pass)
+                if _user:
+                    st.session_state.current_user = _user
+                    st.success(f"✅ 欢迎，{_user['display_name']}！")
                     st.rerun()
                 else:
-                    st.warning("请输入用户名")
+                    st.error("用户名或密码错误")
+            st.caption("💡 默认管理员账号：admin / admin123")
         else:
-            st.caption(f"当前用户：**{current_user}**")
-            from utils.user_manager import load_user_notes
-            notes = load_user_notes(current_user)
-            st.caption(f"已保存 {len(notes)} 条笔记")
-            if st.button("📝 查看我的笔记", use_container_width=True, key="view_my_notes"):
-                st.session_state["_show_user_notes"] = True
-            if st.button("🚪 退出登录", use_container_width=True, key="user_logout"):
-                set_local_user("")
+            # 已登录
+            st.markdown(
+                f"**{_auth_user.get('display_name', '')}**  \n"
+                f"{_role_icons.get(_role)} {_role_labels.get(_role)}"
+            )
+            if _role == "member":
+                from utils.user_manager import load_user_notes
+                _notes = load_user_notes(_auth_user.get("username", ""))
+                st.caption(f"📝 {len(_notes)} 条笔记")
+            if st.button("🚪 退出", use_container_width=True, key="sidebar_logout"):
+                st.session_state.current_user = None
                 st.rerun()
 
     # P0-A2: 软件切换入口（RELION / cryoSPARC）
@@ -3630,6 +3651,85 @@ with tab_settings:
                 st.success("✅ 没有待审核的经验")
         except Exception as exc:
             st.error(f"加载审核列表失败：{exc}")
+
+        # ✨ 用户管理面板（仅管理员可见）
+        from utils.auth import (
+            get_current_user as _au_get, has_permission as _au_perm,
+            load_users as _au_load, add_user as _au_add,
+            delete_user as _au_del, change_role as _au_role, change_password as _au_pw,
+        )
+        _mgr_user = _au_get(st.session_state)
+
+        if _au_perm(_mgr_user, "all"):  # 仅管理员
+            st.divider()
+            st.markdown("### 👥 成员管理（管理员）")
+            _udata = _au_load()
+            _users = _udata.get("users", [])
+            st.caption(f"共 {len(_users)} 个账号")
+
+            # 现有成员列表
+            for _u in _users:
+                _role_map = {"admin": "🔑 管理员", "member": "👤 成员", "guest": "👁️ 访客"}
+                with st.expander(f"{_role_map.get(_u['role'],'👤')} {_u['display_name']} (@{_u['username']})", expanded=False):
+                    st.caption(f"邮箱：{_u.get('email', '未设置')}")
+                    col_role, col_del = st.columns(2)
+                    with col_role:
+                        if _u["username"] != "admin":
+                            _new_role = st.selectbox(
+                                "角色", ["member", "guest"],
+                                index=0 if _u["role"] == "member" else 1,
+                                key=f"role_{_u['username']}",
+                                format_func=lambda x: {"member": "👤 成员", "guest": "👁️ 访客"}[x]
+                            )
+                            if st.button("修改角色", key=f"changerole_{_u['username']}", use_container_width=True):
+                                if _au_role(_u["username"], _new_role):
+                                    st.success("已修改")
+                                    st.rerun()
+                    with col_del:
+                        if _u["username"] != "admin":
+                            if st.button("🗑️ 删除", key=f"deluser_{_u['username']}", use_container_width=True):
+                                if _au_del(_u["username"]):
+                                    st.warning(f"已删除 {_u['display_name']}")
+                                    st.rerun()
+
+            # 添加新成员
+            st.markdown("**➕ 添加成员**")
+            with st.form("add_user_form"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    _new_uname = st.text_input("用户名", placeholder="如 lisi")
+                    _new_dname = st.text_input("显示名", placeholder="如 李四")
+                with c2:
+                    _new_pw = st.text_input("初始密码", type="password")
+                    _new_email = st.text_input("邮箱（可选）")
+                _new_role_sel = st.selectbox("角色", ["member", "guest"],
+                                             format_func=lambda x: "👤 成员（可贡献经验）" if x == "member" else "👁️ 访客（仅查看）")
+                if st.form_submit_button("添加成员", use_container_width=True):
+                    if _new_uname.strip() and _new_pw.strip() and _new_dname.strip():
+                        from utils.auth import add_user as _au_adduser
+                        if _au_adduser(_new_uname.strip(), _new_pw.strip(), _new_role_sel, _new_dname.strip(), _new_email.strip()):
+                            st.success(f"✅ 已添加成员：{_new_dname}")
+                            st.rerun()
+                        else:
+                            st.error("添加失败（用户名可能已存在）")
+                    else:
+                        st.warning("请填写用户名、显示名和密码")
+
+            # 修改自己的密码
+            st.markdown("**🔐 修改密码**")
+            with st.form("change_pw_form"):
+                _cpw_new = st.text_input("新密码", type="password")
+                _cpw_confirm = st.text_input("确认新密码", type="password")
+                if st.form_submit_button("修改密码", use_container_width=True):
+                    if _cpw_new == _cpw_confirm and len(_cpw_new) >= 6:
+                        if _au_pw(_mgr_user["username"], _cpw_new):
+                            st.success("密码已修改，下次登录生效")
+                        else:
+                            st.error("修改失败")
+                    elif _cpw_new != _cpw_confirm:
+                        st.error("两次密码不一致")
+                    else:
+                        st.error("密码至少6位")
 
 
         st.divider()
