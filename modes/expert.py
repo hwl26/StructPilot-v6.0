@@ -188,23 +188,40 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
         symptoms_text = st.text_area("症状描述（遇到了什么问题）", height=70)
         solution = st.text_area("解决方案（怎么解决的）", height=80)
 
-        # ✨ 新增：截图上传
-        st.markdown("**📸 附加截图（可选，有助于他人理解）**")
-        uploaded_files = st.file_uploader(
-            "上传报错截图或结果对比图",
-            type=["png", "jpg", "jpeg"],
-            accept_multiple_files=True,
-            help="最多上传 3 张，每张不超过 5MB",
-            key=f"kb_images_{cp_id}"
-        )
+        # 📸 截图上传
+        st.markdown("**📸 截图 + 🎬 操作视频（可选）**")
+        col_img, col_vid = st.columns(2)
+        with col_img:
+            uploaded_files = st.file_uploader(
+                "报错截图或结果图",
+                type=["png", "jpg", "jpeg"],
+                accept_multiple_files=True,
+                help="最多 3 张，每张 <5MB",
+                key=f"kb_images_{cp_id}"
+            )
+        with col_vid:
+            video_file = st.file_uploader(
+                "操作演示视频",
+                type=["mp4", "mov", "avi", "webm"],
+                help="最多 50MB，演示完整操作步骤",
+                key=f"kb_video_{cp_id}"
+            )
+            video_url = st.text_input(
+                "或填写外链（B站/YouTube）",
+                placeholder="https://www.bilibili.com/video/...",
+                key=f"kb_video_url_{cp_id}"
+            )
 
-        # 预览上传的图片
+        # 预览
         if uploaded_files:
-            st.caption(f"已选择 {len(uploaded_files)} 张图片（最多保留前3张）：")
             cols = st.columns(min(len(uploaded_files), 3))
             for idx, img_file in enumerate(uploaded_files[:3]):
                 with cols[idx]:
                     st.image(img_file, caption=img_file.name, use_container_width=True)
+        if video_file:
+            st.video(video_file)
+        elif video_url.strip():
+            st.caption(f"🔗 视频外链：{video_url.strip()}")
 
         tags_str = st.text_input("标签（逗号分隔）", placeholder="运动校正, 漂移, B-factor")
         submitted = st.form_submit_button("提交经验")
@@ -227,6 +244,20 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
                 image_filenames = []
                 if uploaded_files:
                     image_filenames = _save_experience_images(uploaded_files, cp_id)
+
+                # 🎬 保存视频文件
+                saved_video_path = ""
+                if video_file:
+                    try:
+                        import datetime as _dt, os as _os
+                        vid_dir = BASE_DIR / "runtime" / "experience_media"
+                        vid_dir.mkdir(parents=True, exist_ok=True)
+                        ext = Path(video_file.name).suffix.lower()
+                        vid_name = f"{cp_id}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+                        (vid_dir / vid_name).write_bytes(video_file.getbuffer())
+                        saved_video_path = vid_name
+                    except Exception:
+                        pass  # 视频保存失败不阻断提交
 
                 try:
                     data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
@@ -279,8 +310,10 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
                     "symptoms": [s.strip() for s in normalized_symptoms.split("；") if s.strip()],
                     "symptoms_text": normalized_symptoms,
                     "solution": normalized_solution,
-                    "tags": all_tags,  # ✨ 合并后的标签
-                    "images": image_filenames,  # ✨ 截图列表
+                    "tags": all_tags,
+                    "images": image_filenames,
+                    "video_path": saved_video_path,
+                    "video_url": video_url.strip() if video_url.strip() else "",
                 }
                 data["entries"].append(new_entry)
                 _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

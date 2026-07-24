@@ -4078,6 +4078,87 @@ with tab_settings:
                             st.json(item, expanded=False)
                         st.divider()
     
+        # ── 课题组内部留言板 ──────────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 💬 课题组内部留言板")
+        from components.lab_board import render_board as _render_lab_board
+        _board_user = get_current_user()
+        _render_lab_board(_board_user or "匿名用户")
+
+        # ── Telegram Bot 经验记录 ──────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 📱 Telegram Bot 经验记录")
+        st.caption("配置后，可直接发消息给 Bot 记录经验，无需打开网页")
+
+        from utils.telegram_bot import load_bot_config as _tg_load, save_bot_config as _tg_save, start_polling as _tg_start
+        _tg_cfg = _tg_load()
+
+        with st.expander("⚙️ Bot 配置", expanded=not _tg_cfg.get("token")):
+            _tg_token = st.text_input("Bot Token", value=_tg_cfg.get("token", ""), type="password",
+                                      help="在 @BotFather 创建 Bot 后获取", key="tg_token_input")
+            _tg_chat_ids = st.text_input(
+                "允许的 Chat ID（逗号分隔，空=所有人）",
+                value=",".join(str(c) for c in _tg_cfg.get("allowed_chat_ids", [])),
+                help="在 Bot 中发 /start，从日志找到你的 Chat ID",
+                key="tg_chat_ids_input",
+            )
+            _tg_enabled = st.toggle("启用 Bot", value=_tg_cfg.get("enabled", False), key="tg_enabled_toggle")
+
+            if st.button("💾 保存 Bot 配置", use_container_width=True, key="tg_save_btn"):
+                _tg_ids = [c.strip() for c in _tg_chat_ids.split(",") if c.strip()]
+                if _tg_save(_tg_token, _tg_ids, _tg_enabled):
+                    st.success("✅ 配置已保存")
+                    if _tg_enabled and _tg_token:
+                        _tg_start(_tg_token, _tg_ids)
+                        st.info("🤖 Bot 已启动，发 /start 给你的 Bot 查看使用方法")
+                else:
+                    st.error("保存失败")
+
+        if _tg_cfg.get("enabled") and _tg_cfg.get("token"):
+            st.caption("🤖 Telegram Bot 运行中")
+            st.code(
+                "#经验 [cp_02] Motion Correction 报错\n"
+                "症状：漂移过大\n"
+                "解决：增大 B-factor 到 300",
+                language="text",
+            )
+
+        # ── 邮件转经验配置 ─────────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 📧 邮件转经验")
+        st.caption("发邮件到指定邮箱，主题包含 #经验，自动记录到经验库")
+
+        from utils.email_to_experience import (
+            load_email_config as _em_load,
+            save_email_config as _em_save,
+            start_email_polling as _em_start,
+        )
+        _em_cfg = _em_load()
+
+        with st.expander("⚙️ 邮件配置（IMAP）", expanded=not _em_cfg.get("imap_host")):
+            _em_host = st.text_input("IMAP 服务器", value=_em_cfg.get("imap_host", ""),
+                                     placeholder="如 imap.gmail.com", key="em_host_input")
+            _em_port = st.number_input("端口", value=_em_cfg.get("imap_port", 993),
+                                       min_value=1, max_value=65535, key="em_port_input")
+            _em_user = st.text_input("邮箱账号", value=_em_cfg.get("username", ""), key="em_user_input")
+            _em_pass = st.text_input("密码/授权码", value=_em_cfg.get("password", ""),
+                                     type="password", key="em_pass_input")
+            _em_enabled = st.toggle("启用邮件监听", value=_em_cfg.get("enabled", False), key="em_enabled_toggle")
+
+            if st.button("💾 保存邮件配置", use_container_width=True, key="em_save_btn"):
+                if _em_save(_em_host, int(_em_port), _em_user, _em_pass, _em_enabled):
+                    st.success("✅ 配置已保存")
+                    if _em_enabled:
+                        _em_start({
+                            "imap_host": _em_host,
+                            "imap_port": int(_em_port),
+                            "username": _em_user,
+                            "password": _em_pass,
+                        })
+                        st.info(f"📧 邮件监听已启动，发邮件到 {_em_user}，主题包含 #经验 即可记录")
+                else:
+                    st.error("保存失败")
+
     # --------------------------------------------------------------------------- #
     # 高级模式专属功能面板（仅在 expert 模式下渲染）
     # --------------------------------------------------------------------------- #
