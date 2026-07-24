@@ -3435,9 +3435,31 @@ with tab_settings:
 
             # 新建笔记
             with st.expander("➕ 新建笔记", expanded=False):
-                note_step = st.selectbox("关联步骤", options=[cp.get("checkpoint_id") for cp in state.checkpoints],
-                                         format_func=lambda cid: next((c.get("checkpoint_cn") for c in state.checkpoints if c.get("checkpoint_id")==cid), cid),
-                                         key="new_note_step")
+                # 获取步骤列表（防御性检查）
+                checkpoint_list = getattr(state, 'checkpoints', [])
+                if not checkpoint_list:
+                    # 如果没有加载 checkpoints，使用默认列表
+                    checkpoint_list = [
+                        {"checkpoint_id": "cp_01", "checkpoint_cn": "数据导入"},
+                        {"checkpoint_id": "cp_02", "checkpoint_cn": "运动校正"},
+                        {"checkpoint_id": "cp_03", "checkpoint_cn": "CTF估计"},
+                        {"checkpoint_id": "cp_04", "checkpoint_cn": "颗粒挑选"},
+                        {"checkpoint_id": "cp_05", "checkpoint_cn": "颗粒提取"},
+                        {"checkpoint_id": "cp_06", "checkpoint_cn": "2D分类"},
+                        {"checkpoint_id": "cp_07", "checkpoint_cn": "Ab-initio"},
+                        {"checkpoint_id": "cp_08", "checkpoint_cn": "3D分类"},
+                        {"checkpoint_id": "cp_09", "checkpoint_cn": "3D精修"},
+                        {"checkpoint_id": "cp_10", "checkpoint_cn": "CTF精修"},
+                        {"checkpoint_id": "cp_11", "checkpoint_cn": "后处理"},
+                        {"checkpoint_id": "cp_12", "checkpoint_cn": "模型构建"},
+                    ]
+
+                note_step = st.selectbox(
+                    "关联步骤",
+                    options=[cp.get("checkpoint_id") for cp in checkpoint_list],
+                    format_func=lambda cid: next((c.get("checkpoint_cn") for c in checkpoint_list if c.get("checkpoint_id")==cid), cid),
+                    key="new_note_step"
+                )
                 note_content = st.text_area("笔记内容", height=100, key="new_note_content", placeholder="记录关键参数、踩坑经验、个人心得...")
                 note_tags_str = st.text_input("标签（逗号分隔）", key="new_note_tags", placeholder="例：CTF, 参数调优")
                 if st.button("💾 保存笔记", key="save_new_note", use_container_width=True):
