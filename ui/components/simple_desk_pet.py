@@ -1,5 +1,6 @@
 """简化的桌宠组件 - 纯CSS实现，无需复杂的JavaScript"""
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 def render_simple_desk_pet(
@@ -7,7 +8,7 @@ def render_simple_desk_pet(
     pet_size: int = 64,
     pet_mood: str = "idle",
 ) -> None:
-    """渲染简化版桌宠（纯CSS动画）。
+    """渲染简化版桌宠（纯CSS动画，持久化）。
 
     Parameters
     ----------
@@ -38,8 +39,8 @@ def render_simple_desk_pet(
     }
     animation = animations.get(pet_mood, "float")
 
-    # 渲染CSS和HTML
-    st.markdown(f"""
+    # 使用 components.html 持久化渲染
+    html_code = f"""
 <style>
 .sp-simple-pet {{
     position: fixed;
@@ -93,7 +94,7 @@ def render_simple_desk_pet(
     20%, 40%, 60%, 80% {{ transform: translateX(5px); }}
 }}
 
-/* 气泡提示（可选） */
+/* 气泡提示 */
 .sp-pet-tooltip {{
     position: fixed;
     right: {pet_size + 30}px;
@@ -115,9 +116,38 @@ def render_simple_desk_pet(
 }}
 </style>
 
-<div class="sp-simple-pet" title="你的科研小伙伴 ✨">{emoji}</div>
-<div class="sp-pet-tooltip">陪你做实验 🧪</div>
-""", unsafe_allow_html=True)
+<script>
+(function() {{
+    // 检查是否已经存在桌宠
+    var existingPet = parent.document.getElementById('sp-simple-pet-container');
+    if (existingPet) {{
+        // 如果已存在，只更新动画类
+        var pet = existingPet.querySelector('.sp-simple-pet');
+        if (pet) {{
+            pet.className = 'sp-simple-pet';
+            pet.style.animation = '{animation} 2s ease-in-out infinite';
+        }}
+        return;
+    }}
+
+    // 创建桌宠容器
+    var container = parent.document.createElement('div');
+    container.id = 'sp-simple-pet-container';
+    container.innerHTML = '<div class="sp-simple-pet" title="你的科研小伙伴 ✨">{emoji}</div><div class="sp-pet-tooltip">陪你做实验 🧪</div>';
+
+    // 添加到 body
+    parent.document.body.appendChild(container);
+
+    // 添加样式
+    var style = parent.document.createElement('style');
+    style.textContent = `{html_code.split('</style>')[0].split('<style>')[1]}`;
+    parent.document.head.appendChild(style);
+}})();
+</script>
+"""
+
+    # 使用 height=0 避免占用空间
+    components.html(html_code, height=0, scrolling=False)
 
 
 def update_pet_mood(

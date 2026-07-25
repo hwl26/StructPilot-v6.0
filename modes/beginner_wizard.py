@@ -305,7 +305,16 @@ def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
     # 渲染固定参数（折叠，但可编辑）
     if locked_params:
         with st.expander("🔒 固定参数（通常无需修改）", expanded=False):
-            st.info("💡 **提示：** 这些参数通常不需要修改，但如果你需要自定义，可以直接编辑下方的值。")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info("💡 **提示：** 这些参数通常不需要修改，但如果你需要自定义，可以直接编辑下方的值。")
+            with col2:
+                if st.button("✏️ 一键展开编辑", key="expand_locked_params", use_container_width=True):
+                    st.session_state["_locked_params_expanded"] = True
+
+            # 添加视觉分隔
+            st.markdown("---")
+
             for param in locked_params:
                 _render_param_input(param, params_store)
 
@@ -610,14 +619,14 @@ def _render_relion_beginner_guide(state: Any) -> None:
     st.markdown("## 🔬 RELION 快速上手指南")
     st.caption("针对入门用户的 RELION Import + Motion Correction 操作步骤")
 
-    # 工作流说明
-    st.warning("⚠️ **RELION 入门模式限制**")
+    # 工作流说明（去掉warning，改为info）
     st.info(
+        "**🔬 RELION 工作流：**\n\n"
         "入门模式下，RELION 主要用于前期数据预处理：\n\n"
         "✅ **步骤1：数据导入** (Import)\n"
         "✅ **步骤2：运动校正** (Motion Correction)\n\n"
-        "**后续步骤**（CTF、颗粒挑选、分类等）**建议切换到 cryoSPARC 完成**。\n\n"
-        "如需完整的 RELION 工作流，请切换到「⚙️ 高级模式」。"
+        "**完成后建议切换到 cryoSPARC** 继续 CTF 估计、颗粒挑选等步骤。\n\n"
+        "需要完整 RELION 功能？请切换到「⚙️ 高级模式」。"
     )
 
     # 快速切换按钮
@@ -670,9 +679,18 @@ relion
         """)
 
         st.markdown("### 常见问题")
-        st.error("❌ **路径错误**：确保文件路径正确，支持绝对路径和相对路径")
-        st.error("❌ **Pixel size 错误**：影响后续所有步骤的尺度，务必核对")
-        st.error("❌ **Gain reference 缺失**：如果 movies 未应用 gain，需要在 Motion Correction 中指定")
+        # 紧凑样式的常见问题
+        st.markdown("""
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ 路径错误：</b> 确保文件路径正确，支持绝对路径和相对路径
+</div>
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ Pixel size 错误：</b> 影响后续所有步骤的尺度，务必核对
+</div>
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ Gain reference 缺失：</b> 如果 movies 未应用 gain，需要在 Motion Correction 中指定
+</div>
+        """, unsafe_allow_html=True)
 
     # 步骤2：运动校正
     with st.expander("🎬 **步骤2：运动校正 (Motion Correction)**", expanded=True):
