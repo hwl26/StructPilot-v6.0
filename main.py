@@ -3211,6 +3211,69 @@ with tab_forum:
     else:
         render_forum_tab()
 
+# ----- Tab: 我的空间 ----- #
+if tab_myspace is not None:
+    with tab_myspace:
+        from components.my_space import render_my_space
+        render_my_space()
+
+# ----- Tab: 社区 ----- #
+if tab_community is not None:
+    with tab_community:
+        st.markdown("### 👥 社区")
+        st.caption("课题组交流与协作")
+
+        # 简单显示：链接到讨论区
+        st.info("💬 **讨论区** - 在「💬 讨论区」Tab 中查看完整论坛")
+
+        st.divider()
+        st.markdown("### 💬 企业微信群机器人")
+        st.caption("审核通过经验后，自动推送到企业微信群（单向推送，无需服务器）")
+
+        from utils.wework_bot import load_wework_config as _ww_load, save_wework_config as _ww_save, send_wework_message as _ww_send
+        _ww_cfg = _ww_load()
+
+        with st.expander("⚙️ 配置机器人", expanded=not _ww_cfg.get("webhook_url")):
+            st.markdown("""
+**使用步骤：**
+1. 企业微信群 → 群设置 → 群机器人 → 添加机器人
+2. 复制 Webhook 地址到下方
+3. 点击「测试推送」验证
+            """)
+
+            _ww_webhook = st.text_input(
+                "Webhook URL",
+                value=_ww_cfg.get("webhook_url", ""),
+                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+                key="ww_webhook_input"
+            )
+            _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
+                    if _ww_save(_ww_webhook, _ww_enabled):
+                        st.success("✅ 配置已保存")
+                    else:
+                        st.error("保存失败")
+
+            with col2:
+                if st.button("🧪 测试推送", use_container_width=True, key="ww_test_btn"):
+                    if not _ww_webhook:
+                        st.error("请先填写 Webhook URL")
+                    else:
+                        ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
+                        if ok:
+                            st.success("✅ 测试成功，企业微信群应收到消息")
+                        else:
+                            st.error("❌ 推送失败，请检查 Webhook URL 是否正确")
+
+# ----- Tab: 管理员区 ----- #
+if tab_admin is not None:
+    with tab_admin:
+        from components.admin_panel import render_admin_panel
+        render_admin_panel()
+
 # ----- Tab 3: settings ----- #
 with tab_settings:
     # 快速/教学模式：只显示简化的界面设置和数据清除
