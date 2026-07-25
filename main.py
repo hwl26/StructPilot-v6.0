@@ -4610,7 +4610,9 @@ if st.session_state.app_mode == "expert":
 # --------------------------------------------------------------------------- #
 # Desk Pets (bottom-right companions)
 # --------------------------------------------------------------------------- #
-if st.session_state.get("pet_enabled", True):
+# 调试：显示桌宠配置状态
+_pet_enabled_check = st.session_state.get("pet_enabled", True)
+if _pet_enabled_check:
     _cp_name = state.current_cp_name or "等待开始"
     _completed = len(state.completed)
     _failed = len(state.failed)

@@ -444,45 +444,6 @@ def _generate_and_export_workflow(params: Dict[str, Any], state: Any, app: Any) 
         st.error(f"生成 Workflow 时出错：{e}")
 
 
-        # 导航按钮
-        col_prev, col_next, col_export = st.columns([1, 1, 1])
-
-        with col_prev:
-            if current_step > 0:
-                prev_clicked = st.form_submit_button("⬅️ 上一步", use_container_width=True)
-            else:
-                prev_clicked = False
-
-        with col_next:
-            if current_step < total_steps - 1:
-                next_clicked = st.form_submit_button("下一步 ➡️", type="primary", use_container_width=True)
-            else:
-                next_clicked = False
-
-        with col_export:
-            if current_step == total_steps - 1:
-                export_clicked = st.form_submit_button("🚀 生成 Workflow", type="primary", use_container_width=True)
-            else:
-                export_clicked = False
-
-    # 处理导航
-    if prev_clicked:
-        st.session_state.wizard_step = max(0, current_step - 1)
-        st.rerun()
-
-    if next_clicked:
-        # 验证当前步骤必填参数
-        if _validate_step(current_step, st.session_state.wizard_params):
-            st.session_state.wizard_step = min(total_steps - 1, current_step + 1)
-            st.rerun()
-        else:
-            st.error("❌ 请填写所有必填参数")
-
-    if export_clicked:
-        # 生成 workflow JSON
-        _export_workflow(st.session_state.wizard_params, state, app)
-
-
 def _render_job_params(job_id: str, params_dict: Dict[str, Any]) -> None:
     """渲染单个 job 的参数表单。"""
     param_configs = _JOB_PARAMS_CONFIG.get(job_id, [])
