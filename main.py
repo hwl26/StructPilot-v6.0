@@ -71,6 +71,7 @@ from ui.components import (
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
 from components.answer_source_display import render_answer_sources
+from components.forum_ui import render_forum_tab, render_forum_detail  # 新增：论坛组件
 from ui.styles import (
     THEMES, _WORKSPACE_CSS, _workspace_theme_css, build_global_styles,
 )
@@ -2187,14 +2188,14 @@ if st.session_state.last_feedback:
 # 动态Tab：根据模式决定显示哪些Tab
 _app_mode = st.session_state.get("app_mode", "beginner")
 if _app_mode in ["beginner", "teaching"]:
-    # 入门/教学模式：只显示对话和设置
-    tab_labels = ["对话陪跑", "设置"]
-    tab_chat, tab_settings = st.tabs(tab_labels)
+    # 入门/教学模式：显示对话、讨论区和设置
+    tab_labels = ["对话陪跑", "💬 讨论区", "设置"]
+    tab_chat, tab_forum, tab_settings = st.tabs(tab_labels)
     tab_report = None  # 不显示报告导出
 else:
     # 高级模式/原v6：显示全部Tab
-    tab_labels = ["对话陪跑", "报告导出", "设置"]
-    tab_chat, tab_report, tab_settings = st.tabs(tab_labels)
+    tab_labels = ["对话陪跑", "💬 讨论区", "报告导出", "设置"]
+    tab_chat, tab_forum, tab_report, tab_settings = st.tabs(tab_labels)
 
 # ----- Tab 1: chat ----- #
 with tab_chat:
@@ -3255,6 +3256,14 @@ if tab_report is not None:
             capture_state_safely(state)
             st.session_state.last_feedback = "当前会话已保存到本地 SQLite。"
             st.rerun()
+
+# ----- Tab 2: Forum (论坛) ----- #
+with tab_forum:
+    # 检查是否查看特定问题详情
+    if st.session_state.get("forum_view_question"):
+        render_forum_detail()
+    else:
+        render_forum_tab()
 
 # ----- Tab 3: settings ----- #
 with tab_settings:
