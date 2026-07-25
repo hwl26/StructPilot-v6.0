@@ -71,7 +71,7 @@ from ui.components import (
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
 from components.answer_source_display import render_answer_sources
-from components.forum_ui import render_forum_tab, render_forum_detail  # 新增：论坛组件
+from components.forum_ui import render_forum_tab, render_question_detail  # 修正函数名
 from ui.styles import (
     THEMES, _WORKSPACE_CSS, _workspace_theme_css, build_global_styles,
 )
@@ -3261,7 +3261,7 @@ if tab_report is not None:
 with tab_forum:
     # 检查是否查看特定问题详情
     if st.session_state.get("forum_view_question"):
-        render_forum_detail()
+        render_question_detail()  # 修正函数名
     else:
         render_forum_tab()
 
