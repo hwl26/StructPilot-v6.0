@@ -458,40 +458,83 @@
   },
   {
     "id": "cp_10",
-    "name": "post_processing",
-    "label_cn": "后处理与掩模优化",
-    "goal": "对重构后的密度图进行后处理（局部滤波、掩模优化、局部分辨率等），获得最终可用的密度图。",
+    "name": "ctf_refinement",
+    "label_cn": "CTF精修",
+    "goal": "精修每颗粒的 CTF 参数与像差（光束倾斜、三叶草像散、四叶草像散、各向异性放大等），进一步提分辨率。",
     "inputs": [
-      "精修后的 half maps",
-      "初始掩模"
+      "精修后的颗粒",
+      "alignments3D"
     ],
     "cryosparc_jobs": [
-      "Sharpening / Local Filter",
-      "Mask Creation / Optimization",
+      "Global CTF Refinement",
+      "Local CTF Refinement"
+    ],
+    "key_parameters": [
+      "Fit beam tilt",
+      "Fit trefoil",
+      "Fit tetrafoil",
+      "Fit defocus per particle",
+      "Fit anisotropic magnification"
+    ],
+    "qc_checks": [
+      "CTF 精修后 FSC 是否提升（通常提升 0.1-0.3A）",
+      "光束倾斜估计值是否合理（通常 < 1 mrad）",
+      "各向异性放大校正是否合理"
+    ],
+    "common_pitfalls": [
+      "CTF 精修后分辨率反而下降——可能过度拟合，回退到精修前的参数",
+      "Local CTF 需要足够计算资源——颗粒数太多时先跑 Global 即可"
+    ],
+    "starter_questions": [
+      "CTF refinement 什么时候做？",
+      "Global 和 Local CTF refinement 有什么区别？",
+      "CTF 精修后分辨率反而下降怎么办？"
+    ],
+    "source_refs": [
+      {
+        "title": "cryoSPARC Guide: Global CTF Refinement",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/ctf-refinement/global-ctf-refinement",
+        "source_type": "cryosparc_guide"
+      },
+      {
+        "title": "cryoSPARC Guide: Local CTF Refinement",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/ctf-refinement/local-ctf-refinement",
+        "source_type": "cryosparc_guide"
+      }
+    ]
+  },
+  {
+    "id": "cp_11",
+    "name": "post_processing",
+    "label_cn": "后处理与锐化",
+    "goal": "锐化（B-factor）+ 掩膜校正，确定最终分辨率，生成可发布的密度图。",
+    "inputs": [
+      "精修后的三维体积",
+      "掩膜（mask）"
+    ],
+    "cryosparc_jobs": [
+      "Sharpening Tools",
       "Local Resolution Estimation"
     ],
     "key_parameters": [
       "B-factor (自动或手动)",
-      "Mask threshold",
-      "Soft padding / edge width",
-      "Lowpass filter resolution"
+      "Map sharpening resolution limit",
+      "Lowpass filter"
     ],
     "qc_checks": [
-      "Sharpened 图细节清晰，不过度锐化",
-      "局部分辨率分布合理，核心高、外围低",
-      "掩模恰好包裹蛋白，不松不紧",
-      "FSC 曲线在后处理后无明显下降"
+      "FSC 0.143 交点确定的分辨率是否可信（金标准验证）",
+      "锐化后密度图是否清晰（无过度锐化导致的噪声增强）",
+      "局部分辨率是否合理（核心高、外围低）"
     ],
     "common_pitfalls": [
-      "过度锐化导致噪点被放大",
-      "掩模太松包含太多溶剂区",
-      "掩模太紧切掉了蛋白外围结构",
-      "局部分辨率异常提示各向异性问题"
+      "B-factor 过度锐化——噪声被放大，密度图中出现椒盐噪声",
+      "掩膜太紧——切掉了蛋白的柔性区域",
+      "忘记确认 FSC 是金标准（gold-standard）而非自我相关（self-correlation）"
     ],
     "starter_questions": [
       "B-factor 怎么确定？",
       "Local resolution 怎么看？",
-      "为什么要做 density modification？"
+      "后处理会不会提高分辨率？"
     ],
     "source_refs": [
       {
@@ -507,100 +550,55 @@
     ]
   },
   {
-    "id": "cp_11",
-    "name": "validation",
-    "label_cn": "模型验证与构建",
-    "goal": "对密度图进行建模型和验证，确保结构可靠，包括模型搭建、立体化学验证和交叉验证。",
-    "inputs": [
-      "Sharpened 密度图",
-      "Half maps"
-    ],
-    "cryosparc_jobs": [
-      "Model Building (phenix / coot)",
-      "Validation (MTRIAGE)",
-      "Map-to-model FSC"
-    ],
-    "key_parameters": [
-      "Sequence identity",
-      "Resolution cutoff",
-      "Refinement constraints"
-    ],
-    "qc_checks": [
-      "模型密度拟合良好（Map-model FSC 合理）",
-      "Ramachandran 图大部分在允许区",
-      "RMS Z-scores 在正常范围",
-      "无严重的立体化学违规"
-    ],
-    "common_pitfalls": [
-      "模型在分辨率外建模（building beyond resolution）",
-      "用 work half map 建模导致过拟合",
-      "忽略侧链密度不好的区域，强行建模",
-      "模型验证只看一个指标"
-    ],
-    "starter_questions": [
-      "怎么用 coot 建模？",
-      "Ramachandran 图怎么看？",
-      "Model vs map FSC 怎么算？"
-    ],
-    "source_refs": [
-      {
-        "title": "cryoSPARC Guide: Validation",
-        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation",
-        "source_type": "cryosparc_guide"
-      },
-      {
-        "title": "cryoSPARC Guide: MTRIAGE Validation",
-        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/post-processing-and-validation/mtriage",
-        "source_type": "cryosparc_guide"
-      }
-    ]
-  },
-  {
     "id": "cp_12",
-    "name": "final_output",
-    "label_cn": "最终结果与交付",
-    "goal": "整理最终结果，导出密度图、模型和处理记录，生成可复现的工作流，确保数据可追溯。",
+    "name": "model_building",
+    "label_cn": "模型构建与验证",
+    "goal": "在最终密度图中构建并精修原子模型，用 MolProbity / FSC 等指标完成验证。",
     "inputs": [
-      "最终密度图",
-      "最终原子模型",
-      "处理流程记录"
+      "最终三维密度图（.mrc 格式）"
     ],
     "cryosparc_jobs": [
-      "Volume Tools (Export)",
-      "Particle Tools (Export)"
+      "Volume Tools (Export .mrc)",
+      "外部工具：Coot / Phenix / ChimeraX / ISOLDE"
     ],
     "key_parameters": [
-      "Output format (MRC, CCP4)",
-      "PDB deposition format",
-      "Map sharpening state"
+      "Map-to-model FSC",
+      "Ramachandran favored / outlier",
+      "Clashscore",
+      "MolProbity score"
     ],
     "qc_checks": [
-      "密度图坐标与模型一致",
-      "所有原始数据和中间结果有备份",
-      "处理流程可复现",
-      "用于投稿的图表齐全"
+      "Ramachandran 图：favored > 98%, outliers < 0.2%",
+      "Clashscore < 5",
+      "Rotamer outliers < 1%",
+      "FSC_model_vs_map 在 0.5 交点处分辨率与 FSC_0.143 一致",
+      "MolProbity score 在对应分辨率的合理百分位内"
     ],
     "common_pitfalls": [
-      "导出时忘记 half maps，后续无法验证",
-      "工作流没有保存，无法追溯参数",
-      "原始数据与处理结果混放，难以管理",
-      "忽略了数据备份"
+      "FSC_work 和 FSC_free 差距大——模型过度拟合密度图",
+      "侧链方向错误——用 ISOLDE (ChimeraX) 进行分子动力学辅助优化",
+      "分辨率不够却强行搭原子模型——在低分辨率 (>4A) 建议仅做 Ca trace"
     ],
     "starter_questions": [
-      "投稿需要准备哪些数据？",
-      "EMDB 和 PDB 怎么同时提交？",
-      "怎么保证结果可复现？"
+      "怎么用 coot 搭建模型？",
+      "Phenix real_space_refine 怎么用？",
+      "MolProbity 验证报告怎么看？"
     ],
     "source_refs": [
       {
-        "title": "cryoSPARC Guide: Volume Tools",
-        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/particle-tools/extract-from-micrographs",
+        "title": "cryoSPARC Guide: Volume Tools (Export)",
+        "url": "https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/utilities-tools/volume-tools",
         "source_type": "cryosparc_guide"
       },
       {
-        "title": "cryoSPARC Guide: Data Management",
-        "url": "https://guide.cryosparc.com/setup-configuration-and-management/data-management-in-cryosparc",
-        "source_type": "cryosparc_guide"
+        "title": "Phenix Documentation: Real-space refinement",
+        "url": "https://phenix-online.org/documentation/reference/real_space_refine.html",
+        "source_type": "external"
+      },
+      {
+        "title": "Coot Documentation",
+        "url": "https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/",
+        "source_type": "external"
       }
     ]
   }

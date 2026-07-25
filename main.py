@@ -7,10 +7,8 @@ import base64
 import hashlib
 import html
 import json
-import mimetypes
 import os
 import re
-import tempfile
 import threading
 from pathlib import Path
 import inspect
@@ -28,6 +26,13 @@ from streamlit_paste_button import paste_image_button
 
 from graph.app import StructPilotApp
 from graph.state import PipelineState
+from utils.auth import authenticate
+from utils.password_policy import (
+    check_failed_attempts,
+    record_failed_attempt,
+    reset_failed_attempts,
+    validate_password_strength,
+)
 from knowledge_base.importer import (
     KnowledgeDoc, TIER_LABELS, load_knowledge_doc,
     doc_from_dict, detect_conflicts, doc_to_text,
@@ -41,7 +46,12 @@ from knowledge_base.corrections import append_correction, load_corrections, make
 from knowledge_base.document_ingest import build_ingest_draft
 from utils.ui_settings import load_ui_settings, save_ui_settings
 from utils.perf_cache import get_cached_app, get_cached_llm_agent, mark_kb_dirty as perf_mark_kb_dirty, clear_app_cache
-from utils.image_lazy import render_lazy_image, generate_thumbnail_data_url, get_cached_image_data_url
+from utils.image_lazy import (
+    render_lazy_image,
+    generate_thumbnail_data_url,
+    get_cached_image_data_url,
+    lazy_image_html,
+)
 from utils.ui_state_manager import (
     init_ui_state, get_state, set_state,
     get_llm_mode, set_llm_mode, detect_llm_mode, get_mode_label,
@@ -70,7 +80,7 @@ from ui.components import (
     render_stage_workspace, render_parameter_panel, render_image_gallery,
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
-from ui.components.simple_desk_pet import render_simple_desk_pet, update_pet_mood  # 简化版桌宠
+from ui.components.simple_desk_pet import update_pet_mood
 from components.answer_source_display import render_answer_sources
 from components.forum_ui import render_forum_tab, render_question_detail  # 修正函数名
 from ui.styles import (
@@ -257,6 +267,8 @@ def prewarm_runtime_caches() -> dict:
     return report
 
 
+# NOTE: render_guide_card is currently unused (no callers in main.py or other modules).
+# Preserved for potential future reactivation. Consider removing if unused after next release cycle.
 def render_guide_card(card: dict, key_prefix: str = "") -> None:
     """Render image tabs, clickable hot spots and parameter cards."""
     if not isinstance(card, dict) or not card:
@@ -322,6 +334,13 @@ def render_guide_card(card: dict, key_prefix: str = "") -> None:
   display: block;
   width: 100%;
   height: auto;
+}
+.sp-guide-image-wrap img.sp-lazy-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  width: 100%;
 }
 .sp-hotspot {
   position: absolute;
@@ -576,10 +595,18 @@ def render_guide_card(card: dict, key_prefix: str = "") -> None:
                             f'<a class="sp-hotspot" href="#sp-param-{anchor}" title="{pname}" '
                             f'style="left:{float(x):.3f}%;top:{float(y):.3f}%;">{order}</a>'
                         )
+                    # Use lazy_image_html: shows placeholder, swaps to real
+                    # image via IntersectionObserver when scrolled into view.
+                    lazy_img_tag = lazy_image_html(
+                        src=data_url,
+                        alt=caption,
+                        placeholder_text="Scroll to load image...",
+                        img_id=f"guide_img_{cp_id}_{tab_idx}_{image_idx}",
+                    )
                     st.markdown(
                         f'<div class="sp-screen-panel"><div class="sp-screen-topbar">'
                         f'<span class="sp-screen-title">界面截图</span><span>{image_idx} / {max(len(images), 1)}</span></div>'
-                        f'<div class="sp-guide-image-wrap"><img src="{data_url}" alt="{caption}">{"".join(hotspots)}</div>'
+                        f'<div class="sp-guide-image-wrap">{lazy_img_tag}{"".join(hotspots)}</div>'
                         f'<div class="sp-param-meta">{caption}</div></div>',
                         unsafe_allow_html=True,
                     )
@@ -1625,12 +1652,16 @@ def run_command(
         _accum["text"] += chunk
         _stream_box.markdown(_accum["text"] + "▌")
 
-    new_state = app.handle(
-        state,
-        agent_text,
-        response_profile=response_profile,
-        stream_sink=_stream_sink,
-    )
+    _spinner_placeholder = st.spinner("正在思考...")
+    try:
+        new_state = app.handle(
+            state,
+            agent_text,
+            response_profile=response_profile,
+            stream_sink=_stream_sink,
+        )
+    finally:
+        _spinner_placeholder.empty()
     _stream_box.empty()
     for msg in reversed(new_state.messages):
         if msg.role == "user":
@@ -1743,14 +1774,28 @@ with st.sidebar:
                 _login_pass = st.text_input("密码", type="password", key="sb_login_pass")
                 _login_btn = st.form_submit_button("🔐 登录", use_container_width=True)
             if _login_btn:
-                _user = authenticate(_login_user, _login_pass)
-                if _user:
-                    st.session_state.current_user = _user
-                    st.success(f"✅ 欢迎，{_user['display_name']}！")
-                    st.rerun()
+                # 暴力破解防护：检查失败次数
+                _failed_attempts = st.session_state.get("_login_failed_attempts", {})
+                _is_locked, _lock_msg = check_failed_attempts(_login_user, _failed_attempts)
+                if _is_locked:
+                    st.error(_lock_msg)
                 else:
-                    st.error("用户名或密码错误")
-            st.caption("💡 默认管理员账号：admin / admin123")
+                    _user = authenticate(_login_user, _login_pass)
+                    if _user:
+                        # 登录成功，清除失败计数
+                        reset_failed_attempts(_login_user, _failed_attempts)
+                        st.session_state["_login_failed_attempts"] = _failed_attempts
+                        st.session_state.current_user = _user
+                        st.success(f"✅ 欢迎，{_user['display_name']}！")
+                        # 检查是否需要强制修改密码
+                        if _user.get("force_change_password"):
+                            st.session_state["show_change_password_dialog"] = True
+                        st.rerun()
+                    else:
+                        # 登录失败，记录失败次数
+                        record_failed_attempt(_login_user, _failed_attempts)
+                        st.session_state["_login_failed_attempts"] = _failed_attempts
+                        st.error("用户名或密码错误")
         else:
             # 已登录
             st.markdown(
@@ -1994,72 +2039,8 @@ with st.sidebar:
 
 
 # --------------------------------------------------------------------------- #
-# UI: workspace CSS + output mode + quick questions
+# UI: workspace CSS + output mode
 # --------------------------------------------------------------------------- #
-
-# Quick questions per checkpoint (used in chat tab)
-_QUICK_QUESTIONS: dict[str, list[tuple[str, str]]] = {
-    "cp_01": [
-        ("pixel size 怎么设？", "pixel size 应该怎么设置？实验室常用值是多少？"),
-        ("电压和 Cs 怎么填？", "加速电压和球差 Cs 值应该填多少？"),
-        ("导入哪些文件？", "应该导入 movies 还是 micrographs？文件格式要求？"),
-    ],
-    "cp_02": [
-        ("漂移太大怎么办？", "运动校正后漂移很大，应该怎么处理？"),
-        ("B-factor 怎么设？", "MotionCor2 的 B-factor 默认值是多少？需要调整吗？"),
-        ("patch 大小怎么选？", "Number of patches 应该设多少？5x5 够吗？"),
-    ],
-    "cp_03": [
-        ("CTF fit 质量怎么判断？", "CTF 拟合质量怎么判断好坏？分辨率阈值是多少？"),
-        ("哪些照片该删？", "Manual Curate 时应该剔除哪些照片？标准是什么？"),
-        ("defocus 范围怎么设？", "defocus 搜索范围应该设多大？"),
-    ],
-    "cp_04": [
-        ("颗粒直径怎么测？", "怎么用 PyMOL 测定蛋白外接圆直径？"),
-        ("Blob 还是 Topaz？", "Blob Picker 和 Topaz 应该选哪个？怎么组合？"),
-        ("NCC vs Power 怎么看？", "NCC vs Power 图怎么解读？怎么判断真假粒子？"),
-    ],
-    "cp_05": [
-        ("box size 怎么算？", "box size 应该怎么计算？公式是什么？"),
-        ("要不要 bin？", "第一轮要不要 Fourier crop？crop 到多少？"),
-        ("box 太大太小会怎样？", "box size 太大或太小会有什么问题？"),
-    ],
-    "cp_06": [
-        ("class 很糊怎么办？", "2D 分类结果很模糊，class 不清晰怎么办？"),
-        ("分类数怎么设？", "Number of classes 应该设多少？100 还是 50？"),
-        ("可以进入 3D 吗？", "2D 分类后什么时候可以进入 3D？判断标准是什么？"),
-    ],
-    "cp_07": [
-        ("初始模型不好怎么办？", "Ab-initio 生成的 3D 模型不像蛋白怎么办？"),
-        ("要做几个 class？", "Ab-initio 应该做几个 class？3 个够吗？"),
-        ("忘了去重怎么办？", "忘记 Remove Duplicates 会有什么影响？"),
-    ],
-    "cp_08": [
-        ("输入所有 model 吗？", "Heterogeneous Refinement 要输入所有 Ab-initio model 吗？"),
-        ("选哪个 class？", "3D 分类后应该选哪个 class 进入精修？"),
-        ("构象差异怎么看？", "怎么判断不同 class 之间是否有真实构象差异？"),
-    ],
-    "cp_09": [
-        ("FSC 怎么看？", "FSC 曲线怎么看？0.143 阈值意味着什么？"),
-        ("取向偏侧怎么办？", "取向分布不均匀怎么办？怎么改善？"),
-        ("Non-uniform 必须做吗？", "Non-uniform Refinement 是必须的吗？不做会怎样？"),
-    ],
-    "cp_10": [
-        ("什么时候做 CTF 精修？", "什么时候适合做 CTF refinement？需要什么前提？"),
-        ("能提多少分辨率？", "CTF 精修通常能提升多少分辨率？"),
-        ("Local 还是 Global？", "Local CTF 和 Global CTF 有什么区别？都要做吗？"),
-    ],
-    "cp_11": [
-        ("B-factor 怎么选？", "锐化的 B-factor 应该怎么选？自动还是手动？"),
-        ("mask 怎么做？", "mask 应该怎么做才不会虚高 FSC？"),
-        ("分辨率怎么确认？", "最终分辨率怎么确认？金标准 FSC 是什么？"),
-    ],
-    "cp_12": [
-        ("Ramachandran 标准？", "Ramachandran 图的合格标准是什么？"),
-        ("FSC_work vs FSC_free？", "FSC_work 和 FSC_free 差距大说明什么？"),
-        ("低分辨率怎么建模？", "分辨率不够时应该怎么建模？Cα trace 够吗？"),
-    ],
-}
 
 
 def _get_current_checkpoint_data(app: StructPilotApp, state: PipelineState) -> dict:
@@ -2133,73 +2114,6 @@ def _render_output_mode_toggle(compact: bool = False) -> str:
 
     # 返回当前profile（保持向后兼容）
     return view_options[current_level]["profile"]
-
-
-
-def _render_quick_questions(state: PipelineState, key_prefix: str = "qq") -> None:
-    """Render quick question chips for the current checkpoint."""
-    cp_id = state.current_cp_id
-    questions = _QUICK_QUESTIONS.get(cp_id, [])
-    if not questions:
-        return
-
-    st.markdown("**快捷提问**")
-    cols = st.columns(min(len(questions), 3))
-    for i, (short_q, full_q) in enumerate(questions):
-        with cols[i % len(cols)]:
-            if st.button(
-                short_q,
-                key=f"{key_prefix}_{cp_id}_{i}",
-                use_container_width=True,
-                help=full_q,
-            ):
-                run_command(full_q)
-                st.session_state._sp_scroll_target = "chat_bottom"
-                st.rerun()
-
-
-def _render_summary_cards(checkpoint: dict, state: PipelineState) -> None:
-    """渲染左侧摘要卡片（紧凑网格布局）。"""
-    if not checkpoint:
-        return
-
-    cp_id = checkpoint.get("checkpoint_id", "")
-    stage_goal = checkpoint.get("stage_goal", "")
-    input_needed = checkpoint.get("input_needed", "")
-    sw_data = checkpoint.get(state.software, {}) if isinstance(checkpoint.get(state.software), dict) else {}
-    sw_output = sw_data.get("output", "")
-    key_steps = sw_data.get("key_steps", []) or []
-    qc_checks = checkpoint.get("qc_check", []) or []
-
-    # 2x2 网格布局
-    row1_col1, row1_col2 = st.columns(2)
-
-    with row1_col1:
-        if stage_goal:
-            with st.expander("🎯 目标", expanded=True):
-                st.caption(stage_goal[:150] + "..." if len(stage_goal) > 150 else stage_goal)
-
-    with row1_col2:
-        if input_needed or sw_output:
-            with st.expander("📥📤 I/O", expanded=True):
-                if input_needed:
-                    st.caption(f"输入: {input_needed[:80]}")
-                if sw_output:
-                    st.caption(f"输出: {sw_output[:80]}")
-
-    row2_col1, row2_col2 = st.columns(2)
-
-    with row2_col1:
-        if key_steps:
-            with st.expander(f"📋 步骤({len(key_steps)})", expanded=False):
-                for idx, step in enumerate(key_steps[:3], 1):
-                    st.caption(f"{idx}. {step[:60]}")
-
-    with row2_col2:
-        if qc_checks:
-            with st.expander(f"✅ 质控({len(qc_checks)})", expanded=False):
-                for qc in qc_checks[:3]:
-                    st.caption(f"• {qc[:60]}")
 
 
 # --------------------------------------------------------------------------- #
@@ -4964,22 +4878,27 @@ if _pet_enabled_check:
             "accent": "#3b82f6",
         }
 
-    # 直接使用简化版桌宠（更可靠）
     _pet_mood = update_pet_mood(
         completed_count=_completed,
         total_count=_cp_total_num,
         has_errors=_failed > 0,
         session_started=state.session_started
     )
-    render_simple_desk_pet(
+    pet_value = render_desk_pet(
         pet_type=_pet_type,
+        pet_svg=_pet_svg,
+        ctx_msgs=_pet_ctx_msgs,
+        pet_msgs=_pet_pet_msgs,
+        body_msgs=_pet_body_msgs,
+        tail_msgs=_pet_tail_msgs,
+        quick_qs=_pet_quick_qs,
+        theme=_pet_theme,
+        is_dark=_is_dark,
+        pet_mood=_pet_mood,
         pet_size=int(st.session_state.get("pet_size", 64)),
-        pet_mood=_pet_mood
     )
-    pet_value = None  # 简化版没有交互值
 
     # Handle actions from desk pet (via hidden text input)
-    # 注意：简化版桌宠不支持交互，这部分代码保留但不会执行
     if pet_value:
         try:
             _pet_action = json.loads(pet_value) if isinstance(pet_value, str) else pet_value

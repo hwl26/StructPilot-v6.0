@@ -10,7 +10,7 @@
 3. CTF tab：Do CTF correction?: Yes，Ignore CTFs until first peak?: No
 4. Optimisation tab：Number of classes: 4，Regularisation parameter T: 4，Number of iterations: 25，Mask diameter (A): 200，Mask individual particles with zeros?: Yes，Limit resolution E-step to (A): -1，Use Blush regularisation?: Yes
 5. Sampling tab 通常不改；Compute tab：Use GPU acceleration?: Yes；Running tab：Number of MPI procs: 5，threads: 6
-6. Subset selection：Automatically select 2D classes?: No，手动选优类丢弃亚优类
+6. Subset selection：Automatically select 3D classes?: No，手动选优类丢弃亚优类
 
 **质控要点**：
 - 在 2D slices 查看类重建评估未解异质性（模糊/条纹区）

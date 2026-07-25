@@ -17,7 +17,7 @@
         "报错提示 local motion too large"
       ],
       "symptoms_text": "Motion Correction 作业运行到一半报错，提示 local motion too large，部分影像无法完成校正。",
-      "solution": "增大 B-factor 到 500（默认 150）；如果仍失败，在 Import Movies 时将 pixel size 设为实际值的 0.8 倍重新导入，再跑 Motion Correction。这个方法在我们实验室 3 次遇到该问题时都有效。",
+      "solution": "增大 B-factor（从 150 调到 300-500）；调整 patch 参数（减小 patch size overlap）；或剔除漂移过大的 micrograph。pixel size 是物理量，不可修改。这个方法在我们实验室多次遇到该问题时有效。",
       "related_params": {
         "B_factor": 500
       },

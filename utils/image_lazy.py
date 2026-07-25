@@ -5,6 +5,9 @@ This module provides:
 2. Guide image data URL optimization (thumbnails for list, full on click)
 3. Image dimension caching
 4. Scroll-to-element JS injection for smart scrolling
+5. IntersectionObserver-based lazy loading for HTML-embedded images
+6. Expander-based lazy loading for st.image widgets
+7. Lazy image gallery with grouped expanders
 
 Design principles:
 - Thumbnails are generated once and cached by file path + mtime.
@@ -13,11 +16,16 @@ Design principles:
 - The existing fixed screenshot display (render_guide_card) continues to
   work unchanged; this module provides optional optimization hooks.
 - All functions degrade gracefully when PIL is not installed.
+- Two lazy loading strategies:
+  a) **IntersectionObserver JS**: For HTML-embedded images (guide cards).
+     Images start as grey placeholders; JS swaps in the real src when visible.
+  b) **Expander wrapping**: For st.image widgets (gallery, workspace).
+     Images are grouped into expanders; only expanded groups load images.
 
 Integration points:
-- main.py:2963, 2991  → use render_lazy_image() instead of st.image()
-- main.py:282 (render_guide_card)  → use get_cached_thumbnail_data_url()
-- main.py:804 (image_data_url)  → use get_cached_image_data_url() for base64
+- main.py render_guide_card  → use lazy_image_html() for <img> tags
+- image_gallery.py           → use render_lazy_gallery() instead of render_image_gallery()
+- stage_workspace.py         → use render_image_in_expander() for step screenshots
 """
 
 from __future__ import annotations
@@ -28,7 +36,7 @@ import io
 import mimetypes
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
 
@@ -309,3 +317,423 @@ def preload_next_step_images(
             if img_path.exists():
                 # Trigger thumbnail generation (cached)
                 generate_thumbnail_data_url(str(img_path))
+
+
+# =========================================================================
+# IntersectionObserver JS Lazy Loading (for HTML-embedded images)
+# =========================================================================
+
+def lazy_image_html(
+    src: str,
+    alt: str = "",
+    placeholder_color: str = "#f1f5f9",
+    placeholder_text: str = "",
+    extra_attrs: str = "",
+    img_id: str = "",
+) -> str:
+    """Generate an ``<img>`` tag that lazy-loads via IntersectionObserver.
+
+    The image element is created with a transparent 1px placeholder src.
+    The real ``src`` is stored in ``data-src``.  A single IntersectionObserver
+    script (injected once per page via ``_inject_observer_script()``) watches
+    all ``[data-src]`` elements and swaps the ``src`` when the element enters
+    the viewport.
+
+    Parameters
+    ----------
+    src : str
+        The actual image source (data URL, HTTP URL, or local file path).
+    alt : str
+        Alt text for accessibility.
+    placeholder_color : str
+        Background colour of the placeholder rectangle.
+    placeholder_text : str
+        Optional text shown in the placeholder (e.g. "Loading...").
+    extra_attrs : str
+        Additional HTML attributes to merge into the ``<img>`` tag
+        (e.g. ``class=\"...\" style=\"...\"``).
+    img_id : str
+        Optional HTML ``id`` for the image element.
+
+    Returns
+    -------
+    str
+        A complete ``<img>`` HTML string.
+    """
+    # Short-circuit: if src is empty, return a placeholder div
+    if not src:
+        id_attr = f' id="{img_id}"' if img_id else ""
+        return (
+            f'<div{id_attr} class="sp-lazy-placeholder"'
+            f' style="background:{placeholder_color};min-height:120px;'
+            f'border-radius:6px;display:flex;align-items:center;justify-content:center;'
+            f'color:#94a3b8;font-size:0.85rem;">{placeholder_text or "Image unavailable"}</div>'
+        )
+
+    # Ensure the IntersectionObserver bootstrap script is present on the page
+    _inject_observer_script()
+
+    id_attr = f' id="{img_id}"' if img_id else ""
+    ph_text_attr = f" data-ph-text=\"{_html_escape(placeholder_text)}\"" if placeholder_text else ""
+    placeholder_style = (
+        f"background:{placeholder_color};min-height:180px;border-radius:6px;"
+        f"display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:0.85rem;"
+    )
+
+    return (
+        f'<img{ id_attr} class="sp-lazy-img"'
+        f' data-src="{_html_escape(src)}"'
+        f' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"'
+        f' alt="{_html_escape(alt)}"'
+        f'{ph_text_attr}'
+        f' style="{placeholder_style}"'
+        f' {extra_attrs} loading="lazy">'
+    )
+
+
+def lazy_image_wrap_html(
+    inner_html: str,
+    src: str,
+    alt: str = "",
+    wrapper_class: str = "sp-guide-image-wrap",
+) -> str:
+    """Wrap lazy_image_html output in a container div (for hotspots etc.).
+
+    This is a drop-in helper for ``render_guide_card`` in main.py that
+    produces the same ``.sp-guide-image-wrap`` wrapper but with a lazy
+    ``<img>`` inside.
+
+    Parameters
+    ----------
+    inner_html : str
+        The HTML content to place inside the wrapper (usually from
+        ``lazy_image_html()`` + hotspot anchors).
+    src : str
+        Actual image source (used to generate the lazy ``<img>`` tag).
+    alt : str
+        Alt text.
+    wrapper_class : str
+        CSS class for the outer wrapper div.
+
+    Returns
+    -------
+    str
+        Complete wrapper HTML string.
+    """
+    img_tag = lazy_image_html(src, alt=alt)
+    return f'<div class="{wrapper_class}">{img_tag}{inner_html}</div>'
+
+
+# Track whether observer script has been injected this render cycle.
+_observer_injected_key = "__lazy_observer_injected"
+
+
+def _inject_observer_script() -> None:
+    """Inject the IntersectionObserver bootstrap script (once per render).
+
+    Uses ``st.components.v1.html`` to inject a small ``<script>`` block that:
+    1. Creates a single IntersectionObserver for all ``.sp-lazy-img`` elements.
+    2. When an element enters the viewport (with 100px rootMargin for
+       pre-loading slightly before visible), replaces ``src`` with
+       ``data-src`` and removes the placeholder styling.
+    3. Unobserves the element after loading to free resources.
+    """
+    if st.session_state.get(_observer_injected_key):
+        return
+
+    try:
+        import streamlit.components.v1 as components
+    except ImportError:
+        return
+
+    js_code = """
+<script>
+(function() {
+    if (window.__spLazyObserverInit) return;
+    window.__spLazyObserverInit = true;
+
+    function initObserver() {
+        var imgs = document.querySelectorAll('img.sp-lazy-img[data-src]');
+        if (!imgs.length) return;
+
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    var img = entry.target;
+                    var realSrc = img.getAttribute('data-src');
+                    if (realSrc) {
+                        img.src = realSrc;
+                        img.removeAttribute('data-src');
+                        img.classList.remove('sp-lazy-img');
+                        // Remove placeholder styling once loaded
+                        img.style.background = '';
+                        img.style.minHeight = '';
+                        img.style.display = 'block';
+                        img.style.width = '100%';
+                        img.style.height = 'auto';
+                    }
+                    observer.unobserve(img);
+                }
+            });
+        }, {
+            rootMargin: '200px 0px',
+            threshold: 0.01
+        });
+
+        imgs.forEach(function(img) { observer.observe(img); });
+    }
+
+    // Run immediately and also after a short delay (Streamlit re-renders)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initObserver);
+    } else {
+        initObserver();
+    }
+    // Retry after Streamlit finishes rendering
+    setTimeout(initObserver, 500);
+    setTimeout(initObserver, 1500);
+})();
+</script>
+    """
+
+    components.html(js_code, height=0, width=0)
+    st.session_state[_observer_injected_key] = True
+
+
+def _html_escape(s: str) -> str:
+    """Minimal HTML entity escaping for attribute values."""
+    if not s:
+        return ""
+    return (
+        s.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+# =========================================================================
+# Expander-based Lazy Loading (for st.image widgets)
+# =========================================================================
+
+def render_image_in_expander(
+    path: str,
+    caption: str = "",
+    label: str = "",
+    use_container_width: bool = True,
+    thumb_width: int = 0,
+    key: str = "",
+) -> None:
+    """Render an image inside a collapsed expander for on-demand loading.
+
+    The image is only loaded into the browser when the user expands the
+    expander. This is the recommended lightweight lazy loading strategy
+    for Streamlit since Streamlit does not natively support image
+    lazy loading.
+
+    Parameters
+    ----------
+    path : str
+        Image file path.
+    caption : str
+        Caption text below the image.
+    label : str
+        Expander label text. Defaults to a clickable caption with icon.
+    use_container_width : bool
+        If True, image fills the container width when shown.
+    thumb_width : int
+        If > 0, show a thumbnail outside the expander at this width.
+    key : str
+        Unique key for the expander widget.
+    """
+    if not path or not os.path.exists(path):
+        return
+
+    expander_key = f"lazy_exp_{key}" if key else f"lazy_exp_{hash(path)}"
+    display_label = label or f"  \U0001F5BC\uFE0F {caption or 'Click to view image'}"
+
+    # Optionally show a small thumbnail as preview
+    if thumb_width > 0:
+        thumb_url = generate_thumbnail_data_url(path, max_edge=thumb_width)
+        if thumb_url:
+            st.image(thumb_url, caption=None, width=thumb_width)
+
+    with st.expander(display_label, expanded=False):
+        try:
+            st.image(path, caption=caption or None, use_container_width=use_container_width)
+        except Exception:
+            st.caption(f"Failed to load: {caption or path}")
+
+
+def render_lazy_gallery(
+    images: list,
+    key_prefix: str = "lg",
+    group_size: int = 4,
+    columns: int = 3,
+    use_expanders: bool = True,
+) -> None:
+    """Render a gallery of images with expander-based lazy loading.
+
+    When ``use_expanders`` is True (default), images are grouped into
+    collapsible sections. Only the currently expanded section loads
+    its images into the browser, significantly reducing initial page
+    load time for galleries with many images.
+
+    When ``use_expanders`` is False, falls back to immediate rendering
+    (same as the original ``render_image_gallery``).
+
+    Parameters
+    ----------
+    images : list of dict
+        Each dict should have at least a ``path`` key. Supported keys:
+        path, image, url, caption, label, name, title, hotspot, annotation.
+    key_prefix : str
+        Unique prefix for widget keys.
+    group_size : int
+        Number of images per expander group.
+    columns : int
+        Number of columns within each group.
+    use_expanders : bool
+        If True, group images into expanders for lazy loading.
+    """
+    if not images:
+        st.caption("")
+        return
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for img in images:
+        path = _resolve_path(img)
+        if not path:
+            continue
+        if path not in seen:
+            seen.add(path)
+            unique.append(img)
+
+    if not unique:
+        st.caption("")
+        return
+
+    total = len(unique)
+
+    if not use_expanders or total <= group_size:
+        # Small number of images: render directly (no expanders needed)
+        _render_image_grid(unique, key_prefix, columns)
+        return
+
+    # Group images into expanders
+    num_groups = (total + group_size - 1) // group_size
+    for g in range(num_groups):
+        start = g * group_size
+        end = min(start + group_size, total)
+        group = unique[start:end]
+
+        # Build group label
+        first_caption = (
+            group[0].get("caption") or group[0].get("label")
+            or group[0].get("name") or ""
+        )
+        if len(group) == 1:
+            group_label = f"  \U0001F5BC\uFE0F {first_caption}"
+        else:
+            group_label = (
+                f"  \U0001F5BC\uFE0F  ({start + 1}-{end}/{total})"
+                f"  {first_caption}"
+                if first_caption
+                else f"  \U0001F5BC\uFE0F  ({start + 1}-{end}/{total})"
+            )
+
+        with st.expander(group_label, expanded=(g == 0)):
+            _render_image_grid(group, f"{key_prefix}_g{g}", columns)
+
+
+def _render_image_grid(
+    images: list,
+    key_prefix: str,
+    columns: int,
+) -> None:
+    """Render a grid of images using st.image with thumbnail optimization."""
+    n_cols = min(columns, len(images))
+    cols = st.columns(n_cols)
+
+    for i, img in enumerate(images):
+        col = cols[i % n_cols]
+        with col:
+            path = _resolve_path(img)
+            caption = (
+                img.get("caption") or img.get("label")
+                or img.get("name") or img.get("title") or ""
+            )
+            annotation = img.get("hotspot") or img.get("annotation") or ""
+
+            if not path:
+                st.caption(f"\U0001F4F7 {caption or 'Image unavailable'}")
+                continue
+
+            if not path.startswith(("http://", "https://", "data:")) and not os.path.exists(path):
+                st.caption(f"\U0001F4F7 {caption or path} (not found)")
+                continue
+
+            try:
+                # Use thumbnail for faster rendering, with expander for full
+                thumb_url = generate_thumbnail_data_url(path)
+                if thumb_url:
+                    st.image(thumb_url, caption=caption or None, use_container_width=True)
+                else:
+                    st.image(path, caption=caption or None, use_container_width=True)
+            except Exception:
+                st.caption(f"\U0001F4F7 {caption or path} (load failed)")
+
+            if annotation:
+                st.caption(f"  \U0001F4A1 {annotation}")
+
+
+def _resolve_path(img: dict) -> str:
+    """Extract and resolve image path from a dict.
+
+    Supports: path, image, image_path, url, src keys.
+    Absolute paths and URLs are returned as-is.
+    Relative paths are resolved against the project base directory.
+    """
+    path = (
+        img.get("path") or img.get("image")
+        or img.get("image_path") or img.get("url")
+        or img.get("src") or ""
+    )
+    if not path:
+        return ""
+
+    path = str(path).strip()
+
+    # Already a URL or data URL
+    if path.startswith(("http://", "https://", "data:")):
+        return path
+
+    # Absolute path
+    if os.path.isabs(path):
+        return path
+
+    # Resolve relative to base directory
+    candidate = _BASE_DIR / path
+    if candidate.exists():
+        return str(candidate)
+
+    # Fallback: try importing main module for BASE_DIR
+    try:
+        import importlib
+        main_mod = importlib.import_module("main")
+        base_dir = getattr(main_mod, "BASE_DIR", None)
+        if base_dir:
+            candidate = base_dir / path
+            if candidate.exists():
+                return str(candidate)
+            if hasattr(main_mod, "resolve_guide_asset"):
+                resolved = main_mod.resolve_guide_asset(path)
+                if resolved:
+                    return resolved
+    except Exception:
+        pass
+
+    return path
+

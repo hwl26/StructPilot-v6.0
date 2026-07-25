@@ -20,6 +20,7 @@ from utils.forum_data import (
     increment_views,
     has_user_upvoted
 )
+from utils.security import sanitize_html
 
 
 def render_forum_tab():
@@ -228,7 +229,7 @@ def _render_question_card(question: Dict):
             # 标签
             tags = question.get("tags", [])
             if tags:
-                tag_html = " ".join([f"<span style='background:#e0e7ff;color:#4338ca;padding:2px 8px;border-radius:4px;font-size:0.85rem;margin-right:4px;'>{tag}</span>" for tag in tags])
+                tag_html = " ".join([f"<span style='background:#e0e7ff;color:#4338ca;padding:2px 8px;border-radius:4px;font-size:0.85rem;margin-right:4px;'>{sanitize_html(tag)}</span>" for tag in tags])
                 st.markdown(tag_html, unsafe_allow_html=True)
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
@@ -300,13 +301,13 @@ def _render_question_detail(question: Dict):
     # 标签
     tags = question.get("tags", [])
     if tags:
-        tag_html = " ".join([f"<span style='background:#e0e7ff;color:#4338ca;padding:4px 12px;border-radius:6px;font-size:0.9rem;margin-right:6px;'>{tag}</span>" for tag in tags])
+        tag_html = " ".join([f"<span style='background:#e0e7ff;color:#4338ca;padding:4px 12px;border-radius:6px;font-size:0.9rem;margin-right:6px;'>{sanitize_html(tag)}</span>" for tag in tags])
         st.markdown(tag_html, unsafe_allow_html=True)
 
     st.markdown("---")
 
     # 内容
-    st.markdown(question.get("content", ""))
+    st.markdown(sanitize_html(question.get("content", "")))
 
     # 操作栏
     col1, col2, col3 = st.columns([1, 1, 8])
@@ -361,7 +362,7 @@ def _render_answer_card(answer: Dict, question: Dict):
             st.caption(f"👤 {author} · 🕒 {time_str}")
 
             # 内容
-            st.markdown(answer.get("content", ""))
+            st.markdown(sanitize_html(answer.get("content", "")))
 
             # 操作栏
             col_upvote, col_accept, col_comment = st.columns([1, 1, 8])

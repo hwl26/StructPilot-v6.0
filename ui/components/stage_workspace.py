@@ -23,6 +23,13 @@ import streamlit as st
 
 from components.qa_card import render_qa_card
 
+# Lazy loading utilities
+try:
+    from utils.image_lazy import render_image_in_expander, generate_thumbnail_data_url
+    _HAS_IMAGE_LAZY = True
+except ImportError:
+    _HAS_IMAGE_LAZY = False
+
 
 def render_stage_workspace(
     checkpoint: Dict[str, Any],
@@ -444,8 +451,18 @@ def _render_step_cards(
                 st.session_state[state_key] = done_set
                 st.rerun()
             if has_image and img_path and os.path.exists(img_path):
-                with st.popover("📷", use_container_width=True):
-                    st.image(img_path, caption=img_caption, use_column_width=True)
+                if _HAS_IMAGE_LAZY:
+                    # Lazy loading: image only loads when expander is opened
+                    render_image_in_expander(
+                        img_path,
+                        caption=img_caption,
+                        label=f"  \U0001F4F7  {img_caption}",
+                        thumb_width=120,
+                        key=f"{key_prefix}_step_img_{i}",
+                    )
+                else:
+                    with st.popover("\U0001F4F7", use_container_width=True):
+                        st.image(img_path, caption=img_caption, use_column_width=True)
 
     if total > 0:
         st.divider()

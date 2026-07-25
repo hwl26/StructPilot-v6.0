@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+from utils.security import sanitize_html
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _POSTS_PATH = BASE_DIR / "runtime" / "lab_board" / "posts.json"
@@ -136,7 +137,7 @@ def render_board(current_user: str) -> None:
                         f"<div style='background:#f8fafc;border-left:3px solid #93c5fd;"
                         f"padding:6px 10px;margin:4px 0;border-radius:4px;font-size:0.9rem;'>"
                         f"<b>{rep.get('author','匿名')}</b> <span style='color:#94a3b8;font-size:0.8rem;'>{rep_ts}</span><br>"
-                        f"{rep.get('content','')}</div>",
+                        f"{sanitize_html(rep.get('content',''))}</div>",
                         unsafe_allow_html=True,
                     )
             else:

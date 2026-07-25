@@ -114,6 +114,85 @@
       "success_criteria": "CTF 拟合率 > 70%，分辨率估算与预期接近，CTF 拟合环在功率谱中清晰可见。"
     }
   },
+  "cp_04": {
+    "step_name": "Particle Picking",
+    "beginner_instructions": [
+      "① 确认 CTF Estimation 已完成并完成了 Manual Curate 筛选",
+      "② 选择颗粒挑选方法：Blob Picker（快速初挑）、Topaz（AI 精挑）或 Template Picker（模板匹配）",
+      "③ 用 PyMOL 测定蛋白外接圆直径，设置 Min/Max particle diameter 和 Min separation distance",
+      "④ 提交挑选作业，用 Inspect Picks 交互式检查 NCC vs Power 图，确认真粒子与噪声分离清晰",
+      "⑤ 推荐渐进策略：Blob 初挑 → 2D 分类选好颗粒 → Topaz 训练 → 大规模精挑"
+    ],
+    "teaching_card": {
+      "what": "从显微照片中自动识别并标记单颗粒的坐标位置。这是「从大海里捞珍珠」的关键步骤——颗粒挑选的准确性直接决定后续 3D 重构的最终分辨率。三种方法各有优势：Blob 速度快适合初筛，Topaz 深度学习精度高适合低对比度数据，Template 能补全取向劣势方向。",
+      "key_params": [
+        {
+          "name": "Min / Max particle diameter (Å)",
+          "meaning": "颗粒直径的搜索范围。应通过 PyMOL 测定蛋白外接圆精确设置，范围太大会合并相邻颗粒，太小会漏挑。",
+          "range": "根据蛋白实际尺寸设置，通常 Min = 直径×0.8，Max = 直径×1.2"
+        },
+        {
+          "name": "Min separation distance (Å)",
+          "meaning": "两个坐标之间的最小允许距离，防止同一颗粒被重复挑选。",
+          "range": "通常 0.5-0.7（相对值），过小会产生大量重复"
+        },
+        {
+          "name": "Max local maxima",
+          "meaning": "每张照片允许挑选的最大颗粒数，防止在聚集区域过度挑选。",
+          "range": "Blob: 200-400；Template: 100-400，根据照片中实际颗粒密度调整"
+        },
+        {
+          "name": "Expected particles (Topaz)",
+          "meaning": "Topaz 训练时期望的颗粒数，用于控制正负样本比例。",
+          "range": "约每张照片中实际颗粒数的 1-1.5 倍"
+        }
+      ],
+      "common_problems": [
+        "颗粒直径设置过大会合并相邻颗粒 → 用 PyMOL 精确测定外接圆直径，不要凭目测估算",
+        "Min separation distance 太小导致大量重复坐标 → 后续运行 Remove Duplicate Particles 清理",
+        "Topaz 训练 loss 不收敛或验证 loss 反升 → 训练数据不足或质量差，增加标注好的训练图片到 1000 张以上",
+        "挑选结果中大量冰晶和污染物被当作颗粒 → 调整 picking 阈值，或在 Inspect Picks 中用 NCC vs Power 图过滤"
+      ],
+      "success_criteria": "随机抽查 50-100 张照片，颗粒坐标准确落在蛋白区域，无大量冰晶/碳膜边缘误挑，真粒子在 NCC vs Power 图中与噪声分离清晰。"
+    }
+  },
+  "cp_05": {
+    "step_name": "Particle Extraction",
+    "beginner_instructions": [
+      "① 确认颗粒挑选已完成，坐标文件已生成",
+      "② 计算提取框大小：box_size (pix) = 颗粒直径(Å) / pixel_size(Å) × 1.5~2.0，向上取到 2 的幂次（如 192、256）",
+      "③ 第一轮快速粗筛：开启 Fourier crop，crop 到约 100-120 px（不超过 128），加速后续 2D 分类",
+      "④ 第二轮精细挑选：关闭 Fourier crop，保留原始分辨率，使用第一轮精选后的颗粒坐标重新提取",
+      "⑤ 检查提取结果：颗粒小图预览中蛋白应居中、无截断"
+    ],
+    "teaching_card": {
+      "what": "按颗粒坐标从显微照片中将每个单颗粒切出，生成颗粒图像堆栈（particle stack）。这是从照片到颗粒的关键转换步骤。实验室常用两轮策略：第一轮带 Fourier crop（降采样）快速粗筛，第二轮不 crop 保留原始分辨率用于精细处理。",
+      "key_params": [
+        {
+          "name": "Box size (pix)",
+          "meaning": "提取框的像素尺寸。太小会截断蛋白导致信号丢失，太大会浪费计算资源和 GPU 显存。",
+          "range": "直径/pixel_size × 1.5~2.0，如 120Å / 0.96 × 1.5 ≈ 188 → 取 192；建议取 64 的倍数以优化 FFT 效率"
+        },
+        {
+          "name": "Fourier crop box size (pix)",
+          "meaning": "降采样后的目标框大小。仅第一轮粗筛时使用，通过降低分辨率加速计算。",
+          "range": "第一轮粗筛：~100-120 px（不超过 128）；第二轮精细挑选：关闭 Fourier crop"
+        },
+        {
+          "name": "Downsample factor (binning)",
+          "meaning": "降采样倍率。bin2 表示像素尺寸翻倍、分辨率降半、box 减半，计算速度约提升 8 倍。",
+          "range": "第一轮 bin2（推荐），第二轮 bin1（不降采样）"
+        }
+      ],
+      "common_problems": [
+        "Box size 太小导致蛋白被截断 → 重新计算 box_size，确保包含蛋白 + 周围冰层（系数用 1.8~2.0）",
+        "Box size 不是 2 的幂次导致 FFT 效率极低 → 向上取到最近的 64 倍数（如 192、256、320、384）",
+        "忘记第一轮 bin2 直接用全分辨率 → 后续 2D 分类计算时间暴增数倍",
+        "提取后颗粒偏心或截断 → 检查 picking 坐标是否正确，必要时重新挑选"
+      ],
+      "success_criteria": "颗粒小图预览中蛋白居中、完整无截断，周围有适量冰层缓冲；第一轮 box 大小合理（100-128 px），第二轮保留原始分辨率。"
+    }
+  },
   "cp_06": {
     "step_name": "2D Classification",
     "beginner_instructions": [
@@ -142,6 +221,238 @@
         "颗粒数少（< 5000）→ 减少分类数到 20-30"
       ],
       "success_criteria": "至少 30% 的类别显示清晰的颗粒特征，可区分不同投影方向或构象。"
+    }
+  },
+  "cp_07": {
+    "step_name": "Ab-Initio Reconstruction",
+    "beginner_instructions": [
+      "① 确认 2D 分类精选已完成，在 Ab-Initio 之前先运行 Remove Duplicate Particles 移除重复坐标",
+      "② 添加 Ab-Initio Reconstruction 作业，设置 Number of classes 为 3（生成多个候选模型）",
+      "③ 设置 Maximum resolution 为 10 Å（初始模型用低分辨率即可）",
+      "④ 设置对称性（Symmetry）：无对称选 C1，有对称则设置对应对称群",
+      "⑤ 提交后检查输出：3 个模型中至少 1 个呈现合理的蛋白轮廓，无明显碎片或空洞"
+    ],
+    "teaching_card": {
+      "what": "从数十万张 2D 颗粒图像反推蛋白的 3D 密度图，不需要任何先验结构模型。算法通过随机梯度下降（SGD）不断猜测每个颗粒的空间角度，再反向投影叠加来逼近真实 3D 结构。这是从 2D 跨入 3D 的关键一步。",
+      "key_params": [
+        {
+          "name": "Number of classes",
+          "meaning": "同时生成的初始模型数量。多个类可以捕捉不同构象或排除错误模型。",
+          "range": "通常 3，颗粒异质性高时可增加到 4-6"
+        },
+        {
+          "name": "Maximum resolution (Å)",
+          "meaning": "初始模型的目标分辨率。初建模型用低分辨率即可，过高会导致过拟合。",
+          "range": "通常 8-15 Å，推荐 10 Å"
+        },
+        {
+          "name": "Symmetry",
+          "meaning": "蛋白分子的对称性。正确设置能显著提升信号强度，错误设置会导致信号分散。",
+          "range": "无对称选 C1；常见对称群有 C2-C12（ cyclic）、D2-D12（dihedral）、T/I/O（正多面体）"
+        },
+        {
+          "name": "Class similarity",
+          "meaning": "类间相似度阈值。值越小允许类间差异越大，分类更独立；值越大迫使类更相似。",
+          "range": "默认 0.1，希望分得更开可调到 0.03"
+        }
+      ],
+      "common_problems": [
+        "忘记 Remove Duplicate Particles → 同一颗粒被反复计算，导致分辨率虚高和过度拟合",
+        "3 个模型全都不像蛋白 → 检查 2D 分类精选是否有误，颗粒质量是否足够",
+        "Symmetry 选错导致信号分散 → 确认蛋白真实对称性后再运行，有对称却用 C1 会浪费大量信号",
+        "模型出现碎片或空洞 → 颗粒数量不足或取向分布不均匀，考虑回到颗粒挑选阶段补全取向"
+      ],
+      "success_criteria": "生成的 3 个初始模型中至少 1 个呈现合理的蛋白轮廓和预期大小，无明显碎片、空洞或扭曲。"
+    }
+  },
+  "cp_08": {
+    "step_name": "Heterogeneous Refinement (3D Classification)",
+    "beginner_instructions": [
+      "① 确认 Ab-Initio Reconstruction 已完成",
+      "② 添加 Heterogeneous Refinement 作业，连接 Ab-Initio 输出的所有 3D 模型和颗粒集（好坏模型都要输入）",
+      "③ 设置 Max alignment resolution 为 3 Å，Refinement box size 与之前一致",
+      "④ 提交运行，等待产出多个精细分类的 3D 模型",
+      "⑤ 比较各类的分辨率和颗粒数，选择结构最好、颗粒数充足的类进入后续精修"
+    ],
+    "teaching_card": {
+      "what": "利用 Ab-Initio 产出的多个初始 3D 模型作为参考，将混合颗粒按真实 3D 构象分类到不同组。本质是 3D 分类，用于分离构象异质性（如开放态/关闭态）、组分异质性（如结合/未结合配体）或去除坏颗粒。这是从混合数据中提纯目标态的关键步骤。",
+      "key_params": [
+        {
+          "name": "Max alignment resolution (Å)",
+          "meaning": "颗粒对齐时使用的最高分辨率。值越精细分类越准确，但计算量越大。",
+          "range": "通常 3-4 Å"
+        },
+        {
+          "name": "Refinement box size (Voxels)",
+          "meaning": "精修时的 3D 体积框大小。过大会导致 GPU 显存溢出。",
+          "range": "与颗粒提取的 box size 一致或适当截断"
+        },
+        {
+          "name": "Number of reference volumes",
+          "meaning": "输入的参考体积数量，决定了分类的数量。",
+          "range": "通常 2-4 个（来自 Ab-Initio 的多个输出）"
+        }
+      ],
+      "common_problems": [
+        "只输入最好的 Ab-Initio 模型 → 必须输入所有模型（好坏都要），否则无法有效分离构象",
+        "各类颗粒数极不均匀（某类只有几百颗粒）→ 可能颗粒总数不足或分类数太多，减少参考体积数量",
+        "Refinement box 太大导致 GPU 显存溢出 → 缩小 box size 或开启 Fourier crop",
+        "目标构象被分散到多个类 → 减少分类数，或将相似的类合并后进入下一步"
+      ],
+      "success_criteria": "不同类之间有明显构象差异，目标态类的分辨率优于其他类，且颗粒数量充足（通常 > 30% 总颗粒数），FSC 曲线平滑无振荡。"
+    }
+  },
+  "cp_09": {
+    "step_name": "3D Refinement (Homogeneous + Non-uniform)",
+    "beginner_instructions": [
+      "① 确认 Heterogeneous Refinement 已完成，选出最好的类",
+      "② 运行 Homogeneous Refinement：输入最佳类和对应体积，设置 Max alignment resolution 为 3 Å",
+      "③ 检查 Homogeneous 输出：FSC 曲线平滑、取向分布均匀、无振荡",
+      "④ 运行 Non-uniform Refinement：输入 Homogeneous 的最佳输出 + mask，这一步是最终 push 分辨率的关键",
+      "⑤ 检查最终结果：FSC 0.143 交点处的全局分辨率，局部分辨率图中核心区域应达到最高分辨率"
+    ],
+    "teaching_card": {
+      "what": "对目标态颗粒进行高分辨率 3D 精修，采用三步递进策略：Heterogeneous 分构象 → Homogeneous 全局精修到极限 → Non-uniform 最终 push 分辨率。Homogeneous Refinement 假设蛋白整体刚性，统一优化角度和位移；Non-uniform Refinement 则允许不同区域有不同分辨率（柔性区域和刚性核心分开处理），是目前 cryo-EM 高分辨率重建最关键的步骤。",
+      "key_params": [
+        {
+          "name": "Max alignment resolution (Å)",
+          "meaning": "颗粒对齐的最高分辨率，直接影响精修精度。",
+          "range": "通常 3 Å，高质量数据可尝试 2-2.5 Å"
+        },
+        {
+          "name": "Dynamic mask use absolute value",
+          "meaning": "Non-uniform Refinement 中掩膜权重计算方式。OFF 为相对值（推荐），ON 为绝对值。",
+          "range": "默认 OFF"
+        },
+        {
+          "name": "Initial B-factor (Å²)",
+          "meaning": "初始 B 因子，控制锐化程度。Non-uniform 用数据驱动权重自动优化，通常不需要手动设置。",
+          "range": "Homogeneous 后查看 Guinier 图确定，通常 50-100 Å²"
+        }
+      ],
+      "common_problems": [
+        "FSC 曲线剧烈振荡 → 检查像素尺寸、加速电压、球差系数是否正确，任一错误都会导致振荡",
+        "取向分布严重偏侧 → 运行 Orientation Diagnostics 量化评估；回到 Heterogeneous Refinement 尝试改善",
+        "B 因子过大（> 150 Å²）→ 剂量加权不足或数据整体质量下降，CTF 精修可能有帮助",
+        "跳过 Non-uniform Refinement → 会损失 0.2-0.5 Å 分辨率，这是 push 高分辨的关键步骤"
+      ],
+      "success_criteria": "FSC 曲线平滑下降，0.143 交点处全局分辨率达到预期（通常 3-4 Å 以内），取向分布均匀无严重偏侧，局部分辨率图核心区域达到最高分辨率。"
+    }
+  },
+  "cp_10": {
+    "step_name": "CTF Refinement",
+    "beginner_instructions": [
+      "① 确认 Homogeneous 或 Non-uniform Refinement 已完成",
+      "② 运行 Global CTF Refinement：校正光束倾斜（beam tilt）、三叶草像散（trefoil）、四叶草像散（tetrafoil）等系统性像差",
+      "③ 运行 Local CTF Refinement：逐颗粒精修 defocus 值，提升每颗粒的 CTF 精度",
+      "④ 检查精修后 FSC 是否有提升（通常提升 0.1-0.3 Å）",
+      "⑤ 用精修后的颗粒重新运行 Non-uniform Refinement 获得更高质量的密度图"
+    ],
+    "teaching_card": {
+      "what": "对已完成 3D 精修的颗粒进一步精修 CTF 参数和光学像差。Global CTF Refinement 校正全图系统性偏差（光束倾斜、像散、各向异性放大等），Local CTF Refinement 则逐颗粒微调 defocus 值。这一步相当于「微调镜头」，通常能提升 0.1-0.3 Å 分辨率，高分辨率重建（< 3 Å）强烈推荐。",
+      "key_params": [
+        {
+          "name": "Fit beam tilt",
+          "meaning": "是否拟合光束倾斜参数。光束倾斜是电镜对中不完美导致的系统性偏差。",
+          "range": "建议开启，精修后 tilt 值通常 < 1 mrad"
+        },
+        {
+          "name": "Fit trefoil / tetrafoil",
+          "meaning": "是否拟合三叶草/四叶草高阶像散。这些高阶像差在高分辨率重建中不可忽略。",
+          "range": "目标分辨率 < 3 Å 时建议开启"
+        },
+        {
+          "name": "Fit defocus per particle",
+          "meaning": "Local CTF 中是否逐颗粒精修 defocus。比全局平均值更精确，但计算量大。",
+          "range": "建议开启；颗粒数 > 50 万时计算资源可能紧张"
+        }
+      ],
+      "common_problems": [
+        "CTF 精修后分辨率反而下降 → 可能过度拟合（overfitting），回退到精修前的参数",
+        "Local CTF Refinement 耗时过长 → 颗粒数太多时先只跑 Global CTF，局部精修视计算资源决定",
+        "光束倾斜估计值异常大（> 5 mrad）→ 可能是参数设置错误或数据质量问题，需排查原因",
+        "精修后用旧参数重新精修 → 必须用 CTF 精修后的颗粒重新跑 Non-uniform Refinement 才能体现提升"
+      ],
+      "success_criteria": "CTF 精修后 FSC 分辨率提升 0.1-0.3 Å，光束倾斜值合理（< 1 mrad），重新精修后的密度图比精修前更清晰。"
+    }
+  },
+  "cp_11": {
+    "step_name": "Post-Processing & Sharpening",
+    "beginner_instructions": [
+      "① 确认最终 3D Refinement 已完成，获得 half map A 和 half map B",
+      "② 添加 Post-processing / Sharpening Tools 作业，输入两个 half maps 和掩膜",
+      "③ 系统根据 FSC 曲线自动计算最优 B-factor 并锐化密度图",
+      "④ 检查 FSC 0.143 交点确定的全局分辨率是否与预期一致",
+      "⑤ 检查锐化后密度图：清晰可见二级结构细节，无过度锐化导致的椒盐噪声"
+    ],
+    "teaching_card": {
+      "what": "对最终精修的 3D 密度图进行 B-factor 锐化和掩膜校正，确定可发布的全局分辨率，生成高质量的最终密度图。B-factor 锐化相当于「去模糊」——抵消因电子剂量和运动导致的高频信号衰减。掩膜校正则去除蛋白外围噪声的影响，确保 FSC 分辨率的可靠性。",
+      "key_params": [
+        {
+          "name": "B-factor (Å²)",
+          "meaning": "锐化强度控制。正值锐化（增强高频），负值模糊。通常由系统根据 FSC 自动计算最优值。",
+          "range": "自动计算为佳，手动设置时通常 -50 ~ -150 Å²（注意负值为锐化）"
+        },
+        {
+          "name": "Mask",
+          "meaning": "用于限定 FSC 计算区域的 3D 掩膜。掩膜应紧贴蛋白表面，过大引入噪声，过小切掉柔性区域。",
+          "range": "通常在精修步骤中自动生成，也可用 ChimeraX 手动调整"
+        },
+        {
+          "name": "FSC threshold",
+          "meaning": "判断分辨率的 FSC 阈值。0.143 是金标准阈值，对应信噪比 = 1。",
+          "range": "金标准 0.143；部分研究同时报告 0.5 交点"
+        }
+      ],
+      "common_problems": [
+        "B-factor 过度锐化 → 密度图出现椒盐噪声，侧链看起来像噪声 → 降低锐化强度或使用自动计算值",
+        "掩膜太紧切掉蛋白柔性区域 → 放宽掩膜边缘（padding 约 3-5 像素）",
+        "FSC 分辨率不可信 → 确认使用的是金标准（两个独立 half map 计算），而非 self-correlation",
+        "局部分辨率与全局分辨率差异过大 → 检查是否有局部柔性或取向覆盖不足"
+      ],
+      "success_criteria": "FSC 0.143 交点确定的全局分辨率可信，锐化后密度图中二级结构清晰可辨、无椒盐噪声，局部分辨率图显示核心区域达到最高分辨率。"
+    }
+  },
+  "cp_12": {
+    "step_name": "Model Building & Validation",
+    "beginner_instructions": [
+      "① 将 cryoSPARC 最终密度图导出为 .mrc 格式，导入 ChimeraX 预览整体结构",
+      "② 在 Coot 中手工搭建初始原子模型：先放置 Cα 骨架，再补全侧链",
+      "③ 用 Phenix.real_space_refine 精修原子坐标和 B-factor，使模型与密度图最佳匹配",
+      "④ 用 MolProbity 验证几何合理性：Ramachandran favored > 98%、rotamer outliers < 1%、clashscore < 5",
+      "⑤ 用 FSC_work/FSC_free 验证模型-密度图匹配：两者在 0.143 交点处分辨率一致，差距不大说明无过度拟合"
+    ],
+    "teaching_card": {
+      "what": "在最终密度图中构建原子级别的蛋白质模型，并通过多维度验证确保模型几何合理且不与密度图过度拟合。这是从密度图到可解读原子模型的最后一步。工具链为 Coot（手工搭建）→ Phenix（精修）→ MolProbity（验证）→ ChimeraX/ISOLDE（可视化优化），最终产出可提交 PDB/EMDB 发布的原子模型。",
+      "key_params": [
+        {
+          "name": "Ramachandran favored (%)",
+          "meaning": "主链二面角（phi/psi）落在允许区域的残基比例。是衡量模型几何质量的核心指标。",
+          "range": "favored > 98%，outliers < 0.2% 为优秀"
+        },
+        {
+          "name": "Clashscore",
+          "meaning": "每 1000 个原子中非键合原子间严重空间冲突的数量。反映模型的立体化学质量。",
+          "range": "< 5 为优秀，< 10 为合格"
+        },
+        {
+          "name": "FSC_work vs FSC_free",
+          "meaning": "分别用全部颗粒和工作集（通常 5%）计算的模型-密度图 FSC。两者差距大说明过度拟合。",
+          "range": "FSC_work 和 FSC_free 在 0.143 交点处分辨率应一致（差距 < 0.5 Å）"
+        },
+        {
+          "name": "Rotamer outliers (%)",
+          "meaning": "侧链旋转异构体不在允许构象的残基比例。",
+          "range": "< 1% 为合格，< 0.5% 为优秀"
+        }
+      ],
+      "common_problems": [
+        "FSC_work 和 FSC_free 差距过大 → 模型过度拟合密度图，减少精修轮次或使用 cross-validation",
+        "侧链方向错误 → 用 ISOLDE（ChimeraX 插件）进行分子动力学辅助实时优化",
+        "分辨率不够（> 4 Å）却强行搭全原子模型 → 低分辨率建议仅做 Cα trace，不强行放侧链",
+        "MolProbity score 偏差大 → 在 Coot 中逐项修复：消除 clashes、修正 Ramachandran outliers、调整 rotamers"
+      ],
+      "success_criteria": "Ramachandran favored > 98%、clashscore < 5、rotamer outliers < 1%，FSC_work/FSC_free 分辨率一致且与密度图全局分辨率吻合，MolProbity score 在对应分辨率的优秀百分位内。模型可提交 PDB/EMDB 发布。"
     }
   }
 }

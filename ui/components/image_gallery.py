@@ -19,10 +19,17 @@ import streamlit as st
 
 # Performance: lazy import image utilities
 try:
-    from utils.image_lazy import render_lazy_image, generate_thumbnail_data_url
+    from utils.image_lazy import (
+        render_lazy_image,
+        generate_thumbnail_data_url,
+        render_lazy_gallery,
+    )
     _HAS_LAZY = True
 except ImportError:
     _HAS_LAZY = False
+
+
+_LAZY_THRESHOLD = 3  # Images above this count use expander-based lazy loading
 
 
 def render_image_gallery(
@@ -30,8 +37,15 @@ def render_image_gallery(
     key_prefix: str = "ig",
     columns: int = 3,
     thumbnail_width: Optional[int] = None,
+    use_lazy: Optional[bool] = None,
 ) -> None:
     """Render a grid of image thumbnails.
+
+    When there are more than ``_LAZY_THRESHOLD`` images and the lazy
+    loading module is available, images are grouped into collapsed
+    expanders so that only the first group is loaded initially.
+    This dramatically reduces initial page load time for checkpoints
+    with many reference screenshots.
 
     Parameters
     ----------
@@ -46,6 +60,9 @@ def render_image_gallery(
         Number of columns in the thumbnail grid.
     thumbnail_width : int, optional
         Width in pixels for thumbnails. If None, uses container width.
+    use_lazy : bool, optional
+        Force-enable or force-disable lazy loading. If None, auto-detects
+        based on image count (threshold: ``_LAZY_THRESHOLD``).
     """
     if not images:
         st.caption("暂无截图。")
@@ -66,7 +83,22 @@ def render_image_gallery(
         st.caption("暂无截图。")
         return
 
-    # Render thumbnail grid
+    # Decide whether to use lazy loading
+    should_lazy = use_lazy if use_lazy is not None else (
+        len(unique_images) > _LAZY_THRESHOLD and _HAS_LAZY
+    )
+
+    if should_lazy:
+        render_lazy_gallery(
+            unique_images,
+            key_prefix=key_prefix,
+            group_size=4,
+            columns=columns,
+            use_expanders=True,
+        )
+        return
+
+    # Original direct rendering (small galleries or lazy module unavailable)
     n_cols = min(columns, len(unique_images))
     cols = st.columns(n_cols)
 

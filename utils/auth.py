@@ -7,19 +7,34 @@ from __future__ import annotations
 
 import json
 import hashlib
+import secrets
 from pathlib import Path
 from typing import Literal
 
+try:
+    import bcrypt
+    _HAS_BCRYPT = True
+except ImportError:
+    _HAS_BCRYPT = False
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 _USERS_PATH = BASE_DIR / "runtime" / "config" / "users.json"
+
+# 默认密码的明文，用于检测用户是否仍在使用默认密码
+_DEFAULT_ADMIN_PASSWORD = "admin123"
 
 
 RoleType = Literal["admin", "member", "guest"]
 
 
 def _hash_password(password: str) -> str:
-    """SHA256 哈希密码。"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """哈希密码，优先使用 bcrypt，fallback 为 PBKDF2-SHA256。"""
+    if _HAS_BCRYPT:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    else:
+        salt = secrets.token_bytes(16)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+        return f"pbkdf2:{salt.hex()}:{dk.hex()}"
 
 
 def load_users() -> dict:
@@ -37,7 +52,7 @@ def load_users() -> dict:
         }
     """
     try:
-        return json.loads(_USERS_PATH.read_text(encoding="utf-8"))
+        data = json.loads(_USERS_PATH.read_text(encoding="utf-8"))
     except Exception:
         # 首次使用，创建默认管理员账号（密码：admin123）
         default_data = {
@@ -47,7 +62,8 @@ def load_users() -> dict:
                     "password_hash": _hash_password("admin123"),
                     "role": "admin",
                     "display_name": "管理员",
-                    "email": ""
+                    "email": "",
+                    "force_change_password": True
                 }
             ],
             "default_role": "guest",
@@ -61,6 +77,13 @@ def load_users() -> dict:
         _USERS_PATH.write_text(json.dumps(default_data, ensure_ascii=False, indent=2), encoding="utf-8")
         return default_data
 
+    # 检测用户是否仍在使用默认密码，设置 force_change_password 标志
+    for user in data.get("users", []):
+        if user.get("username") == "admin" and not user.get("force_change_password"):
+            if _verify_password(_DEFAULT_ADMIN_PASSWORD, user["password_hash"]):
+                user["force_change_password"] = True
+                save_users(data)
+
 
 def save_users(data: dict) -> bool:
     """保存用户配置。"""
@@ -72,6 +95,31 @@ def save_users(data: dict) -> bool:
         return False
 
 
+def _verify_password(password: str, password_hash: str) -> bool:
+    """验证密码，兼容旧的 SHA256 哈希、bcrypt 和 PBKDF2 三种格式。"""
+    if password_hash.startswith("$2b$") or password_hash.startswith("$2a$"):
+        # bcrypt 哈希
+        if _HAS_BCRYPT:
+            try:
+                return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+            except Exception:
+                return False
+        return False
+    elif password_hash.startswith("pbkdf2:"):
+        # PBKDF2-SHA256 哈希（自身 fallback）
+        try:
+            _, salt_hex, dk_hex = password_hash.split(":", 2)
+            salt = bytes.fromhex(salt_hex)
+            dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+            return secrets.compare_digest(dk.hex(), dk_hex)
+        except Exception:
+            return False
+    else:
+        # 旧的 SHA256 哈希（向后兼容）
+        computed = hashlib.sha256(password.encode()).hexdigest()
+        return secrets.compare_digest(computed, password_hash)
+
+
 def authenticate(username: str, password: str) -> dict | None:
     """验证用户登录。
 
@@ -81,9 +129,8 @@ def authenticate(username: str, password: str) -> dict | None:
         成功返回用户信息，失败返回 None
     """
     data = load_users()
-    pw_hash = _hash_password(password)
     for user in data.get("users", []):
-        if user["username"] == username and user["password_hash"] == pw_hash:
+        if user["username"] == username and _verify_password(password, user["password_hash"]):
             return user
     return None
 
@@ -153,14 +200,24 @@ def delete_user(username: str) -> bool:
     return save_users(data)
 
 
-def change_password(username: str, new_password: str) -> bool:
-    """修改密码。"""
+def change_password(username: str, new_password: str) -> tuple[bool, str]:
+    """修改密码（含密码强度验证）。
+
+    Returns
+    -------
+    (success, error_message)
+    """
+    from utils.password_policy import validate_password_strength
+    is_valid, error_msg = validate_password_strength(new_password)
+    if not is_valid:
+        return False, error_msg
     data = load_users()
     for user in data["users"]:
         if user["username"] == username:
             user["password_hash"] = _hash_password(new_password)
-            return save_users(data)
-    return False
+            user["force_change_password"] = False
+            return save_users(data), ""
+    return False, "用户不存在"
 
 
 def change_role(username: str, new_role: RoleType) -> bool:
