@@ -1822,7 +1822,17 @@ with st.sidebar:
                 _notes = load_user_notes(_auth_user.get("username", ""))
                 st.caption(f"📝 {len(_notes)} 条笔记")
             if st.button("🚪 退出", use_container_width=True, key="sidebar_logout"):
+                # 清除登录状态
                 st.session_state.current_user = None
+                st.session_state.logged_in = False
+                st.session_state.username = ""
+                st.session_state.display_name = ""
+                st.session_state.role = "guest"
+
+                # 清除 localStorage
+                from utils.session_persistence import clear_session_from_storage
+                clear_session_from_storage()
+
                 st.rerun()
 
     # P0-A2: 软件切换入口（RELION / cryoSPARC）
@@ -4918,5 +4928,34 @@ if _pet_enabled_check:
                     st.rerun()
         except (json.JSONDecodeError, TypeError):
             pass
+
+
+# ==================== 右侧快速笔记按钮 ====================
+# 仅在已登录且为成员/管理员时显示
+if st.session_state.get("logged_in") and st.session_state.get("role") in ["member", "admin"]:
+    from components.quick_note import render_quick_note_button
+    render_quick_note_button()
+
+    # 处理快速笔记保存（通过 JavaScript 消息）
+    if "_quick_note_data" in st.session_state:
+        note_data = st.session_state.pop("_quick_note_data")
+        from utils.user_manager import save_user_note_dict
+        import uuid
+        from datetime import datetime
+
+        username = st.session_state.get("username", "")
+        note = {
+            "id": str(uuid.uuid4())[:8],
+            "title": note_data.get("title", "快速笔记"),
+            "content": note_data.get("content", ""),
+            "step": "",
+            "tags": ["快速笔记"],
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        }
+
+        if save_user_note_dict(username, note):
+            st.toast("✅ 笔记已保存", icon="✅")
+
 
 
