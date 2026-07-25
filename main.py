@@ -3360,6 +3360,34 @@ with tab_settings:
                         st.markdown("---")
                         st.markdown(f"**解决方案**：")
                         st.markdown(exp.get('solution', ''))
+
+                        # 显示配图
+                        images = exp.get('images', [])
+                        if images:
+                            st.markdown("---")
+                            st.markdown("**📷 配图说明**：")
+
+                            # 尝试多个可能的图片路径
+                            for img_name in images:
+                                img_paths = [
+                                    BASE_DIR / "runtime" / "images" / "experiences" / img_name,
+                                    BASE_DIR / "knowledge_base" / "images" / img_name,
+                                    Path(f"C:/Users/17706/.claude/image-cache/a6558aff-b50b-4474-aab4-ac8115bc8507/{img_name}")
+                                ]
+
+                                img_found = False
+                                for img_path in img_paths:
+                                    if img_path.exists():
+                                        try:
+                                            st.image(str(img_path), caption=img_name, use_container_width=True)
+                                            img_found = True
+                                            break
+                                        except Exception as e:
+                                            continue
+
+                                if not img_found:
+                                    st.caption(f"🖼️ 配图：{img_name}（图片文件未找到）")
+
                         st.caption(f"贡献者：{exp.get('author', '')} · {exp.get('date', '')}")
             else:
                 st.info("💡 还没有已验证的共享经验，欢迎贡献你的心得！")

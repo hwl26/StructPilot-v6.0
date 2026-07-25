@@ -84,6 +84,8 @@ def load_users() -> dict:
                 user["force_change_password"] = True
                 save_users(data)
 
+    return data
+
 
 def save_users(data: dict) -> bool:
     """保存用户配置。"""
