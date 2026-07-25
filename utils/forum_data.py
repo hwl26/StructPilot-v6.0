@@ -416,3 +416,29 @@ def get_user_votes(user: str) -> List[str]:
     """获取用户点赞的 ID 列表"""
     data = load_forum_data()
     return [v["target_id"] for v in data["votes"] if v["user"] == user]
+
+
+def has_user_upvoted(user: str, target_id: str, target_type: str) -> bool:
+    """检查用户是否已点赞
+
+    Parameters
+    ----------
+    user : str
+        用户名
+    target_id : str
+        目标ID（问题或回答）
+    target_type : str
+        'question' or 'answer'
+
+    Returns
+    -------
+    bool
+        是否已点赞
+    """
+    data = load_forum_data()
+    for vote in data["votes"]:
+        if (vote["user"] == user and
+            vote["target_id"] == target_id and
+            vote["target_type"] == target_type):
+            return True
+    return False

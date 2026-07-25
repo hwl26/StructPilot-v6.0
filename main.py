@@ -3319,6 +3319,112 @@ with tab_settings:
             st.success("✅ 界面设置已保存")
             st.rerun()
 
+        # ✨ 个人笔记管理（入门模式）
+        st.divider()
+        st.markdown("### 📝 个人笔记")
+        st.caption("记录你的实验心得、参数设置、问题解决方案")
+
+        from utils.user_manager import get_current_user, load_user_notes, save_user_note, delete_user_note
+        current_user = get_current_user()
+
+        if not current_user:
+            st.warning("⚠️ 请先登录才能使用个人笔记功能")
+            st.info("💡 在左侧边栏「👤 用户笔记」中登录")
+        else:
+            notes = load_user_notes(current_user)
+            st.caption(f"📊 共 {len(notes)} 条笔记")
+
+            # 新建笔记（简化版）
+            with st.expander("➕ 新建笔记", expanded=False):
+                note_title = st.text_input("笔记标题 *", placeholder="如：Motion Correction 参数设置")
+                note_content = st.text_area(
+                    "笔记内容 *",
+                    placeholder="记录你的实验心得、参数设置、遇到的问题和解决方案...",
+                    height=150
+                )
+                note_step = st.selectbox(
+                    "相关步骤（可选）",
+                    [""] + ["cp_01 数据导入", "cp_02 运动校正", "cp_03 CTF估计",
+                            "cp_04 颗粒挑选", "cp_05 颗粒提取", "cp_06 2D分类",
+                            "cp_07 Ab-initio", "cp_08 3D分类", "cp_09 3D精修"]
+                )
+
+                if st.button("💾 保存笔记", type="primary", use_container_width=True):
+                    if not note_title or not note_content:
+                        st.error("请填写标题和内容")
+                    else:
+                        # 提取步骤ID
+                        step_id = note_step.split()[0] if note_step else ""
+                        save_user_note(
+                            user=current_user,
+                            title=note_title,
+                            content=note_content,
+                            checkpoint_id=step_id,
+                            software=""
+                        )
+                        st.success("✅ 笔记已保存！")
+                        st.rerun()
+
+            # 显示现有笔记
+            if notes:
+                st.markdown("#### 我的笔记")
+                for i, note in enumerate(notes):
+                    with st.expander(f"📄 {note.get('title', '无标题')}", expanded=False):
+                        st.markdown(f"**创建时间：** {note.get('created_at', '')[:10]}")
+                        if note.get('checkpoint_id'):
+                            st.markdown(f"**相关步骤：** {note.get('checkpoint_id')}")
+                        st.markdown("---")
+                        st.markdown(note.get('content', ''))
+
+                        if st.button(f"🗑️ 删除", key=f"del_note_{i}"):
+                            delete_user_note(current_user, note.get('id'))
+                            st.success("✅ 笔记已删除")
+                            st.rerun()
+            else:
+                st.info("💡 还没有笔记，点击上方「➕ 新建笔记」开始记录你的实验心得")
+
+        # ✨ 实验室共同知识库（所有成员可见）
+        st.divider()
+        st.markdown("### 📚 实验室共同知识库")
+        st.caption("已审核通过的经验，全组成员可查看")
+
+        try:
+            exp_data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+            approved_exps = [e for e in exp_data.get("entries", []) if e.get("status") == "approved"]
+
+            if approved_exps:
+                st.info(f"📖 共 {len(approved_exps)} 条已验证经验")
+
+                # 简单的步骤筛选
+                step_filter = st.selectbox(
+                    "按步骤筛选",
+                    ["全部"] + ["cp_01 数据导入", "cp_02 运动校正", "cp_03 CTF估计",
+                                "cp_04 颗粒挑选", "cp_05 颗粒提取", "cp_06 2D分类",
+                                "cp_07 Ab-initio", "cp_08 3D分类", "cp_09 3D精修"],
+                    key="lab_kb_filter"
+                )
+
+                if step_filter != "全部":
+                    step_id = step_filter.split()[0]
+                    filtered_exps = [e for e in approved_exps if e.get('step') == step_id]
+                else:
+                    filtered_exps = approved_exps
+
+                # 显示经验（最多10条）
+                for exp in filtered_exps[:10]:
+                    with st.expander(f"✅ {exp.get('title', '')}", expanded=False):
+                        st.markdown(f"**分类**：{exp.get('category', '')}")
+                        st.markdown(f"**步骤**：{exp.get('step', '')}")
+                        st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
+                        st.markdown("---")
+                        st.markdown(f"**解决方案**：")
+                        st.markdown(exp.get('solution', ''))
+                        st.caption(f"贡献者：{exp.get('author', '')} · {exp.get('date', '')}")
+            else:
+                st.info("💡 还没有已验证的共享经验，欢迎贡献你的心得！")
+        except Exception as e:
+            st.warning(f"⚠️ 无法加载共享知识库：{e}")
+
         st.divider()
         st.markdown("### 🔄 数据管理")
 
