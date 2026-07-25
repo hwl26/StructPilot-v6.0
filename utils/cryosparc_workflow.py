@@ -15,40 +15,56 @@ from typing import Any
 BASE_DIR = Path(__file__).resolve().parent.parent
 _CHECKPOINTS_PATH = BASE_DIR / "knowledge_base" / "flows" / "pipeline_checkpoints.json"
 
-# CryoSPARC job_type 映射
+# CryoSPARC job_type 映射（扩展版，对照真实样本）
 _JOB_TYPE_MAP: dict[str, str] = {
     "cp_01": "import_movies",
+    "cp_01b": "import_micrographs",  # RELION接力路线
     "cp_02": "patch_motion_correction_multi",
     "cp_03": "patch_ctf_estimation_multi",
+    "cp_03b": "curate_exposures_v2",  # 人工筛选
+    "cp_03c": "denoise_train",  # 降噪训练
     "cp_04": "blob_picker_gpu",
+    "cp_04b": "template_picker_gpu",  # 模板匹配
+    "cp_04c": "inspect_picks_v2",  # 检查挑选结果
     "cp_05": "extract_micrographs_multi",
     "cp_06": "class_2D_new",
+    "cp_06b": "select_2D",  # 2D分类筛选
     "cp_07": "homo_abinit",
     "cp_08": "hetero_refine",
     "cp_09": "homo_refine_new",
+    "cp_09b": "nonuniform_refine_new",  # 非均匀精修
     "cp_10": "ctf_refinement",
     "cp_11": "sharpen",
     "cp_12": "local_resolution",
 }
 
-# 数据流连接（source_job, output_slot → target_job, input_slot）
-_CONNECTIONS: dict[str, list[tuple[str, str]]] = {
+# 数据流连接（扩展版，支持分支路线）
+_CONNECTIONS: dict[str, list[tuple[str, str, str]]] = {
     "cp_02": [("cp_01", "imported_movies", "movies")],
     "cp_03": [("cp_02", "micrographs", "exposures")],
-    "cp_04": [("cp_03", "exposures", "micrographs")],
+    "cp_03b": [("cp_03", "exposures", "exposures")],  # curate_exposures
+    "cp_03c": [("cp_03b", "exposures_accepted", "exposures")],  # denoise_train（可选）
+    "cp_04": [("cp_03b", "exposures_accepted", "micrographs")],  # blob_picker 接筛选后的
+    "cp_04c": [("cp_04", "particles", "particles"), ("cp_04", "micrographs", "micrographs")],  # inspect_picks
     "cp_05": [
-        ("cp_03", "exposures", "micrographs"),
-        ("cp_04", "particles", "particles"),
+        ("cp_04c", "micrographs", "micrographs"),  # 如果有 inspect_picks
+        ("cp_04c", "particles", "particles"),
     ],
     "cp_06": [("cp_05", "particles", "particles")],
-    "cp_07": [("cp_06", "particles_selected", "particles")],
+    "cp_06b": [("cp_06", "particles", "particles"), ("cp_06", "class_averages", "templates")],  # select_2D
+    "cp_07": [("cp_06b", "particles_selected", "particles")],  # abinit 接筛选后的颗粒
     "cp_08": [
-        ("cp_06", "particles_selected", "particles"),
+        ("cp_06b", "particles_selected", "particles"),
         ("cp_07", "volume_class_0", "volume"),
     ],
     "cp_09": [
         ("cp_08", "particles_class_0", "particles"),
         ("cp_08", "volume_class_0", "volume"),
+    ],
+    "cp_09b": [  # nonuniform_refine
+        ("cp_09", "particles", "particles"),
+        ("cp_09", "volume", "volume"),
+        ("cp_09", "mask", "mask"),
     ],
     "cp_10": [
         ("cp_09", "particles", "particles"),
@@ -135,80 +151,100 @@ def generate_cryosparc_workflow(
                 if src_cp in job_id_map:
                     groups.append([f"{job_id_map[src_cp]}.{src_slot}", dst_slot])
 
-        # 构建 parameters
+        # 构建 parameters（对照真实 cryoSPARC workflow 样本）
         job_params: dict[str, dict] = {}
 
         # cp_01: Import Movies
         if cp_id == "cp_01":
             job_params = {
-                "blob_paths": _param(None, flagged=True),
-                "gainref_path": _param(None, flagged=True),
-                "psize_A": _param(params.get("pixel_size")),
-                "accel_kv": _param(params.get("voltage")),
-                "cs_mm": _param(params.get("Cs")),
-                "total_dose_e_per_A2": _param(params.get("total_dose")),
+                "blob_paths": _param(params.get("movies_path"), locked=False, visible=True, flagged=True),
+                "gainref_path": _param(params.get("gainref_path"), locked=False, visible=True, flagged=True),
+                "psize_A": _param(params.get("pixel_size", 0.41), locked=False, visible=True, flagged=True),
+                "accel_kv": _param(params.get("voltage", 300), locked=True, visible=True, flagged=False),
+                "cs_mm": _param(params.get("Cs", 2.7), locked=True, visible=True, flagged=False),
+                "total_dose_e_per_A2": _param(params.get("total_dose", 60), locked=True, visible=True, flagged=False),
             }
 
         # cp_02: Motion Correction
         elif cp_id == "cp_02":
             job_params = {
-                "compute_num_gpus": _param(1),
-                "bfactor": _param(params.get("bfactor", 150)),
+                "bfactor": _param(150, locked=True, visible=True, flagged=False),
+                "output_fcrop_factor": _param("1/2", locked=True, visible=True, flagged=False),  # 字符串格式！
+                "compute_num_gpus": _param(params.get("motion_gpus", 4), locked=True, visible=True, flagged=False),
+                "output_f16": _param(True, locked=True, visible=True, flagged=False),
             }
 
         # cp_03: CTF Estimation
         elif cp_id == "cp_03":
             job_params = {
-                "compute_num_gpus": _param(1),
+                "compute_num_gpus": _param(params.get("ctf_gpus", 4), locked=True, visible=True, flagged=False),
             }
 
         # cp_04: Blob Picker
         elif cp_id == "cp_04":
             diameter = params.get("particle_diameter", 150)
+            diameter_max = params.get("particle_diameter_max", diameter * 1.5)
             job_params = {
-                "diameter": _param(diameter),
-                "diameter_max": _param(diameter * 1.5),
-                "min_distance": _param(0.6),
-                "use_ellipse": _param(True),
+                "diameter": _param(diameter, locked=False, visible=True, flagged=True),
+                "diameter_max": _param(diameter_max, locked=False, visible=True, flagged=True),
+                "max_num_hits": _param(params.get("max_num_hits", 300), locked=False, visible=True, flagged=False),
+                "min_distance": _param(0.6, locked=False, visible=True, flagged=False),
+                "use_ellipse": _param(True, locked=False, visible=True, flagged=False),
+                "use_circle": _param(False, locked=False, visible=True, flagged=False),
+                "use_denoised": _param(params.get("use_denoised", True), locked=True, visible=True, flagged=False),
             }
 
         # cp_05: Extract
         elif cp_id == "cp_05":
-            box_size = params.get("box_size", 256)
+            box_size = params.get("box_size", 320)
+            bin_size = params.get("bin_size", min(box_size // 2, 120))
             job_params = {
-                "compute_num_gpus": _param(2),
-                "box_size_pix": _param(box_size),
-                "bin_size_pix": _param(min(box_size // 2, 120)),
+                "compute_num_gpus": _param(params.get("extract_gpus", 4), locked=True, visible=True, flagged=False),
+                "box_size_pix": _param(box_size, locked=False, visible=True, flagged=True),
+                "bin_size_pix": _param(bin_size, locked=False, visible=True, flagged=False),
+                "output_f16": _param(True, locked=True, visible=True, flagged=False),
             }
 
         # cp_06: 2D Classification
         elif cp_id == "cp_06":
             job_params = {
-                "class2D_K": _param(100),
-                "class2D_max_res": _param(5),
-                "compute_num_gpus": _param(2),
-                "compute_use_ssd": _param(False),
+                "class2D_K": _param(params.get("class2d_num_classes", 100), locked=False, visible=True, flagged=True),
+                "class2D_max_res": _param(5, locked=False, visible=True, flagged=False),
+                "class2D_window_inner_A": _param(params.get("particle_diameter", 150), locked=False, visible=True, flagged=False),
+                "class2D_sigma_init_factor": _param(3, locked=True, visible=True, flagged=False),
+                "class2D_num_full_iter_batch": _param(40, locked=False, visible=True, flagged=False),
+                "compute_num_gpus": _param(params.get("class2d_gpus", 4), locked=True, visible=True, flagged=False),
+                "compute_use_ssd": _param(False, locked=False, visible=True, flagged=False),
             }
 
         # cp_07: Ab-Initio
         elif cp_id == "cp_07":
             job_params = {
-                "abinit_K": _param(3),
-                "abinit_max_res": _param(10),
-                "compute_use_ssd": _param(False),
+                "abinit_K": _param(params.get("abinit_num_classes", 3), locked=False, visible=True, flagged=True),
+                "abinit_max_res": _param(10, locked=False, visible=True, flagged=False),
+                "compute_use_ssd": _param(False, locked=False, visible=True, flagged=False),
             }
 
         # cp_08: Hetero Refine
         elif cp_id == "cp_08":
             job_params = {
-                "compute_use_ssd": _param(False),
+                "multirefine_N": _param(params.get("box_size", 320), locked=False, visible=True, flagged=False),
+                "multirefine_res_align_max": _param(3, locked=False, visible=True, flagged=False),
+                "compute_use_ssd": _param(False, locked=False, visible=True, flagged=False),
             }
 
         # cp_09: Homogeneous Refine
         elif cp_id == "cp_09":
             job_params = {
-                "compute_use_ssd": _param(False),
-                "refine_res_align_max": _param(3),
+                "refine_res_align_max": _param(3, locked=False, visible=True, flagged=False),
+                "compute_use_ssd": _param(False, locked=False, visible=True, flagged=False),
+            }
+
+        # cp_09b: Nonuniform Refine
+        elif cp_id == "cp_09b":
+            job_params = {
+                "refine_res_align_max": _param(3, locked=False, visible=True, flagged=False),
+                "compute_use_ssd": _param(False, locked=False, visible=True, flagged=False),
             }
 
         # cp_10: CTF Refinement
@@ -223,6 +259,45 @@ def generate_cryosparc_workflow(
         elif cp_id == "cp_12":
             job_params = {}
 
+        # --- 辅助 job ---
+
+        # cp_01b: Import Micrographs（RELION接力）
+        elif cp_id == "cp_01b":
+            job_params = {
+                "blob_paths": _param(params.get("micrographs_path"), locked=False, visible=True, flagged=True),
+                "psize_A": _param(params.get("pixel_size", 0.96), locked=False, visible=True, flagged=True),
+                "accel_kv": _param(params.get("voltage", 300), locked=False, visible=True, flagged=False),
+                "cs_mm": _param(params.get("Cs", 2.7), locked=False, visible=True, flagged=False),
+                "total_dose_e_per_A2": _param(params.get("total_dose", 50), locked=False, visible=True, flagged=False),
+            }
+
+        # cp_03b: Curate Exposures
+        elif cp_id == "cp_03b":
+            job_params = {}  # 人工筛选，无需参数
+
+        # cp_03c: Denoise Train
+        elif cp_id == "cp_03c":
+            job_params = {
+                "compute_num_cpus": _param(16, locked=True, visible=True, flagged=False),
+            }
+
+        # cp_04b: Template Picker
+        elif cp_id == "cp_04b":
+            job_params = {
+                "diameter": _param(params.get("particle_diameter", 220), locked=False, visible=True, flagged=True),
+                "max_num_hits": _param(params.get("max_num_hits", 300), locked=False, visible=True, flagged=False),
+                "lowpass_res_template": _param(40, locked=False, visible=True, flagged=False),
+                "lowpass_res": _param(30, locked=False, visible=True, flagged=False),
+            }
+
+        # cp_04c: Inspect Picks
+        elif cp_id == "cp_04c":
+            job_params = {}  # 人工检查，无需参数
+
+        # cp_06b: Select 2D
+        elif cp_id == "cp_06b":
+            job_params = {}  # 人工筛选，无需参数
+
         jobs[job_id] = {
             "title": "",
             "description": "",
@@ -235,10 +310,10 @@ def generate_cryosparc_workflow(
     # 组装 Workflow 对象（CryoSPARC 官方格式）
     workflow_json = {
         "_id": uuid.uuid4().hex[:24],  # 24位16进制字符串
-        "category": "Default",  # 使用 Default 而不是自定义分类
-        "createdAt": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-4] + "Z",  # 毫秒精度
+        "category": "Default",
+        "createdAt": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",  # 毫秒精度，无时区
         "createdBy": "000000000000000000000000",  # 假用户ID（导入后CryoSPARC会替换）
-        "csVersion": "v4.4.1",
+        "csVersion": "v4.7.1",  # 使用最新版本号
         "description": (
             f"Generated by StructPilot v6.0. "
             f"Steps: {len(jobs)}. "

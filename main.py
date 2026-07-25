@@ -70,6 +70,7 @@ from ui.components import (
     render_stage_workspace, render_parameter_panel, render_image_gallery,
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
+from components.answer_source_display import render_answer_sources
 from ui.styles import (
     THEMES, _WORKSPACE_CSS, _workspace_theme_css, build_global_styles,
 )
@@ -2720,6 +2721,12 @@ with tab_chat:
                                 f"card_{i}",
                                 suppress_types=["screenshot", "params"],
                             )
+                            # P0-2：来源分层标注（📚基础原理 / 🥇课题组经验 / 💬相关讨论）
+                            _msg_meta = getattr(msg, "metadata", None) or {}
+                            render_answer_sources(
+                                _msg_meta.get("qa_trace"),
+                                key_prefix=f"src_{i}",
+                            )
                             # 注意：guide_card 不再在聊天中回退渲染（已存入 _workspace_guide_cards）
                             # 注意：image_refs 不再在聊天内联渲染（图片应在工作区查看）
                         else:
@@ -2784,6 +2791,10 @@ with tab_chat:
                         key="show_diagnostics",
                         help="显示运行引擎、耗时、RAG 命中、理解纠正和回答审核入口。",
                     )
+                    # P0-3: QC 分析入口
+                    if st.button("🔍 QC 结果分析", key="open_qc_analysis", use_container_width=True, help="分析 cryoSPARC QC 日志或截图"):
+                        st.session_state["show_qc_analysis"] = True
+                        st.rerun()
             with _tc4:
                 with st.popover("💾 沉淀", use_container_width=True):
                     if state.messages:
@@ -2896,6 +2907,20 @@ with tab_chat:
                         st.rerun()
                     if cancelled:
                         st.session_state.distill_draft = None
+                        st.rerun()
+
+            # P0-3: QC 分析对话框
+            if st.session_state.get("show_qc_analysis"):
+                with st.container():
+                    st.markdown("---")
+                    from components.qc_analysis import render_qc_analysis_panel
+                    qc_result = render_qc_analysis_panel(
+                        key_prefix="main_qc",
+                        llm_agent=app.llm,
+                        retriever=app.retriever,
+                    )
+                    if st.button("❌ 关闭", key="close_qc_analysis"):
+                        st.session_state["show_qc_analysis"] = False
                         st.rerun()
 
 
@@ -3636,14 +3661,31 @@ with tab_settings:
         st.markdown("### 📋 经验审核（管理员）")
         st.caption("审核用户贡献的经验，通过后改为「已验证」状态")
 
+        # 审核状态筛选器
+        review_filter = st.radio(
+            "显示条目",
+            options=["待审核", "已驳回", "全部"],
+            horizontal=True,
+            key="exp_review_filter",
+        )
+
         try:
             exp_data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
-            pending_exps = [e for e in exp_data.get("entries", []) if e.get("status") == "pending"]
+            all_entries = exp_data.get("entries", [])
 
-            if pending_exps:
-                st.info(f"📝 待审核：{len(pending_exps)} 条经验")
-                for exp in pending_exps[:10]:  # 最多显示10条
-                    with st.expander(f"⏳ {exp.get('title', '')}", expanded=False):
+            # 根据筛选器过滤
+            if review_filter == "待审核":
+                filtered_exps = [e for e in all_entries if e.get("status") == "pending"]
+            elif review_filter == "已驳回":
+                filtered_exps = [e for e in all_entries if e.get("status") == "rejected"]
+            else:  # 全部
+                filtered_exps = [e for e in all_entries if e.get("status") in ("pending", "rejected")]
+
+            if filtered_exps:
+                st.info(f"📝 {review_filter}：{len(filtered_exps)} 条经验")
+                for exp in filtered_exps[:10]:  # 最多显示10条
+                    status_badge = "⏳" if exp.get("status") == "pending" else "❌"
+                    with st.expander(f"{status_badge} {exp.get('title', '')}", expanded=False):
                         st.markdown(f"**分类**：{exp.get('category', '')}")
                         st.markdown(f"**步骤**：{exp.get('step', '')}")
                         st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
@@ -3678,14 +3720,24 @@ with tab_settings:
                                 st.success("✅ 已通过审核")
                                 st.rerun()
                         with col_reject:
-                            if st.button("❌ 拒绝", key=f"reject_{exp.get('id')}", use_container_width=True):
-                                # 删除此条经验
-                                exp_data["entries"] = [e for e in exp_data["entries"] if e.get("id") != exp.get("id")]
+                            if st.button("❌ 驳回", key=f"reject_{exp.get('id')}", use_container_width=True):
+                                # 修改状态为 rejected（保留条目，供后续查看）
+                                for e in exp_data["entries"]:
+                                    if e.get("id") == exp.get("id"):
+                                        e["status"] = "rejected"
+                                        e["rejected_at"] = datetime.now().isoformat()
+                                        e["rejected_by"] = current_user
+                                        break
                                 _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
-                                st.warning("❌ 已拒绝并删除")
+                                st.warning("❌ 已驳回（条目保留）")
                                 st.rerun()
             else:
-                st.success("✅ 没有待审核的经验")
+                if review_filter == "待审核":
+                    st.success("✅ 没有待审核的经验")
+                elif review_filter == "已驳回":
+                    st.info("📭 没有已驳回的经验")
+                else:
+                    st.success("✅ 没有需要处理的经验")
         except Exception as exc:
             st.error(f"加载审核列表失败：{exc}")
 

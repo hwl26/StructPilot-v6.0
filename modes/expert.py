@@ -180,16 +180,31 @@ def _render_preset_manager(current_cp: dict, software: str) -> None:
 
 
 def _render_kb_contribute_panel(current_cp: dict) -> None:
-    """贡献课题组经验入口（含截图上传）。"""
+    """贡献课题组经验入口（含输入验证和XSS防护）。"""
     cp_id = current_cp.get("checkpoint_id", "")
     cp_cn = current_cp.get("checkpoint_cn", cp_id)
 
     st.markdown("#### 💡 贡献课题组经验")
+
     with st.form(key=f"kb_contribute_{cp_id}"):
-        title = st.text_input("标题（简短描述问题）", placeholder="例：Motion Correction 报错 local motion too large")
-        category = st.selectbox("分类", ["报错解决方案", "参数调优经验", "非常规流程", "软件技巧"])
-        symptoms_text = st.text_area("症状描述（遇到了什么问题）", height=70)
-        solution = st.text_area("解决方案（怎么解决的）", height=80)
+        title = st.text_input(
+            "标题（简短描述问题）",
+            placeholder="例：Motion Correction 报错 local motion too large",
+            max_chars=100,
+        )
+        category = st.selectbox("分类", ["报错解决方案", "参数调优经验", "非常规流程", "软件技巧", "其他"])
+        symptoms_text = st.text_area(
+            "症状描述（遇到了什么问题）",
+            height=70,
+            max_chars=1000,
+            placeholder="详细描述遇到的问题、错误信息、异常现象等"
+        )
+        solution = st.text_area(
+            "解决方案（怎么解决的）",
+            height=80,
+            max_chars=2000,
+            placeholder="具体的解决步骤、参数调整、命令操作等"
+        )
 
         # 📸 截图上传
         st.markdown("**📸 截图 + 🎬 操作视频（可选）**")
@@ -226,67 +241,68 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
         elif video_url.strip():
             st.caption(f"🔗 视频外链：{video_url.strip()}")
 
-        tags_str = st.text_input("标签（逗号分隔）", placeholder="运动校正, 漂移, B-factor")
+        tags_str = st.text_input(
+            "标签（逗号分隔）",
+            placeholder="运动校正, 漂移, B-factor",
+            max_chars=200,
+        )
         submitted = st.form_submit_button("提交经验")
 
     if submitted:
-        if title.strip() and solution.strip():
-            try:
-                # ✨ 输入验证和清理
-                from utils.security import sanitize_user_input, validate_json_size
+        # ✨ 输入验证（使用新的验证器）
+        from utils.input_validator import validate_experience_input
 
-                # 长度限制检查
-                if len(title) > 200:
-                    st.error("标题过长（最多 200 字符）")
-                    return
-                if len(solution) > 5000:
-                    st.error("解决方案过长（最多 5000 字符）")
-                    return
+        is_valid, error_msg, cleaned_data = validate_experience_input(
+            title, category, symptoms_text, solution, tags_str, cp_id
+        )
 
-                # 保存截图
-                image_filenames = []
-                if uploaded_files:
-                    image_filenames = _save_experience_images(uploaded_files, cp_id)
+        if not is_valid:
+            st.error(f"❌ 输入验证失败：{error_msg}")
+            st.caption("请检查输入内容，确保符合要求且不包含不安全内容。")
+            return
 
-                # 🎬 保存视频文件
-                saved_video_path = ""
-                if video_file:
-                    try:
-                        import datetime as _dt, os as _os
-                        vid_dir = BASE_DIR / "runtime" / "experience_media"
-                        vid_dir.mkdir(parents=True, exist_ok=True)
-                        ext = Path(video_file.name).suffix.lower()
-                        vid_name = f"{cp_id}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
-                        (vid_dir / vid_name).write_bytes(video_file.getbuffer())
-                        saved_video_path = vid_name
-                    except Exception:
-                        pass  # 视频保存失败不阻断提交
+        # 验证通过，继续处理
+        try:
+            # 保存截图
+            image_filenames = []
+            if uploaded_files:
+                image_filenames = _save_experience_images(uploaded_files, cp_id)
 
+            # 🎬 保存视频文件
+            saved_video_path = ""
+            if video_file:
                 try:
-                    data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+                    import datetime as _dt, os as _os
+                    vid_dir = BASE_DIR / "runtime" / "experience_media"
+                    vid_dir.mkdir(parents=True, exist_ok=True)
+                    ext = Path(video_file.name).suffix.lower()
+                    vid_name = f"{cp_id}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+                    (vid_dir / vid_name).write_bytes(video_file.getbuffer())
+                    saved_video_path = vid_name
                 except Exception:
-                    data = {"entries": [], "meta": {}}
+                    pass  # 视频保存失败不阻断提交
 
-                # ✨ 术语规范化和自动标签提取
-                from utils.terminology import normalize_text, auto_extract_tags
+            try:
+                data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+            except Exception:
+                data = {"entries": [], "meta": {}}
 
-                normalized_title = normalize_text(title)
-                normalized_symptoms = normalize_text(symptoms_text)
-                normalized_solution = normalize_text(solution)
+            # ✨ 自动提取标签（如果有 NLP 功能）
+            auto_tags = []
+            try:
+                from utils.terminology import auto_extract_tags
+                auto_tags = auto_extract_tags(cleaned_data['title'], cleaned_data['symptoms_text'], cleaned_data['solution'])
+            except (ImportError, Exception):
+                pass  # NLP 功能可选
 
-                # 用户手动输入的标签
-                manual_tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+            # 合并标签
+            all_tags = list(dict.fromkeys(cleaned_data['tags'] + auto_tags))[:10]
 
-                # 自动提取的标签
-                auto_tags = auto_extract_tags(normalized_title, normalized_symptoms, normalized_solution)
-
-                # 合并标签（手动优先，去重）
-                all_tags = list(dict.fromkeys(manual_tags + auto_tags))[:10]  # 最多10个
-
-                # ✨ 去重检测
+            # ✨ 去重检测（可选功能）
+            try:
                 from utils.deduplication import find_similar_experiences
                 similar = find_similar_experiences(
-                    normalized_title,
+                    cleaned_data['title'],
                     data.get("entries", []),
                     threshold=0.80
                 )
@@ -298,66 +314,66 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
                     )
                     if not st.button("✓ 确认提交（不是重复）", key=f"confirm_submit_{cp_id}"):
                         st.stop()
+            except (ImportError, Exception):
+                pass  # 去重检测可选
 
-                import datetime
-                new_entry = {
-                    "id": f"lab_{len(data['entries'])+1:03d}",
-                    "category": category,
-                    "title": normalized_title,
-                    "source": "lab_experience",
-                    "author": "用户贡献",
-                    "date": datetime.date.today().isoformat(),
-                    "status": "pending",  # ✨ 审核状态：待审核
-                    "software": "通用",
-                    "step": cp_id,
-                    "symptoms": [s.strip() for s in normalized_symptoms.split("；") if s.strip()],
-                    "symptoms_text": normalized_symptoms,
-                    "solution": normalized_solution,
-                    "tags": all_tags,
-                    "images": image_filenames,
-                    "video_path": saved_video_path,
-                    "video_url": video_url.strip() if video_url.strip() else "",
-                }
-                data["entries"].append(new_entry)
-                _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            import datetime
+            new_entry = {
+                "id": f"lab_{len(data['entries'])+1:03d}",
+                "category": category,
+                "title": cleaned_data['title'],  # 使用清理后的数据
+                "source": "lab_experience",
+                "author": "用户贡献",
+                "date": datetime.date.today().isoformat(),
+                "status": "pending",  # ✨ 审核状态：待审核
+                "software": "通用",
+                "step": cleaned_data['step'],
+                "symptoms": [s.strip() for s in cleaned_data['symptoms_text'].split("；") if s.strip()],
+                "symptoms_text": cleaned_data['symptoms_text'],
+                "solution": cleaned_data['solution'],
+                "tags": all_tags,
+                "images": image_filenames,
+                "video_path": saved_video_path,
+                "video_url": video_url.strip() if video_url and video_url.strip() else "",
+            }
+            data["entries"].append(new_entry)
+            _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-                img_info = f"（含 {len(image_filenames)} 张截图）" if image_filenames else ""
-                tag_info = f"，自动生成 {len(auto_tags)} 个标签" if auto_tags else ""
-                st.success(f"✅ 经验已提交{img_info}{tag_info}，待管理员审核后生效（目前标注「待验证」，已可检索）")
+            img_info = f"（含 {len(image_filenames)} 张截图）" if image_filenames else ""
+            tag_info = f"，自动生成 {len(auto_tags)} 个标签" if auto_tags else ""
+            st.success(f"✅ 经验已提交{img_info}{tag_info}，待管理员审核后生效（目前标注「待验证」，已可检索）")
 
-                # ✨ 新增：GitHub Issues 分享入口
-                st.markdown("---")
-                st.markdown("**📤 想让更多人受益？提交到课题组经验库：**")
+            # ✨ GitHub Issues 分享入口（可选）
+            st.markdown("---")
+            st.markdown("**📤 想让更多人受益？提交到课题组经验库：**")
 
-                # 构建预填的 GitHub Issue URL
-                import urllib.parse
-                issue_title = f"[经验贡献] {normalized_title}"
-                issue_body = f"""**分类**：{category}
+            # 构建预填的 GitHub Issue URL
+            import urllib.parse
+            issue_title = f"[经验贡献] {cleaned_data['title']}"
+            issue_body = f"""**分类**：{category}
 **步骤**：{cp_cn} ({cp_id})
 
 **症状**：
-{normalized_symptoms}
+{cleaned_data['symptoms_text']}
 
 **解决方案**：
-{normalized_solution}
+{cleaned_data['solution']}
 
 **标签**：{', '.join(all_tags)}
 
 ---
 _本条经验由 StructPilot v6.0 用户贡献_
 """
-                issue_url = f"https://github.com/hwl26/StructPilot-v6.0/issues/new?title={urllib.parse.quote(issue_title)}&body={urllib.parse.quote(issue_body)}&labels=经验贡献,{urllib.parse.quote(cp_id)}"
+            issue_url = f"https://github.com/hwl26/StructPilot-v6.0/issues/new?title={urllib.parse.quote(issue_title)}&body={urllib.parse.quote(issue_body)}&labels=经验贡献,{urllib.parse.quote(cp_id)}"
 
-                st.link_button(
-                    "📤 提交到 GitHub Issues（公开分享）",
-                    url=issue_url,
-                    help="管理员审核通过后会合并到正式知识库，全体用户可见",
-                    use_container_width=True,
-                )
-            except Exception as exc:
-                st.error(f"提交失败：{exc}")
-        else:
-            st.warning("请至少填写标题和解决方案")
+            st.link_button(
+                "📤 提交到 GitHub Issues（公开分享）",
+                url=issue_url,
+                help="管理员审核通过后会合并到正式知识库，全体用户可见",
+                use_container_width=True,
+            )
+        except Exception as exc:
+            st.error(f"提交失败：{exc}")
 
 
 def render_expert_view(

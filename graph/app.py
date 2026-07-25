@@ -40,6 +40,22 @@ def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
+def _classify_source_type(doc_id: str) -> str:
+    """根据 doc_id 命名规则判断来源类型。
+
+    返回值对应三层展示：
+      - "principle"  : 📚 基础原理（内置站点知识 cp_xx、术语库）
+      - "lab_exp"    : 🥇 课题组经验（lab_exp_ 前缀、经验库条目）
+      - "discussion" : 💬 相关讨论（formal_answer、qa/、用户贡献笔记）
+    """
+    d = (doc_id or "").lower()
+    if d.startswith("glossary:") or re.match(r"^cp_\d+", d):
+        return "principle"
+    if d.startswith("lab_exp") or "experience" in d or "lab_kb" in d:
+        return "lab_exp"
+    return "discussion"
+
+
 def _short_snippet(text: str, limit: int = 160) -> str:
     cleaned = re.sub(r"\s+", " ", text or "").strip()
     return cleaned[:limit] + ("..." if len(cleaned) > limit else "")
@@ -451,7 +467,13 @@ class StructPilotApp:
             for doc_id, text, score in retrieved
         ]
         trace["citations"] = [
-            {"ref": f"R{i}", "doc_id": doc_id, "score": round(score, 3)}
+            {
+                "ref": f"R{i}",
+                "doc_id": doc_id,
+                "score": round(score, 3),
+                "source_type": _classify_source_type(doc_id),
+                "snippet": _short_snippet(_text, 120),
+            }
             for i, (doc_id, _text, score) in enumerate(filtered, start=1)
         ]
 

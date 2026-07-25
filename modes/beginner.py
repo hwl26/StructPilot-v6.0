@@ -169,6 +169,43 @@ def render_beginner_view(
                 st.rerun()
         return  # 问答未完成时阻止后续内容渲染
 
+    # ── 问卷完成后的分支逻辑 ──────────────────────────────
+    wizard_completed = st.session_state.get("wizard_completed", False)
+    wizard_active = st.session_state.get("wizard_active", False)
+
+    # 分支1：参数向导激活中
+    if wizard_active:
+        from modes.beginner_wizard import render_beginner_wizard
+        render_beginner_wizard(state, app)
+        return
+
+    # 分支2：向导未完成，显示入口
+    if not wizard_completed:
+        st.markdown("## 🎯 下一步：填写 Workflow 参数")
+        st.info(
+            "根据你的需求，我们为你规划了推荐流程。\n\n"
+            "接下来，请逐步填写关键参数（如颗粒大小、box size），系统将自动生成可导入 cryoSPARC 的 workflow 文件。"
+        )
+
+        col_wizard, col_skip = st.columns([2, 1])
+        with col_wizard:
+            if st.button("🚀 开始填写参数", use_container_width=True, type="primary", key="start_wizard"):
+                st.session_state["wizard_active"] = True
+                st.rerun()
+        with col_skip:
+            if st.button("⏭️ 跳过，直接开始", use_container_width=True, key="skip_wizard"):
+                st.session_state["wizard_completed"] = True
+                st.rerun()
+
+        # 调试信息（可删除）
+        with st.expander("🐛 调试信息", expanded=False):
+            st.write(f"wizard_completed: {wizard_completed}")
+            st.write(f"wizard_active: {wizard_active}")
+
+        return
+
+    # 分支3：向导已完成，进入正常步骤流程
+
     # ── 问答已完成，检查是否需要跳过当前步骤 ────────────────────
     cp_id = current_cp.get("checkpoint_id", "")
     workflow = st.session_state.get("recommended_workflow", {})
