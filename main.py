@@ -1821,31 +1821,14 @@ with st.sidebar:
         state.add_message("assistant", f"已切换到 {_selected_sw} 陪跑模式。", action_tag="software_switch")
         st.rerun()
 
-    # RELION 模式提示（入门模式）
+    # RELION 模式提示（入门模式）— 精简版，默认折叠
     if state.software == "relion" and st.session_state.app_mode == "beginner":
-        with st.expander("💡 RELION 使用说明", expanded=True):
-            st.info(
-                "**RELION 工作流说明：**\n\n"
-                "在入门模式下，RELION 主要用于：\n"
-                "- ✅ **数据导入** (Import)\n"
-                "- ✅ **运动校正** (Motion Correction)\n\n"
-                "**后续步骤（CTF、颗粒挑选等）建议切换到 cryoSPARC 完成。**\n\n"
-                "如需完整的 RELION 工作流，请切换到「⚙️ 高级模式」。"
+        with st.expander("💡 RELION 使用说明", expanded=False):
+            st.caption(
+                "**快速提示：** 入门模式下，RELION 主要用于数据导入和运动校正。\n\n"
+                "后续步骤（CTF、颗粒挑选等）建议切换到 cryoSPARC。\n\n"
+                "如需完整 RELION 工作流，请切换到「⚙️ 高级模式」。"
             )
-            if st.button("💡 查看 RELION 详细指南", use_container_width=True):
-                st.info(
-                    "**RELION Import & Motion Correction 指南**\n\n"
-                    "### 1. 数据导入 (Import)\n"
-                    "- 原始movies 或micrographs\n"
-                    "- 采集参数：pixel size、voltage、Cs\n"
-                    "- 项目目录和文件路径\n\n"
-                    "### 2. 运动校正 (Motion Correction)\n"
-                    "- Dose per frame\n"
-                    "- Patch/grid settings\n"
-                    "- Gain reference\n"
-                    "- Binning\n\n"
-                    "完成后建议导出为STAR文件，切换到cryoSPARC继续处理。"
-                )
 
     # 三模式切换器
     st.markdown("### 交互模式")
