@@ -1,0 +1,88 @@
+{
+  "entries": [
+    {
+      "id": "exp_import_001",
+      "title": "数据导入：检查图片数量",
+      "category": "checklist",
+      "step": "cp_01",
+      "symptoms_text": "导入数据后不知道是否成功",
+      "solution": "**关键检查：** 查看 `imported_micrographs` 和 `failed_micrographs` 的数量\n\n**判断标准：**\n- ✅ **Good：** imported 数量 > 2000，failed 数量 = 0\n- ⚠️ **Warning：** failed 数量 > 0，检查文件路径和格式\n\n**配图说明：** 红框标注 `imported_micrographs: 2,586 exposures` 和 `failed_micrographs: 0 exposures`",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["41.png"],
+      "tags": ["cp_01", "import", "checklist"]
+    },
+    {
+      "id": "exp_ctf_001",
+      "title": "CTF Fit Resolution 分布判断数据质量",
+      "category": "quality_check",
+      "step": "cp_03",
+      "symptoms_text": "不知道 CTF 计算结果是否良好",
+      "solution": "**判断标准：** CTF Fit Resolution 条形图的分布\n\n**✅ 好数据（Good）：**\n- 峰形尖锐，大部分 micrograph 集中在 3.0-4.0 Å 狭窄范围\n- 单峰分布，表示数据高度均一性和可靠性\n- 是后续高分辨率结构解析的坚实基础\n\n**❌ 需警惕（Bad）：**\n- 大量 micrograph 的 CTF Fit Resolution 在 7 Å 以上\n- 条形图分散，表示数据存在异质性\n- 需要回头检查制样或数据收集环节\n\n**总结：** 条形图的"集中"代表均一性，"分散"是警示信号",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["42.png"],
+      "tags": ["cp_03", "ctf", "quality", "resolution"]
+    },
+    {
+      "id": "exp_ctf_002",
+      "title": "像散与分辨率：四大指标综合判断",
+      "category": "quality_check",
+      "step": "cp_03",
+      "symptoms_text": "CTF 结果不知道如何综合评判",
+      "solution": "**四大关键指标：**\n\n1. **拟合曲线（蓝色曲线）**\n   - ✅ 陡峭下降 = 拟合好、数据可靠\n   - ❌ 平滑 = 拟合差、信噪比低\n\n2. **3D 曲面图（波纹）**\n   - ✅ 清晰且延伸至边缘的同心波纹 = 高分辨率信息保存完好\n   - ❌ 椭圆扭曲 = 像散严重\n\n3. **CTF Fit Resolution 条形图**\n   - ✅ 越集中 = 数据质量越均一稳定\n\n4. **像散值（|DF1-DF2|）**\n   - ✅ **理想：** < 500 Å\n   - ⚠️ **警惕：** > 500 Å，会严重扭曲 CTF 并限制最终分辨率\n\n**实践建议：** 需综合评判这四项指标，才能准确筛选优质微图",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["43.png"],
+      "tags": ["cp_03", "ctf", "astigmatism", "resolution", "quality"]
+    },
+    {
+      "id": "exp_patch_ctf_001",
+      "title": "Patch CTF 蓝绿色曲面怎么看",
+      "category": "interpretation",
+      "step": "cp_03b",
+      "symptoms_text": "Patch CTF 曲面有起伏，不知道是否正常",
+      "solution": "**曲面含义：** Z 轴是 defocus 值，X/Y 是空间坐标，表示"defocus 随位置变化"\n\n**起伏形态判断：**\n\n1. **✅ 可接受：单向平滑倾斜（像斜坡）**\n   - 原因：grid 整体倾斜\n   - 处理：Patch CTF 能校正\n\n2. **⚠️ 需关注：波浪状、碗状、马鞍状弯曲**\n   - 原因：grid 弯曲或冰厚不均\n   - 处理：关注局部分辨率\n\n3. **❌ 直接剔除：局部尖锐突起/凹陷**\n   - 原因：污染、冰晶、气泡\n   - 处理：删除整张图\n\n**幅度阈值：**\n- ✅ **无碍：** 整图 defocus 变化 < 1500 Å\n- ⚠️ **警惕：** > 3000-5000 Å\n\n**配合指标：**\n- CTF fit resolution < 5 Å\n- Astigmatism < 200 nm\n\n**实操建议：**\n1. 先用 Exposure Curation 按 ctf_fit_resolution 和 astigmatism 筛一轮\n2. 回头看保留图是否还普遍起伏\n3. 如果大量图都严重弯曲 → 制样问题（冰太厚、grid 没夹紧、vitrification 不均）→ 需优化 grid 制备\n\n**一句话总结：** 平面看 grid 倾斜与冰厚均匀度，起伏形态看制样质量，幅度+CTF fit 看该删哪些图",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["44.png"],
+      "tags": ["cp_03b", "patch_ctf", "defocus", "quality", "grid"]
+    },
+    {
+      "id": "exp_curate_001",
+      "title": "Curate Exposures 手动筛选标准",
+      "category": "checklist",
+      "step": "cp_03c",
+      "symptoms_text": "不知道哪些照片应该删除",
+      "solution": "**❌ 删除标准（满足任一即删）：**\n\n1. **CTF 相关：**\n   - CTF fit resolution > 5-6 Å\n   - Astigmatism > 200-300 nm\n\n2. **Defocus 相关：**\n   - Defocus 超出目标范围（如 < -0.5 或 > -3.0 µm）\n\n3. **Motion 相关：**\n   - Accumulated motion > 5-10 Å\n   - Motion 轨迹发散\n\n4. **冰层相关：**\n   - 冰太厚（灰度过暗）\n   - 冰太薄（灰度过亮）\n   - 有明显冰晶\n\n5. **污染相关：**\n   - 明显污染、碳边、条纹\n   - 增益异常\n\n6. **颗粒相关：**\n   - 预览上颗粒稀少\n   - 颗粒形态异常\n\n**✅ 保留标准（需同时满足）：**\n- CTF fit 好\n- Motion 小\n- 冰厚适中\n- 颗粒密度合理\n- Defocus 分散均匀\n\n**配图说明：**\n- 左上：好数据（颗粒分散、数量多、冰层厚度合适）\n- 其他：坏数据（污染、冰层太厚、裂缝变形、大冰晶、Motion correct 计算错误）",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["45.png"],
+      "tags": ["cp_03c", "curation", "quality", "checklist"]
+    },
+    {
+      "id": "exp_2d_class_001",
+      "title": "2D Classification 质量初评（Blob Picking）",
+      "category": "quality_check",
+      "step": "cp_06",
+      "symptoms_text": "2D class 结果不知道如何判断好坏",
+      "solution": "**Blob Picking 的特点：** 无模板、纯靠形状大小筛颗粒，不引入 model bias，是对"样品里到底有什么"的一次诚实照镜子\n\n**✅ 好的 2D class（保留）：**\n- 轮廓清晰锐利\n- 有二级结构特征（α-螺旋点状密度、β-折叠条纹）\n- 颗粒边界锐利\n- 内部密度分布合理\n- 不同 class 间呈连续取向分布（说明方向覆盖好）\n\n**含义：** 蛋白表达良好、冰层厚度合适、颗粒取向覆盖充分，后续大概率能拿到好的 3D 结构\n\n**❌ 坏的 2D class（删除）：**\n- 纯噪声背景\n- 模糊一团无法分辨结构\n- 明显是冰/碳边/污染碎片\n- 颗粒聚集堆叠成块\n- 只有极少数颗粒且取向高度重复（preferred orientation）\n\n**含义：** 样品或制样出了问题\n\n**选择原则：** "看得清结构、取向多样"的留，"看不清、是垃圾、或取向单一"的删，这一步筛得越狠，后面 3D refinement 越干净\n\n**配图说明：**\n- 左侧 Good：清晰的蛋白结构投影，可见二级结构\n- 右侧 Bad：模糊、聚集、噪声",
+      "author": "实验室经验",
+      "date": "2026-07-25",
+      "source": "user_contributed",
+      "status": "pending",
+      "images": ["46.png"],
+      "tags": ["cp_06", "2d_classification", "blob_picking", "quality", "particle"]
+    }
+  ]
+}
