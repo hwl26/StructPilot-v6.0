@@ -54,7 +54,7 @@ def render_personal_notes(username):
     st.markdown("### 📝 个人笔记")
     st.caption("记录你的实验心得、参数设置、问题解决方案")
 
-    from utils.user_manager import load_user_notes, save_user_note, delete_user_note
+    from utils.user_manager import load_user_notes, save_user_note_dict as save_user_note, delete_user_note
 
     notes = load_user_notes(username)
 

@@ -1793,6 +1793,14 @@ with st.sidebar:
                         st.session_state.display_name = _user.get("display_name", _user.get("username", ""))
                         st.session_state.role = _user.get("role", "guest")
 
+                        # 🆕 保存登录状态到 localStorage（防止刷新后退出）
+                        from utils.session_persistence import save_session_to_storage
+                        save_session_to_storage(
+                            username=_user.get("username", ""),
+                            role=_user.get("role", "guest"),
+                            display_name=_user.get("display_name", _user.get("username", ""))
+                        )
+
                         st.success(f"✅ 欢迎，{_user['display_name']}！")
                         # 检查是否需要强制修改密码
                         if _user.get("force_change_password"):

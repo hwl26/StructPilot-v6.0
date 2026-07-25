@@ -128,3 +128,58 @@ def delete_user_note(user_id: str, note_id: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# ==================== 新版API（支持字典格式）====================
+
+def save_user_note_dict(user_id: str, note: dict) -> bool:
+    """保存一条笔记（字典格式）
+
+    Parameters
+    ----------
+    user_id : str
+        用户 ID
+    note : dict
+        笔记对象，包含 id, title, content, step, tags, created_at, updated_at
+
+    Returns
+    -------
+    bool
+        是否成功
+    """
+    try:
+        path = get_user_notes_path(user_id)
+        notes = load_user_notes(user_id)
+
+        # 检查是否已存在（更新）
+        note_id = note.get("id")
+        existing_idx = next((i for i, n in enumerate(notes) if n.get("id") == note_id), None)
+
+        if existing_idx is not None:
+            # 更新现有笔记
+            notes[existing_idx] = note
+        else:
+            # 添加新笔记
+            notes.append(note)
+
+        path.write_text(json.dumps(notes, ensure_ascii=False, indent=2), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+# 为了兼容性，将新函数作为默认的 save_user_note
+def save_user_note_compat(user_id: str, note_or_step, content=None, tags=None) -> bool:
+    """兼容函数：支持旧版（4个参数）和新版（2个参数）调用
+
+    旧版: save_user_note(user_id, step, content, tags)
+    新版: save_user_note(user_id, note_dict)
+    """
+    if isinstance(note_or_step, dict):
+        # 新版调用：传入字典
+        return save_user_note_dict(user_id, note_or_step)
+    else:
+        # 旧版调用：传入4个参数
+        step = note_or_step
+        return save_user_note(user_id, step, content, tags)
+
