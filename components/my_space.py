@@ -19,40 +19,43 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 def render_my_space():
     """渲染我的空间主界面"""
 
-    # 获取当前用户
-    from utils.user_manager import get_current_user, load_user_notes, save_user_note, delete_user_note
-    current_user = get_current_user()
-
-    if not current_user:
+    # 检查登录状态（使用 session_state）
+    if not st.session_state.get("logged_in", False):
         st.warning("⚠️ 请先登录才能使用此功能")
         st.info("💡 在左侧边栏「👤 用户笔记」中登录")
-        st.caption("**提示**：如果已登录但仍显示此消息，请刷新页面")
+        return
+
+    # 获取用户信息
+    username = st.session_state.get("username", "")
+    display_name = st.session_state.get("display_name", username)
+
+    if not username:
+        st.error("❌ 用户信息异常，请重新登录")
         return
 
     # 显示当前用户信息
-    st.caption(f"👤 当前用户：**{current_user.get('display_name', current_user.get('username'))}**")
+    st.caption(f"👤 当前用户：**{display_name}** (@{username})")
 
     # 子Tab结构
     space_tabs = st.tabs(["📝 个人笔记", "✨ 笔记润色", "📤 我的贡献"])
 
     with space_tabs[0]:
-        render_personal_notes(current_user)
+        render_personal_notes(username)
 
     with space_tabs[1]:
-        render_note_polish(current_user)
+        render_note_polish(username)
 
     with space_tabs[2]:
-        render_my_contributions(current_user)
+        render_my_contributions(username)
 
 
-def render_personal_notes(current_user):
+def render_personal_notes(username):
     """渲染个人笔记管理"""
     st.markdown("### 📝 个人笔记")
     st.caption("记录你的实验心得、参数设置、问题解决方案")
 
     from utils.user_manager import load_user_notes, save_user_note, delete_user_note
 
-    username = current_user.get("username")
     notes = load_user_notes(username)
 
     st.info(f"📊 共 {len(notes)} 条笔记")
