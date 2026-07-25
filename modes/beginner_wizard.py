@@ -221,32 +221,10 @@ def render_beginner_wizard(
     app : StructPilotApp
         应用实例
     """
-    # 检查软件类型，如果是 RELION 则显示提示
+    # 检查软件类型，如果是 RELION 则显示操作指南
     if state.software == "relion":
-        st.warning("⚠️ **RELION 工作流限制**")
-        st.info(
-            "入门模式的参数向导主要针对 **cryoSPARC** 工作流设计。\n\n"
-            "**RELION 用户建议：**\n"
-            "1. 在 RELION 中完成「数据导入」和「运动校正」\n"
-            "2. 导出 STAR 文件\n"
-            "3. 切换软件选择为「cryoSPARC」继续后续流程\n\n"
-            "或切换到「⚙️ 高级模式」使用完整的 RELION 功能。"
-        )
-
-        # 提供快速切换按钮
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 切换到 cryoSPARC", use_container_width=True, type="primary"):
-                state.software = "cryosparc"
-                st.rerun()
-        with col2:
-            if st.button("⚙️ 切换到高级模式", use_container_width=True):
-                st.session_state.app_mode = "expert"
-                st.rerun()
-
-        st.markdown("---")
-        st.caption("💡 如需继续使用 RELION，请参考左侧边栏的「RELION 使用说明」。")
-        return  # 提前返回，不渲染参数向导
+        _render_relion_beginner_guide(state)
+        return  # 提前返回，不渲染 cryoSPARC 参数向导
 
     st.markdown("## 🎯 cryoSPARC Workflow 参数填写")
     st.caption("逐步填写关键参数，系统将自动生成可导入 cryoSPARC 的 workflow 文件。")
@@ -625,3 +603,187 @@ def _export_workflow(params_dict: Dict[str, Any], state: Any, app: Any) -> None:
         )
     else:
         st.error("❌ Workflow 生成失败，请检查参数配置。")
+
+
+def _render_relion_beginner_guide(state: Any) -> None:
+    """渲染 RELION 入门模式操作指南。"""
+    st.markdown("## 🔬 RELION 快速上手指南")
+    st.caption("针对入门用户的 RELION Import + Motion Correction 操作步骤")
+
+    # 工作流说明
+    st.warning("⚠️ **RELION 入门模式限制**")
+    st.info(
+        "入门模式下，RELION 主要用于前期数据预处理：\n\n"
+        "✅ **步骤1：数据导入** (Import)\n"
+        "✅ **步骤2：运动校正** (Motion Correction)\n\n"
+        "**后续步骤**（CTF、颗粒挑选、分类等）**建议切换到 cryoSPARC 完成**。\n\n"
+        "如需完整的 RELION 工作流，请切换到「⚙️ 高级模式」。"
+    )
+
+    # 快速切换按钮
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 切换到 cryoSPARC", use_container_width=True, type="primary"):
+            state.software = "cryosparc"
+            st.rerun()
+    with col2:
+        if st.button("⚙️ 切换到高级模式", use_container_width=True):
+            st.session_state.app_mode = "expert"
+            st.rerun()
+
+    st.markdown("---")
+
+    # 步骤1：数据导入
+    with st.expander("📂 **步骤1：数据导入 (Import)**", expanded=True):
+        st.markdown("### 目标")
+        st.write("建立 RELION 项目，导入原始 movies，确认采集参数正确。")
+
+        st.markdown("### 操作步骤")
+        st.markdown("""
+**1. 启动 RELION GUI**
+```bash
+relion
+```
+
+**2. 选择 Import job type**
+- 在左侧面板选择「Import」
+- Job type: Movies
+
+**3. 填写关键参数**
+
+| 参数 | 说明 | 示例值 |
+|------|------|--------|
+| **Input files** | Movies 文件路径（支持通配符） | `/path/to/*.tif` 或 `*.eer` |
+| **Pixel size (Å)** | 像素大小 | `0.41` - `1.06` |
+| **Voltage (kV)** | 加速电压 | `300` 或 `200` |
+| **Cs (mm)** | 球差系数 | `2.7` |
+| **Optics group name** | 光学组名称（可选） | `opticsGroup1` |
+
+**4. 运行 Import**
+- 点击「Run!」按钮
+- 等待导入完成（通常很快）
+
+**5. 质控检查**
+- ✅ 导入的文件数量与原始数据一致
+- ✅ 查看生成的 STAR 文件（`Import/jobXXX/movies.star`）
+- ✅ 确认 pixel size 和 voltage 正确
+        """)
+
+        st.markdown("### 常见问题")
+        st.error("❌ **路径错误**：确保文件路径正确，支持绝对路径和相对路径")
+        st.error("❌ **Pixel size 错误**：影响后续所有步骤的尺度，务必核对")
+        st.error("❌ **Gain reference 缺失**：如果 movies 未应用 gain，需要在 Motion Correction 中指定")
+
+    # 步骤2：运动校正
+    with st.expander("🎬 **步骤2：运动校正 (Motion Correction)**", expanded=True):
+        st.markdown("### 目标")
+        st.write("校正帧间漂移，生成可用于 CTF 估计和颗粒挑选的 micrographs。")
+
+        st.markdown("### 操作步骤")
+        st.markdown("""
+**1. 选择 Motion correction job type**
+- 在左侧面板选择「Motion correction」
+- 输入：上一步 Import 的 movies.star
+
+**2. 核心参数设置**
+
+#### **I/O Tab（输入输出）**
+
+| 参数 | 说明 | 推荐值 |
+|------|------|--------|
+| **Input movies STAR file** | Import 生成的 STAR 文件 | `Import/job001/movies.star` |
+| **Gain reference** | Gain 文件路径（如果需要） | `/path/to/gain.mrc` |
+| **Dose per frame (e/Å²)** | 每帧剂量 | `1.0` - `1.5` |
+
+#### **Motion Tab（运动校正）**
+
+| 参数 | 说明 | 推荐值 |
+|------|------|--------|
+| **Bfactor** | 用于对帧加权 | `150` |
+| **Patch size (pixels)** | 局部运动校正的 patch 大小 | `5 x 5` |
+| **Group frames** | 每组帧数（用于剂量加权） | `1` |
+| **Binning factor** | 降采样倍数 | `1`（不降采样）或 `2` |
+| **Use GPU** | 是否使用 GPU 加速 | ✅ 勾选（推荐） |
+
+#### **Running Tab（运行配置）**
+
+| 参数 | 说明 | 推荐值 |
+|------|------|--------|
+| **Number of MPI processes** | MPI 进程数 | `1` |
+| **Number of threads** | 线程数 | `12` - `24` |
+| **GPUs to use** | GPU 设备 ID | `0` 或 `0:1:2:3` |
+
+**3. 运行 Motion Correction**
+- 点击「Run!」按钮
+- 查看进度条和日志输出
+- 等待完成（耗时取决于 movies 数量）
+
+**4. 质控检查**
+- ✅ 打开输出文件夹（`MotionCorr/jobXXX/`）
+- ✅ 查看 corrected micrographs（`.mrc` 文件）
+- ✅ 检查运动轨迹图（`*_PS.mrc` 或 `*_shifts.star`）
+- ✅ 确认没有大面积异常漂移
+        """)
+
+        st.markdown("### 常见问题")
+        st.error("❌ **运动过大**：Bfactor 设置过小，尝试调高到 500-800")
+        st.error("❌ **Gain 不匹配**：检查 gain reference 的尺寸和方向")
+        st.error("❌ **GPU 错误**：检查 CUDA 版本和驱动，或改用 CPU 模式")
+
+    # 步骤3：导出数据
+    with st.expander("📤 **步骤3：导出数据到 cryoSPARC**", expanded=False):
+        st.markdown("### 操作步骤")
+        st.markdown("""
+**1. 找到 Motion Correction 的输出**
+- 输出 STAR 文件：`MotionCorr/jobXXX/corrected_micrographs.star`
+- Micrographs 目录：`MotionCorr/jobXXX/`
+
+**2. 在 cryoSPARC 中导入**
+- 创建新项目
+- 使用「Import Micrographs」job
+- 指定 RELION 输出的 micrographs 路径
+
+**3. 继续后续流程**
+- CTF Estimation
+- Particle Picking
+- 2D Classification
+- Ab-initio
+- 3D Refinement
+        """)
+
+        st.info("💡 **提示**：切换软件后，在 StructPilot 中选择「cryoSPARC」继续使用对话陪跑功能。")
+
+    # 参数速查表
+    st.markdown("---")
+    st.markdown("## 📋 参数速查表")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 常用像素大小")
+        st.markdown("""
+- **超高分辨率**：0.41 - 0.66 Å/pixel
+- **高分辨率**：0.66 - 0.85 Å/pixel
+- **中等分辨率**：0.85 - 1.06 Å/pixel
+- **低分辨率**：> 1.06 Å/pixel
+        """)
+
+    with col2:
+        st.markdown("### 加速电压")
+        st.markdown("""
+- **Titan Krios / Glacios**：300 kV
+- **Talos Arctica**：200 kV
+- **Cs (球差系数)**：2.7 mm（常见值）
+        """)
+
+    st.markdown("### 剂量参数")
+    st.markdown("""
+- **总剂量**：50 - 60 e⁻/Ų（典型值）
+- **帧数**：40 - 50 frames
+- **每帧剂量**：总剂量 ÷ 帧数 ≈ 1.0 - 1.5 e⁻/Ų
+    """)
+
+    # 底部提示
+    st.markdown("---")
+    st.success("✅ **完成 RELION 前期处理后，记得切换到 cryoSPARC 继续后续流程！**")
+
