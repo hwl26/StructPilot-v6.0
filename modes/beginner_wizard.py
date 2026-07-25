@@ -744,9 +744,18 @@ relion
         """)
 
         st.markdown("### 常见问题")
-        st.error("❌ **运动过大**：Bfactor 设置过小，尝试调高到 500-800")
-        st.error("❌ **Gain 不匹配**：检查 gain reference 的尺寸和方向")
-        st.error("❌ **GPU 错误**：检查 CUDA 版本和驱动，或改用 CPU 模式")
+        # 紧凑样式的常见问题
+        st.markdown("""
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ 运动过大：</b> Bfactor 设置过小，尝试调高到 500-800
+</div>
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ Gain 不匹配：</b> 检查 gain reference 的尺寸和方向
+</div>
+<div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px; margin: 6px 0; border-radius: 6px;">
+<b>❌ GPU 错误：</b> 检查 CUDA 版本和驱动，或改用 CPU 模式
+</div>
+        """, unsafe_allow_html=True)
 
     # 步骤3：导出数据
     with st.expander("📤 **步骤3：导出数据到 cryoSPARC**", expanded=False):
