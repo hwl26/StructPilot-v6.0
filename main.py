@@ -1754,6 +1754,20 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # 🆕 系统升级状态指示器
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 12px;'
+        'background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);'
+        'border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">'
+        '<span style="font-size:1.2rem;">🚀</span>'
+        '<div style="flex:1;">'
+        '<div style="font-size:0.85rem;font-weight:600;color:white;">系统升级中</div>'
+        '<div style="font-size:0.7rem;color:rgba(255,255,255,0.9);">v6.0 → v6.1 (Beta)</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
     # ✨ 用户登录系统（三级权限：管理员/成员/访客）
     from utils.auth import get_current_user as _auth_get_user, authenticate, has_permission, load_users
 
