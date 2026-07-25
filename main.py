@@ -1847,16 +1847,17 @@ with st.sidebar:
                     "完成后建议导出为STAR文件，切换到cryoSPARC继续处理。"
                 )
 
-    # 两模式切换器
+    # 三模式切换器
     st.markdown("### 交互模式")
     _mode_options = {
-        "beginner": "🌱 入门模式",
+        "beginner": "🚀 快速模式",
+        "teaching": "🎓 教学模式",
         "expert": "⚙️ 高级模式",
     }
     _mode_labels = list(_mode_options.values())
     _current_mode = st.session_state.app_mode
     if _current_mode not in _mode_options:
-        _current_mode = "beginner"  # 默认入门模式
+        _current_mode = "beginner"  # 默认快速模式
         st.session_state.app_mode = _current_mode
     _mode_idx = list(_mode_options.keys()).index(_current_mode)
     _selected_mode_label = st.selectbox(
@@ -1864,7 +1865,7 @@ with st.sidebar:
         options=_mode_labels,
         index=_mode_idx,
         key="mode_selector",
-        help="入门：引导式操作；高级：完整功能+参数配置",
+        help="快速：引导式操作；教学：原理卡片+测验；高级：完整功能+参数配置",
     )
     _new_mode = [k for k, v in _mode_options.items() if v == _selected_mode_label][0]
     if _new_mode != _current_mode:
@@ -2130,8 +2131,8 @@ if st.session_state.last_feedback:
 
 # 动态Tab：根据模式决定显示哪些Tab
 _app_mode = st.session_state.get("app_mode", "beginner")
-if _app_mode == "beginner":
-    # 入门模式：显示对话、讨论区、我的空间和设置
+if _app_mode in ["beginner", "teaching"]:
+    # 快速/教学模式：显示对话、讨论区、我的空间和设置
     tab_labels = ["对话陪跑", "💬 讨论区", "📝 我的空间", "设置"]
     tab_chat, tab_forum, tab_myspace, tab_settings = st.tabs(tab_labels)
     tab_community = None
@@ -2435,9 +2436,14 @@ with tab_chat:
     _app_mode = st.session_state.app_mode
 
     if _app_mode == "beginner":
-        # 入门模式：单栏简化布局
+        # 快速模式：单栏简化布局
         from modes import render_beginner_view
         render_beginner_view(_current_cp, state, app, run_command)
+
+    elif _app_mode == "teaching":
+        # 教学模式：单栏教学卡片+测验
+        from modes import render_teaching_view
+        render_teaching_view(_current_cp, state, app)
 
     elif _app_mode == "expert":
         # 高级模式：保留原有双栏布局（workspace + chat）
@@ -3207,7 +3213,7 @@ with tab_forum:
 
 # ----- Tab 3: settings ----- #
 with tab_settings:
-    # 入门/教学模式：只显示简化的界面设置和数据清除
+    # 快速/教学模式：只显示简化的界面设置和数据清除
     if _app_mode in ["beginner", "teaching"]:
         st.markdown("### 🎨 界面设置")
 
@@ -3603,7 +3609,9 @@ with tab_settings:
         st_theme = st.selectbox("主题风格", options=list(THEMES.keys()), key="ui_theme",
                                help="切换主题会实时生效，保存后会写入配置文件")
         st_hist = st.slider("对话显示条数", min_value=3, max_value=50, value=int(st.session_state.selected_history_limit), step=1)
-        st_pet = st.toggle("桌宠陪伴（右下角小动物）", key="pet_enabled",
+        st_pet = st.toggle("桌宠陪伴（右下角小动物）",
+                           value=st.session_state.get("pet_enabled", True),
+                           key="pet_enabled",
                            help="在右下角显示一只可爱的科研伙伴，摸头、摸身体、拽尾巴有不同反应，还可以拖动哦～")
         _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "AI助手"}
         # 确保 session_state 中的 pet_type 合法（防止旧配置或异常值导致空白选项）
