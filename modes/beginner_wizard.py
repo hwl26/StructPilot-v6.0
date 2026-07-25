@@ -221,6 +221,33 @@ def render_beginner_wizard(
     app : StructPilotApp
         应用实例
     """
+    # 检查软件类型，如果是 RELION 则显示提示
+    if state.software == "relion":
+        st.warning("⚠️ **RELION 工作流限制**")
+        st.info(
+            "入门模式的参数向导主要针对 **cryoSPARC** 工作流设计。\n\n"
+            "**RELION 用户建议：**\n"
+            "1. 在 RELION 中完成「数据导入」和「运动校正」\n"
+            "2. 导出 STAR 文件\n"
+            "3. 切换软件选择为「cryoSPARC」继续后续流程\n\n"
+            "或切换到「⚙️ 高级模式」使用完整的 RELION 功能。"
+        )
+
+        # 提供快速切换按钮
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 切换到 cryoSPARC", use_container_width=True, type="primary"):
+                state.software = "cryosparc"
+                st.rerun()
+        with col2:
+            if st.button("⚙️ 切换到高级模式", use_container_width=True):
+                st.session_state.app_mode = "expert"
+                st.rerun()
+
+        st.markdown("---")
+        st.caption("💡 如需继续使用 RELION，请参考左侧边栏的「RELION 使用说明」。")
+        return  # 提前返回，不渲染参数向导
+
     st.markdown("## 🎯 cryoSPARC Workflow 参数填写")
     st.caption("逐步填写关键参数，系统将自动生成可导入 cryoSPARC 的 workflow 文件。")
 
@@ -299,9 +326,10 @@ def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
 
     # 渲染固定参数（折叠，但可编辑）
     if locked_params:
-        with st.expander("🔒 固定参数（通常无需修改，展开可调整）", expanded=False):
+        with st.expander("🔒 固定参数（通常无需修改）", expanded=False):
+            st.info("💡 **提示：** 这些参数通常不需要修改，但如果你需要自定义，可以直接编辑下方的值。")
             for param in locked_params:
-                _render_param_input(param, params_store)  # 移除 disabled=True
+                _render_param_input(param, params_store)
 
     # 渲染其他参数（折叠）
     if other_params:
