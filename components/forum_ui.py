@@ -16,7 +16,7 @@ from utils.forum_data import (
     get_question,
     get_answers,
     get_comments,
-    search_questions,
+    search_posts,  # 修正函数名
     increment_views,
     has_user_upvoted
 )
@@ -61,7 +61,7 @@ def render_forum_tab():
 
     # 过滤
     if search_query:
-        questions = search_questions(search_query, tag=None if filter_tag == "全部" else filter_tag)
+        questions = search_posts(keyword=search_query, tags=[filter_tag] if filter_tag != "全部" else None)
     elif filter_tag != "全部":
         questions = [q for q in questions if filter_tag in q.get("tags", [])]
 
