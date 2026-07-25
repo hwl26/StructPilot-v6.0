@@ -1,323 +1,222 @@
-# StructPilot 局域网部署指南
+# StructPilot 多课题组隔离部署指南
 
-## 适用场景
+## 问题场景
 
-✅ **课题组服务器部署** — 同一WiFi/局域网内所有人可访问  
-✅ **实验室共享电脑** — 多人轮流使用同一台机器  
-✅ **离线环境** — 无需互联网，内网访问  
-
----
-
-## 快速开始（5分钟）
-
-### Windows 环境
-
-1. **双击运行启动脚本**
-   ```
-   start_lan.bat
-   ```
-
-2. **记下显示的局域网地址**
-   ```
-   📡 局域网访问地址：
-      http://192.168.1.100:8501
-   ```
-
-3. **局域网内其他电脑访问**
-   - 手机/笔记本连接同一WiFi
-   - 浏览器输入上述地址
+学校内多个课题组都部署了 StructPilot，连接同一WiFi的学生能访问所有系统，导致：
+- ❌ 隐私泄露：其他组能看到本组的实验经验
+- ❌ 数据混淆：不清楚哪些知识是本组的
+- ❌ 误操作风险：学生可能在错误的系统提交数据
 
 ---
 
-### Linux/macOS 环境
+## 解决方案对比
 
-1. **运行启动脚本**
-   ```bash
-   chmod +x start_lan.sh
-   ./start_lan.sh
-   ```
-
-2. **或手动启动**
-   ```bash
-   streamlit run main.py --server.address 0.0.0.0 --server.port 8501
-   ```
+| 方案 | 隔离效果 | 实施难度 | 协作支持 | 推荐场景 |
+|------|---------|---------|---------|---------|
+| **方案1：IP白名单** | ⭐⭐⭐⭐ | ★☆☆☆☆ | ❌ 不支持跨组协作 | 独立课题组（推荐） |
+| **方案2：多租户模式** | ⭐⭐⭐⭐⭐ | ★★★☆☆ | ✅ 支持授权共享 | 同一学院统一平台 |
+| **方案3：VPN隧道** | ⭐⭐⭐⭐⭐ | ★★★★☆ | ❌ 完全隔离 | 高度保密课题 |
 
 ---
 
-## 网络架构说明
+## 方案1：IP 白名单隔离（推荐，5分钟配置）
+
+### 原理
+
+通过 Nginx 或防火墙限制访问IP范围，只有课题组内部IP能访问。
 
 ```
-┌─────────────────────────────────────────────┐
-│ 学校WiFi / 实验室局域网 (192.168.x.x)        │
-│                                             │
-│  ┌─────────────┐                            │
-│  │ 服务器电脑   │  运行 StructPilot           │
-│  │ 192.168.1.100│  端口: 8501                │
-│  └──────┬──────┘                            │
-│         │                                   │
-│    ┌────┴────┬──────┬──────┐                │
-│    │         │      │      │                │
-│ ┌──▼──┐  ┌──▼──┐ ┌─▼──┐ ┌─▼──┐             │
-│ │ PC1 │  │ PC2 │ │笔记本│ │手机│             │
-│ └─────┘  └─────┘ └────┘ └────┘             │
-│                                             │
-│ 所有设备通过浏览器访问:                       │
-│ http://192.168.1.100:8501                   │
-└─────────────────────────────────────────────┘
+课题组A (192.168.1.0/24)
+  └─ StructPilot A (192.168.1.100:8501)
+      └─ 只允许 192.168.1.0/24 访问 ✅
+
+课题组B学生 (192.168.2.50)
+  └─ 访问 192.168.1.100:8501 ❌ 被拒绝
 ```
 
 ---
 
-## 防火墙配置
+### 实施步骤
 
-### Windows 防火墙
+#### **步骤1：确定课题组IP段**
 
-**方法1：自动添加规则（推荐）**
+**询问网络管理员：** "我们实验室的IP段是多少？"
 
-首次启动时 Streamlit 会弹窗请求防火墙权限，点击「允许访问」即可。
-
-**方法2：手动添加规则**
-
-```powershell
-# 以管理员身份运行 PowerShell
-New-NetFirewallRule -DisplayName "StructPilot" -Direction Inbound -Protocol TCP -LocalPort 8501 -Action Allow
-```
-
----
-
-### Linux 防火墙 (ufw)
-
+**或自行查看：**
 ```bash
-sudo ufw allow 8501/tcp
-sudo ufw reload
+# Linux/Mac
+ip addr show | grep inet
+
+# Windows
+ipconfig
 ```
+
+**常见IP段：**
+- `192.168.1.0/24` → `192.168.1.1` ~ `192.168.1.254` (254个IP)
+- `10.0.1.0/24` → `10.0.1.1` ~ `10.0.1.254`
 
 ---
 
-### Linux 防火墙 (firewalld)
+#### **步骤2A：使用 Nginx（推荐，支持HTTPS）**
 
+**安装 Nginx：**
 ```bash
-sudo firewall-cmd --permanent --add-port=8501/tcp
-sudo firewall-cmd --reload
+# Ubuntu/Debian
+sudo apt install nginx
+
+# CentOS
+sudo yum install nginx
+
+# macOS
+brew install nginx
 ```
 
----
-
-## 访问方式对比
-
-| 方式 | 访问地址 | 适用场景 | 需要配置 |
-|------|---------|---------|---------|
-| **本机访问** | `http://localhost:8501` | 服务器自己用 | 无 |
-| **局域网访问** | `http://192.168.x.x:8501` | 课题组共享 | 防火墙 + `address=0.0.0.0` |
-| **公网访问** | `http://your-domain.com` | 全球访问 | 域名 + 反向代理 + SSL |
-| **Streamlit Cloud** | `https://structpilot.streamlit.app` | 免费托管 | GitHub 连接 |
-
----
-
-## 常见问题
-
-### Q1: 局域网内其他电脑无法访问
-
-**检查清单：**
-
-1. **服务器 IP 是否正确？**
-   ```bash
-   # Linux/Mac
-   hostname -I
-   
-   # Windows
-   ipconfig
-   ```
-   找到 `192.168.x.x` 或 `10.x.x.x` 开头的地址
-
-2. **防火墙是否开放 8501 端口？**
-   - Windows: 控制面板 → Windows Defender 防火墙 → 高级设置 → 入站规则
-   - Linux: `sudo ufw status`
-
-3. **Streamlit 是否绑定到 0.0.0.0？**
-   ```bash
-   # 检查启动日志，应该看到：
-   Network URL: http://192.168.x.x:8501
-   ```
-   如果只显示 `http://localhost:8501`，说明未绑定到局域网
-
-4. **客户端和服务器是否在同一网段？**
-   - 服务器: `192.168.1.100`
-   - 客户端: `192.168.1.50` ✅ 可以访问
-   - 客户端: `10.0.0.50` ❌ 不同网段，无法访问
-
----
-
-### Q2: 手机能访问，但电脑不能？
-
-可能是电脑防火墙更严格。临时关闭防火墙测试：
-
-**Windows:**
-```
-控制面板 → Windows Defender 防火墙 → 启用或关闭 Windows Defender 防火墙
-→ 关闭专用网络防火墙（仅测试用）
-```
-
-**测试成功后记得重新开启，并添加 8501 端口规则！**
-
----
-
-### Q3: 如何修改端口（8501 被占用）？
-
-**方法1：命令行指定**
-```bash
-streamlit run main.py --server.address 0.0.0.0 --server.port 8080
-```
-
-**方法2：修改配置文件**
-```toml
-# .streamlit/config.toml
-[server]
-port = 8080
-```
-
----
-
-### Q4: 多个课题组能同时部署吗？
-
-可以！每个课题组用不同端口：
-
-```
-课题组A: http://192.168.1.100:8501
-课题组B: http://192.168.1.100:8502
-课题组C: http://192.168.1.100:8503
-```
-
-启动命令：
-```bash
-# 课题组A
-streamlit run main.py --server.port 8501
-
-# 课题组B
-streamlit run main.py --server.port 8502
-
-# 课题组C
-streamlit run main.py --server.port 8503
-```
-
----
-
-## 性能优化
-
-### 1. 使用后台守护进程（推荐生产环境）
-
-**systemd 服务（Linux）**
-
-创建 `/etc/systemd/system/structpilot.service`：
-
-```ini
-[Unit]
-Description=StructPilot Streamlit App
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/path/to/final_struct
-ExecStart=/usr/local/bin/streamlit run main.py --server.address 0.0.0.0 --server.port 8501
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动：
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable structpilot
-sudo systemctl start structpilot
-```
-
----
-
-**nohup（Linux/Mac）**
-
-```bash
-nohup streamlit run main.py --server.address 0.0.0.0 --server.port 8501 > structpilot.log 2>&1 &
-```
-
-停止：
-```bash
-ps aux | grep streamlit
-kill <进程ID>
-```
-
----
-
-**PM2（跨平台推荐）**
-
-```bash
-# 安装 PM2
-npm install -g pm2
-
-# 启动
-pm2 start "streamlit run main.py --server.address 0.0.0.0 --server.port 8501" --name structpilot
-
-# 开机自启
-pm2 startup
-pm2 save
-
-# 查看状态
-pm2 list
-
-# 查看日志
-pm2 logs structpilot
-
-# 停止
-pm2 stop structpilot
-```
-
----
-
-### 2. 使用反向代理（Nginx）
-
-**优势：**
-- 隐藏端口（通过 80/443 访问）
-- 支持 HTTPS（SSL 加密）
-- 支持多应用（通过子路径区分）
-
-**Nginx 配置示例：**
+**创建配置：** `/etc/nginx/sites-available/structpilot`
 
 ```nginx
 server {
     listen 80;
-    server_name structpilot.lab.edu.cn;
+    server_name structpilot.lab.local;
+
+    # IP 白名单（修改为本课题组的IP段）
+    allow 192.168.1.0/24;   # 允许本组
+    deny all;               # 拒绝其他
 
     location / {
-        proxy_pass http://localhost:8501;
+        proxy_pass http://127.0.0.1:8501;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-访问地址变为：`http://structpilot.lab.edu.cn`（无需端口号）
+**启用：**
+```bash
+sudo ln -s /etc/nginx/sites-available/structpilot /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+**修改 Streamlit 绑定本机：**
+```toml
+# .streamlit/config.toml
+[server]
+address = "127.0.0.1"  # 只监听本机
+port = 8501
+```
+
+**访问地址变为：** `http://192.168.1.100` (无需端口号)
 
 ---
 
-## 安全建议
+#### **步骤2B：使用防火墙（无Nginx时）**
 
-### 1. 修改默认密码
+**Linux (ufw):**
+```bash
+# 清空规则
+sudo ufw --force reset
 
-编辑 `runtime/user_db.json`：
+# 允许SSH（避免锁死）
+sudo ufw allow 22/tcp
+
+# 只允许本组访问 8501
+sudo ufw allow from 192.168.1.0/24 to any port 8501
+
+# 启用
+sudo ufw enable
+```
+
+**Linux (iptables):**
+```bash
+# 清空
+sudo iptables -F INPUT
+
+# 允许本组
+sudo iptables -A INPUT -p tcp --dport 8501 -s 192.168.1.0/24 -j ACCEPT
+
+# 拒绝其他
+sudo iptables -A INPUT -p tcp --dport 8501 -j DROP
+
+# 保存
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+```
+
+**Windows 防火墙：**
+1. 控制面板 → Windows Defender 防火墙 → 高级设置
+2. 入站规则 → 新建规则 → 端口 → TCP → 8501
+3. 允许连接
+4. **作用域** → 远程IP地址 → 添加：`192.168.1.0/24`
+5. 命名：StructPilot 白名单
+
+---
+
+### 测试验证
+
+**本组测试（应该成功）：**
+```bash
+curl http://192.168.1.100:8501
+# 返回 HTML 内容
+```
+
+**其他组测试（应该失败）：**
+```bash
+curl http://192.168.1.100:8501
+# 超时或 403 Forbidden
+```
+
+---
+
+## 方案2：多租户模式（需要代码改造）
+
+### 架构设计
+
+一个 StructPilot 实例支持多个课题组：
+
+```
+StructPilot 统一平台 (192.168.0.100:8501)
+├─ 租户A（李老师课题组）
+│   ├─ 用户：admin_a, student_a1, student_a2
+│   ├─ 知识库：knowledge_base/tenant_a/
+│   └─ 权限：只能看到本组数据
+├─ 租户B（王老师课题组）
+│   ├─ 用户：admin_b, student_b1
+│   ├─ 知识库：knowledge_base/tenant_b/
+│   └─ 权限：只能看到本组数据
+└─ 公共区（可选）
+    └─ 允许跨组共享的通用经验
+```
+
+---
+
+### 数据库改造
+
+**原结构：**
 ```json
 {
-  "users": [
+  "entries": [
     {
-      "username": "admin",
-      "password": "your-strong-password",  // 改为复杂密码
-      "role": "admin"
+      "id": "lab_001",
+      "title": "Motion Correction 报错",
+      "author": "王师兄"
+    }
+  ]
+}
+```
+
+**多租户结构：**
+```json
+{
+  "entries": [
+    {
+      "id": "lab_001",
+      "tenant_id": "tenant_a",  // 新增：租户ID
+      "title": "Motion Correction 报错",
+      "author": "王师兄",
+      "visibility": "private"  // private | public | shared_to:[tenant_b]
     }
   ]
 }
@@ -325,69 +224,192 @@ server {
 
 ---
 
-### 2. 限制访问IP（可选）
+### 用户体系改造
 
-**Nginx IP 白名单：**
-```nginx
-location / {
-    allow 192.168.1.0/24;  # 只允许局域网访问
-    deny all;
-    proxy_pass http://localhost:8501;
+**原结构：**
+```json
+{
+  "users": [
+    {"username": "admin", "role": "admin"}
+  ]
+}
+```
+
+**多租户结构：**
+```json
+{
+  "users": [
+    {
+      "username": "admin_a",
+      "tenant_id": "tenant_a",  // 新增：所属租户
+      "tenant_name": "李老师课题组",
+      "role": "admin"
+    },
+    {
+      "username": "student_a1",
+      "tenant_id": "tenant_a",
+      "role": "member"
+    }
+  ]
 }
 ```
 
 ---
 
-### 3. 定期备份数据
+### 实施步骤（需要开发）
+
+**如果你需要多租户模式，我可以帮你改造代码。需要修改的文件：**
+
+1. `utils/auth.py` — 登录时加载租户信息
+2. `utils/rag_*.py` — 检索时过滤租户数据
+3. `main.py` — UI 显示租户名称
+4. `components/onboarding_v3.py` — 问卷时选择租户
+
+**工作量估计：** 2-3小时（我可以帮你做）
+
+---
+
+## 方案3：VPN 隧道（高度保密）
+
+适用于涉密课题，完全物理隔离。
+
+**原理：**
+- 每个课题组搭建自己的 VPN 服务器
+- 学生需要先连VPN才能访问 StructPilot
+- 即使在同一WiFi，也无法互相访问
+
+**实施：**
+- 使用 WireGuard / OpenVPN
+- 工作量较大，不展开
+
+---
+
+## 推荐配置矩阵
+
+| 课题组规模 | 保密需求 | 推荐方案 | 原因 |
+|----------|---------|---------|------|
+| 5-20人 | 一般 | IP白名单 | 配置简单，满足基本需求 |
+| 20-50人 | 一般 | IP白名单 + Nginx | 支持HTTPS，更专业 |
+| 多课题组统一平台 | 一般 | 多租户模式 | 降低维护成本 |
+| 涉密课题 | 高 | VPN + IP白名单 | 双重保护 |
+
+---
+
+## 常见问题
+
+### Q1: IP段如何划分？
+
+**询问网络管理员最准确。** 如果无法联系，可以这样判断：
 
 ```bash
-# 备份知识库
-tar -czf backup_$(date +%Y%m%d).tar.gz \
-    knowledge_base/ \
-    runtime/user_db.json \
-    runtime/presets/
+# 查看本组多台设备IP
+设备A: 192.168.1.10
+设备B: 192.168.1.15
+设备C: 192.168.1.20
+
+# 前三段相同 → IP段为 192.168.1.0/24
 ```
 
 ---
 
-## 监控和日志
+### Q2: 配置后本组学生也无法访问？
 
-### 查看 Streamlit 日志
+**检查清单：**
+1. 学生IP是否在白名单内？（`ip addr` 或 `ipconfig` 查看）
+2. 防火墙规则是否生效？（`sudo ufw status` 查看）
+3. Nginx 是否正常运行？（`sudo systemctl status nginx`）
 
-```bash
-# 实时查看
-tail -f ~/.streamlit/logs/streamlit.log
+---
 
-# 查看最近错误
-grep ERROR ~/.streamlit/logs/streamlit.log
+### Q3: 如何允许特定的跨组协作？
+
+**Nginx 添加多个 IP 段：**
+```nginx
+allow 192.168.1.0/24;   # 本组
+allow 192.168.2.50;     # 协作者IP
+deny all;
 ```
 
 ---
 
-### 监控资源占用
+### Q4: 多租户模式何时需要？
 
-```bash
-# 查看 CPU/内存
-top -p $(pgrep -f streamlit)
-
-# 或使用 htop
-htop -p $(pgrep -f streamlit)
-```
+**满足以下3个条件时推荐多租户：**
+1. 多个课题组希望统一维护（不想各自部署）
+2. 需要跨组共享部分经验（如通用的 CTF 参数）
+3. 有专人负责运维（统一平台需要更多管理）
 
 ---
 
-## 故障排查脚本
+## 部署检查脚本
 
-创建 `check_deployment.sh`：
+创建 `check_isolation.sh`：
 
 ```bash
 #!/bin/bash
 
-echo "========== StructPilot 部署检查 =========="
+echo "========== 隔离配置检查 =========="
 echo ""
 
-# 1. 检查服务是否运行
-if pgrep -f "streamlit run" > /dev/null; then
+# 1. 检查Nginx白名单
+if systemctl is-active --quiet nginx; then
+    echo "✅ Nginx 正在运行"
+    grep -r "allow\|deny" /etc/nginx/sites-enabled/structpilot 2>/dev/null
+else
+    echo "⚠️  Nginx 未运行（使用防火墙模式）"
+fi
+
+# 2. 检查防火墙规则
+echo ""
+echo "--- 防火墙规则 ---"
+if command -v ufw &> /dev/null; then
+    sudo ufw status | grep 8501
+elif command -v iptables &> /dev/null; then
+    sudo iptables -L INPUT -n | grep 8501
+fi
+
+# 3. 测试本机访问
+echo ""
+echo "--- 本机访问测试 ---"
+if curl -s http://localhost:8501 > /dev/null; then
+    echo "✅ 本机可访问"
+else
+    echo "❌ 本机无法访问"
+fi
+
+# 4. 获取本机IP
+echo ""
+echo "--- 服务器IP ---"
+hostname -I | awk '{print "本机IP: " $1}'
+
+echo ""
+echo "========== 检查完成 =========="
+```
+
+运行：
+```bash
+chmod +x check_isolation.sh
+./check_isolation.sh
+```
+
+---
+
+## 总结
+
+| 需求 | 推荐方案 | 配置时间 |
+|------|---------|---------|
+| 快速隔离 | 防火墙IP白名单 | 5分钟 |
+| 生产环境 | Nginx + IP白名单 | 15分钟 |
+| 统一平台 | 多租户模式 | 需开发（联系我） |
+| 最高保密 | VPN + IP白名单 | 1-2小时 |
+
+**立即行动：**
+1. 确定本课题组IP段（问管理员或查看设备IP）
+2. 选择方案（推荐从IP白名单开始）
+3. 按步骤配置
+4. 用其他组设备测试是否被拒绝
+
+需要帮助随时问我！n" > /dev/null; then
     echo "✅ Streamlit 进程运行中"
 else
     echo "❌ Streamlit 未运行"
