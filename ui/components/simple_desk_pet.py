@@ -39,9 +39,8 @@ def render_simple_desk_pet(
     }
     animation = animations.get(pet_mood, "float")
 
-    # 使用 components.html 持久化渲染
-    html_code = f"""
-<style>
+    # CSS 样式（单独定义）
+    css_styles = f"""
 .sp-simple-pet {{
     position: fixed;
     right: 20px;
@@ -62,7 +61,6 @@ def render_simple_desk_pet(
     filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
 }}
 
-/* 动画定义 */
 @keyframes float {{
     0%, 100% {{ transform: translateY(0); }}
     50% {{ transform: translateY(-12px); }}
@@ -94,7 +92,6 @@ def render_simple_desk_pet(
     20%, 40%, 60%, 80% {{ transform: translateX(5px); }}
 }}
 
-/* 气泡提示 */
 .sp-pet-tooltip {{
     position: fixed;
     right: {pet_size + 30}px;
@@ -114,8 +111,10 @@ def render_simple_desk_pet(
 .sp-simple-pet:hover + .sp-pet-tooltip {{
     opacity: 1;
 }}
-</style>
+"""
 
+    # 完整的 HTML 代码
+    html_code = f"""
 <script>
 (function() {{
     // 检查是否已经存在桌宠
@@ -130,6 +129,11 @@ def render_simple_desk_pet(
         return;
     }}
 
+    // 添加样式
+    var style = parent.document.createElement('style');
+    style.textContent = `{css_styles}`;
+    parent.document.head.appendChild(style);
+
     // 创建桌宠容器
     var container = parent.document.createElement('div');
     container.id = 'sp-simple-pet-container';
@@ -137,11 +141,6 @@ def render_simple_desk_pet(
 
     // 添加到 body
     parent.document.body.appendChild(container);
-
-    // 添加样式
-    var style = parent.document.createElement('style');
-    style.textContent = `{html_code.split('</style>')[0].split('<style>')[1]}`;
-    parent.document.head.appendChild(style);
 }})();
 </script>
 """
