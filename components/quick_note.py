@@ -51,7 +51,7 @@ def render_quick_note_button():
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
     }
 
-    /* 快速笔记面板 */
+    /* 快速笔记面板 - 支持调整宽度 */
     #quick-note-panel {
         position: fixed;
         top: 0;
@@ -64,10 +64,29 @@ def render_quick_note_button():
         transition: right 0.3s ease;
         overflow-y: auto;
         padding: 20px;
+        resize: horizontal;
+        min-width: 300px;
+        max-width: 800px;
     }
 
     #quick-note-panel.open {
         right: 0;
+    }
+
+    /* 可拖拽调整大小的手柄 */
+    #resize-handle {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 8px;
+        height: 100%;
+        background: transparent;
+        cursor: col-resize;
+        z-index: 10000;
+    }
+
+    #resize-handle:hover {
+        background: rgba(102, 126, 234, 0.3);
     }
 
     #quick-note-panel h3 {
@@ -182,6 +201,9 @@ def render_quick_note_button():
 
     <!-- 快速笔记面板 -->
     <div id="quick-note-panel">
+        <!-- 可拖拽调整大小的手柄 -->
+        <div id="resize-handle" title="拖动调整宽度"></div>
+
         <h3>📝 快速笔记</h3>
 
         <input type="text" id="note-title" placeholder="笔记标题（可选）" />
@@ -200,6 +222,39 @@ def render_quick_note_button():
 
     <script>
     let panelOpen = false;
+    let isResizing = false;
+    let lastDownX = 0;
+
+    // 拖拽调整宽度
+    const resizeHandle = document.getElementById('resize-handle');
+    const panel = document.getElementById('quick-note-panel');
+
+    resizeHandle.addEventListener('mousedown', function(e) {
+        isResizing = true;
+        lastDownX = e.clientX;
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isResizing) return;
+
+        const offsetX = lastDownX - e.clientX;
+        const newWidth = panel.offsetWidth + offsetX;
+
+        if (newWidth >= 300 && newWidth <= 800) {
+            panel.style.width = newWidth + 'px';
+            panel.style.right = '0px';
+            lastDownX = e.clientX;
+        }
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        }
+    });
 
     function toggleQuickNote() {
         panelOpen = !panelOpen;
