@@ -8,8 +8,10 @@ font = "sans serif"
 [server]
 headless = true
 port = 8501
-# 保留 XSRF 防护（Cloud 部署必需），CORS 由其自动管理，不显式关闭以免冲突
+address = "0.0.0.0"  # 绑定到所有网络接口，允许局域网访问
 enableXsrfProtection = true
+enableCORS = false  # 局域网环境可关闭 CORS 检查
+maxUploadSize = 200  # 最大上传文件 200MB（支持大截图）
 
 [browser]
 gatherUsageStats = false
