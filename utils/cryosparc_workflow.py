@@ -183,6 +183,9 @@ def generate_cryosparc_workflow(
         # cp_04: Blob Picker
         elif cp_id == "cp_04":
             diameter = params.get("particle_diameter", 150)
+            # 防止 diameter 为 None 导致的 TypeError
+            if diameter is None:
+                diameter = 150
             diameter_max = params.get("particle_diameter_max", diameter * 1.5)
             job_params = {
                 "diameter": _param(diameter, locked=False, visible=True, flagged=True),
