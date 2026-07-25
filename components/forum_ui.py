@@ -25,7 +25,17 @@ from utils.security import sanitize_html
 
 def render_forum_tab():
     """渲染论坛主页面"""
+    from utils.user_manager import get_current_user
+
     st.markdown("## 💬 讨论区")
+
+    # 获取当前用户权限
+    current_user = get_current_user()
+    user_role = current_user.get("role", "guest") if current_user else "guest"
+
+    # 访客提示
+    if user_role == "guest":
+        st.info("👁️ **访客模式：** 您可以浏览问题和回答，登录后可参与讨论")
 
     # 顶部操作栏
     col1, col2, col3 = st.columns([2, 2, 1])
@@ -46,8 +56,13 @@ def render_forum_tab():
         )
 
     with col3:
-        if st.button("➕ 提问", use_container_width=True, type="primary"):
-            st.session_state["forum_show_ask"] = True
+        # 仅成员和管理员可以提问
+        if user_role in ["member", "admin"]:
+            if st.button("➕ 提问", use_container_width=True, type="primary"):
+                st.session_state["forum_show_ask"] = True
+        else:
+            st.button("➕ 提问", use_container_width=True, type="primary", disabled=True)
+            st.caption("💡 登录后可提问")
 
     st.markdown("---")
 
@@ -79,7 +94,20 @@ def render_forum_tab():
 
 
 def _render_ask_question_form():
-    """渲染提问表单"""
+    """渲染提问表单（仅成员和管理员）"""
+    from utils.user_manager import get_current_user
+
+    # 权限检查
+    current_user = get_current_user()
+    user_role = current_user.get("role", "guest") if current_user else "guest"
+
+    if user_role not in ["member", "admin"]:
+        st.warning("⚠️ 仅登录用户可以提问，请先登录")
+        if st.button("关闭"):
+            st.session_state["forum_show_ask"] = False
+            st.rerun()
+        return
+
     st.markdown("### 📝 提问")
 
     with st.form("ask_question_form"):
@@ -141,9 +169,9 @@ def _render_ask_question_form():
                     tags.append(software.lower())
 
                 # 获取当前用户信息
-                user = st.session_state.get("username", "guest")
-                user_display = st.session_state.get("display_name", user)
-                user_lab = st.session_state.get("user_lab", "")
+                user = current_user.get("username", "guest")
+                user_display = current_user.get("display_name", user)
+                user_lab = current_user.get("lab", "")
 
                 # 创建问题
                 question_id = create_question(
