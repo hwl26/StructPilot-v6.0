@@ -198,14 +198,13 @@ def render_personal_notes(username):
         st.info("💡 还没有笔记，点击上方「➕ 新建笔记」开始记录")
 
 
-def render_note_polish(current_user):
+def render_note_polish(username):
     """渲染笔记润色功能"""
     st.markdown("### ✨ 笔记润色")
     st.caption("使用 AI 将口语化笔记润色为结构化的技术经验")
 
     from utils.user_manager import load_user_notes
 
-    username = current_user.get("username")
     notes = load_user_notes(username)
 
     if not notes:
@@ -303,12 +302,10 @@ def render_note_polish(current_user):
                 st.rerun()
 
 
-def render_my_contributions(current_user):
+def render_my_contributions(username):
     """渲染我的贡献列表"""
     st.markdown("### 📤 我的贡献")
     st.caption("查看你提交的经验审核状态")
-
-    username = current_user.get("username")
 
     # 加载经验库
     exp_path = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
