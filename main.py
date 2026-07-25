@@ -2443,7 +2443,7 @@ with tab_chat:
     if _app_mode == "expert":
         # 高级模式和默认：保留原有双栏布局（workspace + chat）
         # --- 4. Two-column layout: workspace + chat ---
-        _ws_col, _chat_col = st.columns([0.30, 0.70], gap="small")
+        _ws_col, _chat_col = st.columns([0.45, 0.55], gap="small")
 
         # ===== Left column: Stage workspace =====
         with _ws_col:
