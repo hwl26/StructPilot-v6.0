@@ -70,6 +70,7 @@ from ui.components import (
     render_stage_workspace, render_parameter_panel, render_image_gallery,
 )
 from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
+from ui.components.simple_desk_pet import render_simple_desk_pet, update_pet_mood  # 简化版桌宠
 from components.answer_source_display import render_answer_sources
 from components.forum_ui import render_forum_tab, render_question_detail  # 修正函数名
 from ui.styles import (
@@ -4960,19 +4961,37 @@ if st.session_state.get("pet_enabled", True):
             "text": "#f1f5f9",
             "accent": "#3b82f6",
         }
-    pet_value = render_desk_pet(
-        pet_type=_pet_type,
-        pet_svg=_pet_svg,
-        ctx_msgs=_pet_msgs_map.get(_pet_ctx, [_pet_default]),
-        pet_msgs=_i_msgs["pet"],
-        body_msgs=_i_msgs["body"],
-        tail_msgs=_i_msgs["tail"],
-        quick_qs=_quick_qs,
-        theme=_pet_theme,
-        is_dark=_is_dark,
-        pet_mood=_pet_ctx,
-        pet_size=int(st.session_state.get("pet_size", 64)),
-    )
+
+    # 尝试渲染完整版桌宠，如果失败则使用简化版
+    try:
+        pet_value = render_desk_pet(
+            pet_type=_pet_type,
+            pet_svg=_pet_svg,
+            ctx_msgs=_pet_msgs_map.get(_pet_ctx, [_pet_default]),
+            pet_msgs=_i_msgs["pet"],
+            body_msgs=_i_msgs["body"],
+            tail_msgs=_i_msgs["tail"],
+            quick_qs=_quick_qs,
+            theme=_pet_theme,
+            is_dark=_is_dark,
+            pet_mood=_pet_ctx,
+            pet_size=int(st.session_state.get("pet_size", 64)),
+        )
+    except Exception as e:
+        # 如果复杂版渲染失败，使用简化版
+        _pet_mood = update_pet_mood(
+            completed_count=_completed,
+            total_count=_cp_total_num,
+            has_errors=_failed > 0,
+            session_started=state.session_started
+        )
+        render_simple_desk_pet(
+            pet_type=_pet_type,
+            pet_size=int(st.session_state.get("pet_size", 64)),
+            pet_mood=_pet_mood
+        )
+        pet_value = None
+
     # Handle actions from desk pet (via hidden text input)
     if pet_value:
         try:
