@@ -262,7 +262,7 @@ def render_beginner_wizard(
                 finish_clicked = False
             else:
                 next_clicked = False
-                finish_clicked = st.form_submit_button("✅ 完成并生成 Workflow", use_container_width=True, type="primary")
+                finish_clicked = st.form_submit_button("✅ 完成", use_container_width=True, type="primary")
 
         if prev_clicked:
             st.session_state.wizard_step = max(0, current_step - 1)
@@ -271,7 +271,13 @@ def render_beginner_wizard(
             st.session_state.wizard_step = min(total_steps - 1, current_step + 1)
             st.rerun()
         elif finish_clicked:
-            _generate_and_export_workflow(st.session_state.wizard_params, state, app)
+            # 设置标志，表单外生成 workflow
+            st.session_state["wizard_generate_workflow"] = True
+            st.rerun()
+
+    # 表单外处理 workflow 生成（避免 download_button 在 form 内的错误）
+    if st.session_state.get("wizard_generate_workflow", False):
+        _generate_and_export_workflow(st.session_state.wizard_params, state, app)
 
 
 def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
@@ -291,11 +297,11 @@ def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
         for param in core_params:
             _render_param_input(param, params_store)
 
-    # 渲染固定参数（折叠）
+    # 渲染固定参数（折叠，但可编辑）
     if locked_params:
-        with st.expander("🔒 固定参数（通常无需修改）", expanded=False):
+        with st.expander("🔒 固定参数（通常无需修改，展开可调整）", expanded=False):
             for param in locked_params:
-                _render_param_input(param, params_store, disabled=True)
+                _render_param_input(param, params_store)  # 移除 disabled=True
 
     # 渲染其他参数（折叠）
     if other_params:
@@ -304,7 +310,7 @@ def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
                 _render_param_input(param, params_store)
 
 
-def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any], disabled: bool = False) -> None:
+def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any]) -> None:
     """渲染单个参数输入控件。"""
     key = param["key"]
     label = param["label"]
@@ -323,7 +329,6 @@ def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any], dis
             value=current_value or "",
             placeholder=placeholder,
             help=help_text,
-            disabled=disabled,
             key=f"param_{key}",
         )
         params_store[key] = value
@@ -341,7 +346,6 @@ def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any], dis
                 options=options,
                 index=index,
                 help=help_text,
-                disabled=disabled,
                 key=f"param_{key}",
             )
         else:
@@ -356,7 +360,6 @@ def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any], dis
                 value=float(current_value) if current_value is not None else float(default),
                 step=step,
                 help=help_text,
-                disabled=disabled,
                 key=f"param_{key}",
             )
         params_store[key] = value
