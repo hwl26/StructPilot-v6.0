@@ -1847,22 +1847,24 @@ with st.sidebar:
                     "完成后建议导出为STAR文件，切换到cryoSPARC继续处理。"
                 )
 
-    # 三模式切换器
+    # 两模式切换器
     st.markdown("### 交互模式")
     _mode_options = {
         "beginner": "🌱 入门模式",
-        "teaching": "🎓 教学模式",
         "expert": "⚙️ 高级模式",
     }
     _mode_labels = list(_mode_options.values())
     _current_mode = st.session_state.app_mode
+    if _current_mode not in _mode_options:
+        _current_mode = "beginner"  # 默认入门模式
+        st.session_state.app_mode = _current_mode
     _mode_idx = list(_mode_options.keys()).index(_current_mode)
     _selected_mode_label = st.selectbox(
         "选择模式",
         options=_mode_labels,
         index=_mode_idx,
         key="mode_selector",
-        help="入门：傻瓜式SOP；教学：原理卡片+测验；高级：参数导出+预设",
+        help="入门：引导式操作；高级：完整功能+参数配置",
     )
     _new_mode = [k for k, v in _mode_options.items() if v == _selected_mode_label][0]
     if _new_mode != _current_mode:
@@ -2128,15 +2130,17 @@ if st.session_state.last_feedback:
 
 # 动态Tab：根据模式决定显示哪些Tab
 _app_mode = st.session_state.get("app_mode", "beginner")
-if _app_mode in ["beginner", "teaching"]:
-    # 入门/教学模式：显示对话、讨论区和设置
-    tab_labels = ["对话陪跑", "💬 讨论区", "设置"]
-    tab_chat, tab_forum, tab_settings = st.tabs(tab_labels)
+if _app_mode == "beginner":
+    # 入门模式：显示对话、讨论区、我的空间和设置
+    tab_labels = ["对话陪跑", "💬 讨论区", "📝 我的空间", "设置"]
+    tab_chat, tab_forum, tab_myspace, tab_settings = st.tabs(tab_labels)
+    tab_community = None
+    tab_admin = None
     tab_report = None  # 不显示报告导出
 else:
-    # 高级模式/原v6：显示全部Tab
-    tab_labels = ["对话陪跑", "💬 讨论区", "报告导出", "设置"]
-    tab_chat, tab_forum, tab_report, tab_settings = st.tabs(tab_labels)
+    # 高级模式：显示全部Tab
+    tab_labels = ["对话陪跑", "💬 讨论区", "📝 我的空间", "👥 社区", "🔧 管理员区", "报告导出", "设置"]
+    tab_chat, tab_forum, tab_myspace, tab_community, tab_admin, tab_report, tab_settings = st.tabs(tab_labels)
 
 # ----- Tab 1: chat ----- #
 with tab_chat:
@@ -2435,13 +2439,8 @@ with tab_chat:
         from modes import render_beginner_view
         render_beginner_view(_current_cp, state, app, run_command)
 
-    elif _app_mode == "teaching":
-        # 教学模式：单栏教学卡片+测验
-        from modes import render_teaching_view
-        render_teaching_view(_current_cp, state, app)
-
-    if _app_mode == "expert":
-        # 高级模式和默认：保留原有双栏布局（workspace + chat）
+    elif _app_mode == "expert":
+        # 高级模式：保留原有双栏布局（workspace + chat）
         # --- 4. Two-column layout: workspace + chat ---
         _ws_col, _chat_col = st.columns([0.45, 0.55], gap="small")
 
@@ -4502,42 +4501,6 @@ with tab_settings:
                 "```\n\n"
                 "**完整指南**：`docs/wechat_qq_integration_guide.md`"
             )
-
-        # ── 邮件转经验配置 ─────────────────────────────────────────────────────
-        st.divider()
-        st.markdown("### 📧 邮件转经验")
-        st.caption("发邮件到指定邮箱，主题包含 #经验，自动记录到经验库")
-
-        from utils.email_to_experience import (
-            load_email_config as _em_load,
-            save_email_config as _em_save,
-            start_email_polling as _em_start,
-        )
-        _em_cfg = _em_load()
-
-        with st.expander("⚙️ 邮件配置（IMAP）", expanded=not _em_cfg.get("imap_host")):
-            _em_host = st.text_input("IMAP 服务器", value=_em_cfg.get("imap_host", ""),
-                                     placeholder="如 imap.gmail.com", key="em_host_input")
-            _em_port = st.number_input("端口", value=_em_cfg.get("imap_port", 993),
-                                       min_value=1, max_value=65535, key="em_port_input")
-            _em_user = st.text_input("邮箱账号", value=_em_cfg.get("username", ""), key="em_user_input")
-            _em_pass = st.text_input("密码/授权码", value=_em_cfg.get("password", ""),
-                                     type="password", key="em_pass_input")
-            _em_enabled = st.toggle("启用邮件监听", value=_em_cfg.get("enabled", False), key="em_enabled_toggle")
-
-            if st.button("💾 保存邮件配置", use_container_width=True, key="em_save_btn"):
-                if _em_save(_em_host, int(_em_port), _em_user, _em_pass, _em_enabled):
-                    st.success("✅ 配置已保存")
-                    if _em_enabled:
-                        _em_start({
-                            "imap_host": _em_host,
-                            "imap_port": int(_em_port),
-                            "username": _em_user,
-                            "password": _em_pass,
-                        })
-                        st.info(f"📧 邮件监听已启动，发邮件到 {_em_user}，主题包含 #经验 即可记录")
-                else:
-                    st.error("保存失败")
 
     # --------------------------------------------------------------------------- #
     # 高级模式专属功能面板（仅在 expert 模式下渲染）
