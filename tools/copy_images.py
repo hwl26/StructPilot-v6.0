@@ -4,8 +4,14 @@
 将 Claude image cache 中的图片复制到项目 runtime/images/experiences/ 目录
 """
 
+import sys
 import shutil
 from pathlib import Path
+
+# 设置输出编码为 UTF-8
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 
 def copy_experience_images():
