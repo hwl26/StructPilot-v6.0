@@ -21,14 +21,19 @@ _LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
 def render_admin_panel():
     """渲染管理员区主界面"""
 
-    # 权限检查
-    from utils.user_manager import get_current_user
-    current_user = get_current_user()
-    user_role = current_user.get("role", "guest") if current_user else "guest"
+    # 权限检查 - 使用 session_state 的 role
+    user_role = st.session_state.get("role", "guest")
+
+    # 调试信息（可选，帮助排查）
+    # st.caption(f"Debug: role={user_role}, logged_in={st.session_state.get('logged_in')}")
 
     if user_role != "admin":
         st.warning("⚠️ 此功能仅管理员可用")
         st.info("💡 如需管理权限，请联系系统管理员")
+
+        # 如果已登录但不是管理员，显示当前角色
+        if st.session_state.get("logged_in"):
+            st.caption(f"当前角色：{user_role}")
         return
 
     # 子Tab结构

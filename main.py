@@ -1785,7 +1785,14 @@ with st.sidebar:
                         # 登录成功，清除失败计数
                         reset_failed_attempts(_login_user, _failed_attempts)
                         st.session_state["_login_failed_attempts"] = _failed_attempts
+
+                        # ✅ 设置完整的登录状态（与「我的空间」Tab同步）
                         st.session_state.current_user = _user
+                        st.session_state.logged_in = True
+                        st.session_state.username = _user.get("username", "")
+                        st.session_state.display_name = _user.get("display_name", _user.get("username", ""))
+                        st.session_state.role = _user.get("role", "guest")
+
                         st.success(f"✅ 欢迎，{_user['display_name']}！")
                         # 检查是否需要强制修改密码
                         if _user.get("force_change_password"):
@@ -3886,9 +3893,8 @@ with tab_settings:
         )
         _mgr_user = _au_get(st.session_state)
 
-        if _au_perm(_mgr_user, "all"):  # 仅管理员
-            st.divider()
-            st.markdown("### 👥 成员管理（管理员）")
+        # ✅ 成员管理已移至「管理员区」Tab
+        # 旧代码已注释，保留备份
             _udata = _au_load()
             _users = _udata.get("users", [])
             st.caption(f"共 {len(_users)} 个账号")
