@@ -659,19 +659,13 @@ def handle_local_flow_command(text: str, response_profile: str = "teaching") -> 
 st.set_page_config(page_title=APP_DISPLAY_NAME, page_icon="🔬", layout="wide", initial_sidebar_state="expanded")
 
 # ✨ 服务端 session 恢复（URL params）
-from utils.server_session import load_server_session, cleanup_expired_sessions
+from utils.server_session import cleanup_expired_sessions
 
 # 清理过期 session（后台任务）
 cleanup_expired_sessions()
 
-# 尝试从 URL query params 恢复 session
-if "logged_in" not in st.session_state or not st.session_state.get("logged_in"):
-    query_params = st.query_params
-    if "sid" in query_params:
-        session_data = load_server_session(query_params["sid"])
-        if session_data:
-            st.session_state.update(session_data)
-            st.toast("✅ 会话已恢复", icon="✅")
+# Do not put bearer-like session identifiers in URLs.  Streamlit retains the
+# session during normal interaction; a browser refresh now requires login.
 
 _ui_settings = load_ui_settings()
 st.session_state.setdefault("ui_theme", _ui_settings["ui_theme"])
@@ -1432,21 +1426,6 @@ with st.sidebar:
                         st.session_state.role = _user.get("role", "guest")
                         st.session_state.session_id = _user.get("session_id", "")
 
-                        # 🆕 将 session_id 写入 URL query params（Streamlit内部）
-                        if st.session_state.get("session_id"):
-                            sid = st.session_state["session_id"]
-                            st.query_params["sid"] = sid
-
-                            # 🆕 使用JavaScript修改浏览器地址栏（持久化到浏览器）
-                            components.html(f"""
-                            <script>
-                                const url = new URL(window.location.href);
-                                url.searchParams.set('sid', '{sid}');
-                                window.history.replaceState(null, '', url.toString());
-                                console.log('Session ID saved to URL:', '{sid}');
-                            </script>
-                            """, height=0)
-
                         st.session_state["_login_welcome_msg"] = f"✅ 欢迎，{_user['display_name']}！"
                         # 检查是否需要强制修改密码
                         if _user.get("force_change_password"):
@@ -1480,20 +1459,6 @@ with st.sidebar:
                 st.session_state.display_name = ""
                 st.session_state.role = "guest"
                 st.session_state.session_id = ""
-
-                # 清除 URL query params（Streamlit内部）
-                if "sid" in st.query_params:
-                    del st.query_params["sid"]
-
-                # 清除浏览器地址栏中的sid参数（持久化）
-                components.html("""
-                <script>
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('sid');
-                    window.history.replaceState(null, '', url.toString());
-                    console.log('Session ID removed from URL');
-                </script>
-                """, height=0)
 
                 # 清除 localStorage（废弃方法，保留兼容性）
                 from utils.session_persistence import clear_session_from_storage
@@ -3183,7 +3148,10 @@ if tab_admin is not None:
 # ----- Tab 3: settings ----- #
 with tab_settings:
     # 快速/教学模式：只显示简化的界面设置和数据清除
-    if _app_mode in ["beginner", "teaching"]:
+    # Only administrators may access pages that load or overwrite provider
+    # credentials and integration tokens.  Expert workflow guidance remains
+    # available elsewhere without exposing operational secrets.
+    if _app_mode in ["beginner", "teaching"] or _role != "admin":
         st.markdown("### 🎨 界面设置")
 
         st_theme_simple = st.selectbox(
@@ -3320,11 +3288,11 @@ with tab_settings:
         st.caption("💡 点击上方按钮后刷新页面，即可重新填写需求问卷")
 
         st.divider()
-        st.markdown("### ⚙️ 需要更多高级功能？")
-        st.info(
-            "LLM 配置、知识库管理等功能在「**高级模式**」中提供。\n\n"
-            "点击左侧边栏的「选择模式」切换到「高级模式」查看完整功能。"
-        )
+        st.markdown("### ⚙️ 高级功能")
+        if _role == "admin":
+            st.info("LLM 配置、知识库管理等功能仅在管理员的「高级模式」中提供。")
+        else:
+            st.info("LLM、机器人和知识库写入配置仅对管理员开放。")
 
     # 高级模式：显示完整设置（LLM、向量检索、知识库等）
     else:

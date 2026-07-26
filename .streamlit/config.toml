@@ -11,7 +11,7 @@ font = "sans serif"
 # 本地或局域网部署请用命令行参数指定：
 #   streamlit run main.py --server.port 8501 --server.address 0.0.0.0
 [server]
-maxUploadSize = 200  # 最大上传文件 200MB（支持大截图）
+maxUploadSize = 25  # 与图片/音频校验上限一致，限制单次上传占用
 
 [browser]
 gatherUsageStats = false

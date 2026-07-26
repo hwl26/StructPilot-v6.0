@@ -12,6 +12,14 @@ def generate_session_id() -> str:
     """生成新的session ID"""
     return str(uuid.uuid4())
 
+
+def _valid_session_id(session_id: str) -> bool:
+    """Accept only canonical UUID session identifiers before building a path."""
+    try:
+        return str(uuid.UUID(str(session_id))) == str(session_id)
+    except (ValueError, TypeError, AttributeError):
+        return False
+
 def save_server_session(session_id: str, data: Dict[str, Any]) -> bool:
     """保存session数据到服务端文件"""
     try:
@@ -29,6 +37,8 @@ def save_server_session(session_id: str, data: Dict[str, Any]) -> bool:
 
 def load_server_session(session_id: str) -> Optional[Dict[str, Any]]:
     """从服务端文件加载session数据"""
+    if not _valid_session_id(session_id):
+        return None
     try:
         session_file = SESSION_DIR / f"{session_id}.json"
         if not session_file.exists():
@@ -47,6 +57,8 @@ def load_server_session(session_id: str) -> Optional[Dict[str, Any]]:
 
 def delete_server_session(session_id: str) -> bool:
     """删除session文件"""
+    if not _valid_session_id(session_id):
+        return False
     try:
         session_file = SESSION_DIR / f"{session_id}.json"
         if session_file.exists():

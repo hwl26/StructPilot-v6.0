@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import secrets
 from pathlib import Path
 from typing import Literal
@@ -19,10 +20,6 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _USERS_PATH = BASE_DIR / "runtime" / "config" / "users.json"
-
-# 默认密码的明文，用于检测用户是否仍在使用默认密码
-_DEFAULT_ADMIN_PASSWORD = "admin123"
-
 
 RoleType = Literal["admin", "member", "guest"]
 
@@ -54,18 +51,12 @@ def load_users() -> dict:
     try:
         data = json.loads(_USERS_PATH.read_text(encoding="utf-8"))
     except Exception:
-        # 首次使用，创建默认管理员账号（密码：admin123）
+        # Public deployments must never create a known administrator password.
+        # Administrators are only bootstrapped when the hosting environment
+        # explicitly provides a private password through its secret store.
+        bootstrap_password = os.getenv("STRUCTPILOT_BOOTSTRAP_ADMIN_PASSWORD", "").strip()
         default_data = {
-            "users": [
-                {
-                    "username": "admin",
-                    "password_hash": _hash_password("admin123"),
-                    "role": "admin",
-                    "display_name": "管理员",
-                    "email": "",
-                    "force_change_password": True
-                }
-            ],
+            "users": [],
             "default_role": "guest",
             "permissions": {
                 "admin": ["all"],
@@ -73,16 +64,18 @@ def load_users() -> dict:
                 "guest": ["view"]
             }
         }
+        if bootstrap_password:
+            default_data["users"].append({
+                "username": "admin",
+                "password_hash": _hash_password(bootstrap_password),
+                "role": "admin",
+                "display_name": "管理员",
+                "email": "",
+                "force_change_password": True,
+            })
         _USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
         _USERS_PATH.write_text(json.dumps(default_data, ensure_ascii=False, indent=2), encoding="utf-8")
         return default_data
-
-    # 检测用户是否仍在使用默认密码，设置 force_change_password 标志
-    for user in data.get("users", []):
-        if user.get("username") == "admin" and not user.get("force_change_password"):
-            if _verify_password(_DEFAULT_ADMIN_PASSWORD, user["password_hash"]):
-                user["force_change_password"] = True
-                save_users(data)
 
     return data
 
