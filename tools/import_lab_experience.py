@@ -69,7 +69,7 @@ DETAILS = {
         "symptoms": ["box size 过大", "2D 分类条纹类", "经验参数硬搬"],
         "related_params": {"box_size": "约 256 px", "particle_diameter": "约 110 Å", "box_to_particle_ratio": "1.2~1.5", "particle_box_occupancy": "≤ 60%"},
         "success_rate": "box size 从 320 px 调至约 256 px 后条纹类明显改善",
-        "tags": ["box size", "颗粒提取", "2D 条纹类", "像素尺寸"],
+        "tags": ["box size", "box size 怎么选", "颗粒提取", "2D 条纹类", "像素尺寸"],
     },
     "2026-02-14": {
         "title": "Falcon4 数据未启用 ePT 导致高频信息损失",

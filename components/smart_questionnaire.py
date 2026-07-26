@@ -237,7 +237,11 @@ def render_smart_questionnaire(app: Any) -> Optional[Dict[str, Any]]:
             with st.expander("📝 已回答的问题", expanded=False):
                 for q_key in st.session_state["sq_history"]:
                     st.markdown(f"**Q:** {QUESTION_TEMPLATES[q_key]['question']}")
-                    st.markdown(f"**A:** {st.session_state['sq_answers'][q_key]}")
+                    try:
+                        answers = st.session_state["sq_answers"]
+                    except KeyError:
+                        answers = {}
+                    st.markdown(f"**A:** {answers.get(q_key, '（未填写）')}")
                     st.divider()
 
         # 当前问题
@@ -318,6 +322,12 @@ def render_smart_questionnaire(app: Any) -> Optional[Dict[str, Any]]:
 
         with col_skip:
             if st.button("跳过", use_container_width=True):
+                try:
+                    answers = st.session_state["sq_answers"]
+                except KeyError:
+                    answers = {}
+                    st.session_state["sq_answers"] = answers
+                answers[current_q_key] = "（未填写）"
                 st.session_state["sq_history"].append(current_q_key)
                 next_q = _generate_next_question(
                     st.session_state["sq_profile"],

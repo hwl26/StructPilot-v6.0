@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
 import time
 from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple
@@ -33,6 +32,7 @@ Route = Literal["expert", "sop", "memory", "fault", "plot_interp", "end", "conce
 # that should be prepended to the downstream node's reply as a single message.
 _ROUTING_TAGS = {"stage_guide_sop", "param_advice", "plot_interpretation", "concept_explain"}
 _RAG_INJECTION_MIN_SCORE = 0.5
+_LAB_EXP_INJECTION_MIN_SCORE = 0.4
 _LOCAL_ONLY_ACTIONS = {
     "progress",
     "report",
@@ -217,16 +217,40 @@ def _append_evidence_summary(answer: str, trace: Dict[str, Any]) -> str:
     return answer + "\n\n---\n\n**证据与不确定性 / Evidence and uncertainty**\n" + "\n".join(f"- {item}" for item in evidence)
 
 
-@dataclass
 class StructPilotApp:
-    navigator: "NavigatorAgent" = field(default_factory=lambda: __import__('agents.navigator_agent', fromlist=['NavigatorAgent']).NavigatorAgent())
-    expert: "ExpertAgent" = field(default_factory=lambda: __import__('agents.expert_agent', fromlist=['ExpertAgent']).ExpertAgent())
-    sop: "SOPAgent" = field(default_factory=lambda: __import__('agents.sop_agent', fromlist=['SOPAgent']).SOPAgent())
-    memory: "MemoryAgent" = field(default_factory=lambda: __import__('agents.memory_agent', fromlist=['MemoryAgent']).MemoryAgent())
-    llm: "LLMAgent" = field(default_factory=lambda: __import__('agents.llm_agent', fromlist=['LLMAgent']).LLMAgent())
-    validator: InputValidator = field(default_factory=InputValidator)
+    """Runtime container for the processing agents.
 
-    def __post_init__(self) -> None:
+    This intentionally uses an explicit constructor rather than ``@dataclass``.
+    Streamlit Cloud's Python 3.11 loader can temporarily omit ``graph.app`` from
+    ``sys.modules`` while resolving postponed dataclass annotations, preventing
+    the application from importing at startup.
+    """
+
+    def __init__(
+        self,
+        navigator: Optional[Any] = None,
+        expert: Optional[Any] = None,
+        sop: Optional[Any] = None,
+        memory: Optional[Any] = None,
+        llm: Optional[Any] = None,
+        validator: Optional[InputValidator] = None,
+    ) -> None:
+        self.navigator = navigator if navigator is not None else __import__(
+            "agents.navigator_agent", fromlist=["NavigatorAgent"]
+        ).NavigatorAgent()
+        self.expert = expert if expert is not None else __import__(
+            "agents.expert_agent", fromlist=["ExpertAgent"]
+        ).ExpertAgent()
+        self.sop = sop if sop is not None else __import__(
+            "agents.sop_agent", fromlist=["SOPAgent"]
+        ).SOPAgent()
+        self.memory = memory if memory is not None else __import__(
+            "agents.memory_agent", fromlist=["MemoryAgent"]
+        ).MemoryAgent()
+        self.llm = llm if llm is not None else __import__(
+            "agents.llm_agent", fromlist=["LLMAgent"]
+        ).LLMAgent()
+        self.validator = validator if validator is not None else InputValidator()
         self.retriever = KnowledgeRetriever(self.llm)
         self.plot_agent = __import__('agents.plot_agent', fromlist=['PlotAgent']).PlotAgent()
         self.smart_qa_engine = __import__(
@@ -297,17 +321,22 @@ class StructPilotApp:
             return []
         cp = (state.current_cp_id or "").lower()
         software = (state.software or "").lower()
+        lab_preferred: List[Tuple[str, str, float]] = []
         preferred: List[Tuple[str, str, float]] = []
         accepted: List[Tuple[str, str, float]] = []
         for doc_id, text, score in retrieved:
             haystack = f"{doc_id}\n{text}".lower()
-            if score < _RAG_INJECTION_MIN_SCORE:
+            is_lab_experience = doc_id.lower().startswith("lab_")
+            min_score = _LAB_EXP_INJECTION_MIN_SCORE if is_lab_experience else _RAG_INJECTION_MIN_SCORE
+            if score < min_score:
                 continue
-            if (cp and cp in haystack) or (software and software in haystack):
+            if is_lab_experience:
+                lab_preferred.append((doc_id, text, score))
+            elif (cp and cp in haystack) or (software and software in haystack):
                 preferred.append((doc_id, text, score))
             else:
                 accepted.append((doc_id, text, score))
-        return (preferred + accepted)[:3]
+        return (lab_preferred + preferred + accepted)[:3]
 
     def _build_context(self, state: PipelineState) -> str:
         obs = state.image_observations[-3:] if getattr(state, "image_observations", None) else []

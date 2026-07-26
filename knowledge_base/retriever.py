@@ -500,10 +500,14 @@ class KnowledgeRetriever:
             return results
         try:
             if not self._ensure_corpus_ready():
-                return []
+                results = _lexical_search(self.build_corpus(), query, top_k)
+                _record_hits(results)
+                return results
 
             if self._doc_matrix is None or self._corpus_texts is None or self._corpus_cache is None:
-                return []
+                results = _lexical_search(self.build_corpus(), query, top_k)
+                _record_hits(results)
+                return results
 
             query_vec = np.array(self.llm.embed_texts([query])[0], dtype=np.float64)
 
