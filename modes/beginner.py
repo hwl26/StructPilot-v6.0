@@ -224,43 +224,78 @@ def render_beginner_view(
     # ✨ Step 3: 参数配置界面（在 wizard 之前）
     if not st.session_state.get("params_confirmed", False):
         st.markdown("## 🔧 Step 3: 参数配置")
-        st.info(
-            "根据你的问卷信息，AI 为你推荐了最优参数。\n\n"
-            "你可以直接采用，或根据实际情况调整。"
-        )
 
-        # 生成 AI 推荐参数
+        # 获取用户信息
         user_profile = st.session_state.get("user_profile", {})
+        software = user_profile.get("software", "cryosparc")
 
-        # 检查是否已有推荐参数，避免重复生成
-        if "recommended_params" not in st.session_state or "ai_reasons" not in st.session_state:
-            recommended_params, ai_reasons = recommend_parameters(user_profile)
-            st.session_state["recommended_params"] = recommended_params
-            st.session_state["ai_reasons"] = ai_reasons
-        else:
-            recommended_params = st.session_state["recommended_params"]
-            ai_reasons = st.session_state["ai_reasons"]
+        # 判断是否使用workflow配置界面（仅cryoSPARC + 2D分类）
+        task = user_profile.get("task", "")
+        use_workflow = (software.lower() == "cryosparc" and "2d" in task.lower())
 
-        # 渲染参数配置界面
-        confirmed_params = render_parameter_section(
-            recommended_params=recommended_params,
-            user_profile=user_profile,
-            current_values=st.session_state.get("confirmed_params", {}),
-            ai_reasons=ai_reasons
-        )
+        if use_workflow:
+            # 🎯 使用新的Workflow配置界面（左右分栏 + 自动计算）
+            st.info(
+                "💡 **智能参数配置**：根据官方workflow模板，自动生成参数卡片。\n\n"
+                "蛋白直径相关参数会自动计算，无需手动填写。"
+            )
 
-        # 保存到 session_state 和 graph state
-        if confirmed_params:
-            st.session_state["confirmed_params"] = confirmed_params
-            st.session_state["params_confirmed"] = True
+            from components.cryosparc_workflow_config import render_workflow_config
+            workflow_path = BASE_DIR / "knowledge_base" / "workflows" / "2d_classification.json"
 
-            # 同步到 graph state
-            if hasattr(state, "params"):
-                state.params.update(confirmed_params)
+            if workflow_path.exists():
+                confirmed_params = render_workflow_config(workflow_path)
 
-            # 同步到 state 的顶层属性（cryosparc_workflow 会读取这些）
-            for key, value in confirmed_params.items():
-                if hasattr(state, key):
+                if confirmed_params:
+                    st.session_state["confirmed_params"] = confirmed_params
+                    st.session_state["params_confirmed"] = True
+
+                    # 同步到 graph state
+                    if hasattr(state, "params"):
+                        state.params.update(confirmed_params)
+
+                    st.rerun()
+            else:
+                st.error(f"⚠️ Workflow文件不存在: {workflow_path}")
+                # 降级到传统参数界面
+                use_workflow = False
+
+        if not use_workflow:
+            # 传统参数配置界面（兜底方案）
+            st.info(
+                "根据你的问卷信息，AI 为你推荐了最优参数。\n\n"
+                "你可以直接采用，或根据实际情况调整。"
+            )
+
+            # 检查是否已有推荐参数，避免重复生成
+            if "recommended_params" not in st.session_state or "ai_reasons" not in st.session_state:
+                recommended_params, ai_reasons = recommend_parameters(user_profile)
+                st.session_state["recommended_params"] = recommended_params
+                st.session_state["ai_reasons"] = ai_reasons
+            else:
+                recommended_params = st.session_state["recommended_params"]
+                ai_reasons = st.session_state["ai_reasons"]
+
+            # 渲染参数配置界面
+            confirmed_params = render_parameter_section(
+                recommended_params=recommended_params,
+                user_profile=user_profile,
+                current_values=st.session_state.get("confirmed_params", {}),
+                ai_reasons=ai_reasons
+            )
+
+            # 保存到 session_state 和 graph state
+            if confirmed_params:
+                st.session_state["confirmed_params"] = confirmed_params
+                st.session_state["params_confirmed"] = True
+
+                # 同步到 graph state
+                if hasattr(state, "params"):
+                    state.params.update(confirmed_params)
+
+                # 同步到 state 的顶层属性（cryosparc_workflow 会读取这些）
+                for key, value in confirmed_params.items():
+                    if hasattr(state, key):
                     setattr(state, key, value)
 
             st.success("✅ 参数配置完成！")
