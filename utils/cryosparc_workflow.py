@@ -186,7 +186,7 @@ def generate_cryosparc_workflow(
             # 防止 diameter 为 None 导致的 TypeError
             if diameter is None:
                 diameter = 150
-            diameter_max = params.get("particle_diameter_max", diameter * 1.5)
+            diameter_max = params.get("particle_diameter_max") or (diameter * 1.5)
             job_params = {
                 "diameter": _param(diameter, locked=False, visible=True, flagged=True),
                 "diameter_max": _param(diameter_max, locked=False, visible=True, flagged=True),
@@ -199,8 +199,8 @@ def generate_cryosparc_workflow(
 
         # cp_05: Extract
         elif cp_id == "cp_05":
-            box_size = params.get("box_size", 320)
-            bin_size = params.get("bin_size", min(box_size // 2, 120))
+            box_size = params.get("box_size") or 320
+            bin_size = params.get("bin_size") or min(box_size // 2, 120)
             job_params = {
                 "compute_num_gpus": _param(params.get("extract_gpus", 4), locked=True, visible=True, flagged=False),
                 "box_size_pix": _param(box_size, locked=False, visible=True, flagged=True),
@@ -210,10 +210,11 @@ def generate_cryosparc_workflow(
 
         # cp_06: 2D Classification
         elif cp_id == "cp_06":
+            _diameter_2d = params.get("particle_diameter") or 150
             job_params = {
                 "class2D_K": _param(params.get("class2d_num_classes", 100), locked=False, visible=True, flagged=True),
                 "class2D_max_res": _param(5, locked=False, visible=True, flagged=False),
-                "class2D_window_inner_A": _param(params.get("particle_diameter", 150), locked=False, visible=True, flagged=False),
+                "class2D_window_inner_A": _param(_diameter_2d, locked=False, visible=True, flagged=False),
                 "class2D_sigma_init_factor": _param(3, locked=True, visible=True, flagged=False),
                 "class2D_num_full_iter_batch": _param(40, locked=False, visible=True, flagged=False),
                 "compute_num_gpus": _param(params.get("class2d_gpus", 4), locked=True, visible=True, flagged=False),
@@ -286,8 +287,9 @@ def generate_cryosparc_workflow(
 
         # cp_04b: Template Picker
         elif cp_id == "cp_04b":
+            _diameter_tmpl = params.get("particle_diameter") or 220
             job_params = {
-                "diameter": _param(params.get("particle_diameter", 220), locked=False, visible=True, flagged=True),
+                "diameter": _param(_diameter_tmpl, locked=False, visible=True, flagged=True),
                 "max_num_hits": _param(params.get("max_num_hits", 300), locked=False, visible=True, flagged=False),
                 "lowpass_res_template": _param(40, locked=False, visible=True, flagged=False),
                 "lowpass_res": _param(30, locked=False, visible=True, flagged=False),

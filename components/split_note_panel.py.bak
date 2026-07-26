@@ -1,0 +1,188 @@
+"""分屏笔记面板 - 右侧固定笔记区域
+
+用于在主内容区域旁边显示一个固定的笔记面板，实现双栏布局：
+- 左侧（60%）：主内容区域
+- 右侧（40%）：笔记面板
+
+用法：
+    from components.split_note_panel import render_split_note_trigger, render_split_note_panel
+
+    # 在 sidebar 中放置触发按钮
+    render_split_note_trigger()
+
+    # 在主区域检查是否需要分屏
+    if st.session_state.get("show_split_note", False):
+        col_main, col_note = st.columns([6, 4])
+        with col_main:
+            # 你的主内容
+            st.write("主要内容区域")
+        with col_note:
+            render_split_note_panel()
+    else:
+        # 正常全屏显示
+        st.write("主要内容区域")
+"""
+
+from __future__ import annotations
+
+import streamlit as st
+from datetime import datetime
+from pathlib import Path
+import json
+
+
+def render_split_note_trigger() -> None:
+    """渲染分屏笔记触发按钮（放在 sidebar 中）"""
+
+    # 初始化状态
+    if "show_split_note" not in st.session_state:
+        st.session_state["show_split_note"] = False
+
+    # 切换按钮
+    current_state = st.session_state.get("show_split_note", False)
+    button_text = "📝 开启分屏笔记" if not current_state else "✖️ 关闭分屏笔记"
+    button_type = "primary" if not current_state else "secondary"
+
+    if st.button(button_text, key="toggle_split_note", type=button_type, use_container_width=True):
+        st.session_state["show_split_note"] = not current_state
+        st.rerun()
+
+
+def render_split_note_panel() -> None:
+    """渲染分屏笔记面板（放在右侧列中）
+
+    功能：
+    - 标题输入
+    - 内容输入（多行文本框）
+    - 保存按钮
+    - 清空按钮
+    """
+
+    st.markdown("### 📝 快速笔记")
+    st.caption("记录当前步骤的关键信息")
+
+    # 初始化状态
+    if "split_note_title" not in st.session_state:
+        st.session_state["split_note_title"] = ""
+    if "split_note_content" not in st.session_state:
+        st.session_state["split_note_content"] = ""
+
+    # 标题输入
+    note_title = st.text_input(
+        "标题（可选）",
+        value=st.session_state["split_note_title"],
+        key="split_note_title_input",
+        placeholder="例如：RELION导入数据注意事项"
+    )
+
+    # 内容输入
+    note_content = st.text_area(
+        "笔记内容",
+        value=st.session_state["split_note_content"],
+        key="split_note_content_input",
+        height=300,
+        placeholder="在这里记录重要信息、参数、遇到的问题等..."
+    )
+
+    # 按钮行
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("💾 保存", key="split_note_save", type="primary", use_container_width=True):
+            if not note_content.strip():
+                st.warning("⚠️ 笔记内容不能为空")
+            else:
+                success = _save_note(note_title, note_content)
+                if success:
+                    st.toast("✅ 笔记已保存", icon="✅")
+                    # 清空输入框
+                    st.session_state["split_note_title"] = ""
+                    st.session_state["split_note_content"] = ""
+                    st.rerun()
+                else:
+                    st.toast("❌ 保存失败", icon="❌")
+
+    with col2:
+        if st.button("🗑️ 清空", key="split_note_clear", use_container_width=True):
+            st.session_state["split_note_title"] = ""
+            st.session_state["split_note_content"] = ""
+            st.rerun()
+
+    # 显示最近的笔记
+    st.markdown("---")
+    st.markdown("#### 📚 最近笔记")
+    recent_notes = _load_recent_notes(limit=3)
+
+    if recent_notes:
+        for note in recent_notes:
+            with st.expander(f"📄 {note.get('title', '无标题')} - {note.get('timestamp', '')}"):
+                st.markdown(note.get('content', ''))
+    else:
+        st.caption("暂无笔记")
+
+
+def _save_note(title: str, content: str) -> bool:
+    """保存笔记到用户笔记文件
+
+    保存路径：runtime/user_data/{username}/notes.json
+    """
+    try:
+        # 获取当前用户
+        current_user = st.session_state.get("username", "guest")
+        if current_user == "guest":
+            st.error("❌ 游客无法保存笔记，请先登录")
+            return False
+
+        # 构建笔记数据
+        note_data = {
+            "title": title.strip() or "无标题",
+            "content": content.strip(),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "checkpoint_id": st.session_state.get("current_checkpoint_id", ""),
+            "software": st.session_state.get("selected_software", "")
+        }
+
+        # 读取现有笔记
+        notes_file = Path(f"runtime/user_data/{current_user}/notes.json")
+        notes_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if notes_file.exists():
+            try:
+                notes = json.loads(notes_file.read_text(encoding="utf-8"))
+            except Exception:
+                notes = []
+        else:
+            notes = []
+
+        # 添加新笔记（插入到最前面）
+        notes.insert(0, note_data)
+
+        # 保存回文件
+        notes_file.write_text(
+            json.dumps(notes, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+
+        return True
+
+    except Exception as e:
+        st.error(f"❌ 保存失败：{e}")
+        return False
+
+
+def _load_recent_notes(limit: int = 3) -> list[dict]:
+    """加载最近的笔记"""
+    try:
+        current_user = st.session_state.get("username", "guest")
+        if current_user == "guest":
+            return []
+
+        notes_file = Path(f"runtime/user_data/{current_user}/notes.json")
+        if not notes_file.exists():
+            return []
+
+        notes = json.loads(notes_file.read_text(encoding="utf-8"))
+        return notes[:limit]
+
+    except Exception:
+        return []

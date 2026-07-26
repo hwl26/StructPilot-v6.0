@@ -20,7 +20,7 @@ SoftwareTarget = Literal["cryosparc", "relion", "both"]
 ResponseProfile = Literal["concise", "teaching", "expert"]
 
 ActionTag = Literal[
-    "stage_guide", "qc_check", "advance", "rollback", "progress", "report",
+    "stage_guide", "stage_guide_sop", "qc_check", "advance", "rollback", "progress", "report",
     "param_advice", "fault_diagnosis", "plot_interpretation", "general", "error",
     "concept_explain", "casual",
 ]

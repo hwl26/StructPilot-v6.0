@@ -12,6 +12,10 @@ from typing import Any, Callable
 
 import streamlit as st
 
+# ✨ 导入参数系统
+from components.parameter_card import render_parameter_section
+from utils.param_recommender import recommend_parameters
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 _TEACHING_CARDS_PATH = BASE_DIR / "knowledge_base" / "teaching_cards.json"
 _LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
@@ -147,29 +151,123 @@ def render_beginner_view(
                 st.session_state.recommended_workflow = {}
                 st.session_state.onboarding_step = 1
                 st.session_state["_onboarding_mode"] = "v3"
+                for key in ["wizard_active", "wizard_completed", "_bg_task_done", "_bg_qa_visible"]:
+                    st.session_state.pop(key, None)
                 st.rerun()
         return
 
     # ── 首次使用检测：展示需求问答 ──────────────────────────────
     if not st.session_state.get("onboarding_completed", False):
-        # 问卷模式：v3=对话式（默认）/ v2=快速选择
-        onboarding_mode = st.session_state.get("_onboarding_mode", "v3")
+        # Step 1: 选择问卷模式（如果还没选）
+        if "_questionnaire_mode" not in st.session_state:
+            st.markdown("## 📋 Step 1: 选择问卷方式")
+            st.caption("我们需要了解你的实验需求，以便推荐最合适的参数和流程")
 
-        if onboarding_mode == "v3":
-            from components.onboarding_v3 import render_conversational_onboarding
-            if render_conversational_onboarding(app):
-                st.rerun()  # 完成问答后刷新页面
+            col1, col2 = st.columns(2)
+
+            with col1:
+                with st.container():
+                    st.markdown("### 🚀 快速模式")
+                    st.markdown("""
+                    **适合：** 熟悉流程、快速填写
+
+                    **方式：** 固定选项，直接选择
+
+                    **时间：** ~1分钟
+                    """)
+                    if st.button("选择快速模式", use_container_width=True, type="secondary", key="choose_quick"):
+                        st.session_state["_questionnaire_mode"] = "quick"
+                        st.rerun()
+
+            with col2:
+                with st.container():
+                    st.markdown("### 💬 智能模式")
+                    st.markdown("""
+                    **适合：** 新手、不确定参数
+
+                    **方式：** AI对话式提问，自然语言回答
+
+                    **时间：** ~2分钟
+                    """)
+                    if st.button("选择智能模式（推荐）", use_container_width=True, type="primary", key="choose_smart"):
+                        st.session_state["_questionnaire_mode"] = "smart"
+                        st.rerun()
+
+            return  # 等待用户选择模式
+
+        # Step 2: 根据选择的模式渲染问卷
+        questionnaire_mode = st.session_state["_questionnaire_mode"]
+
+        if questionnaire_mode == "smart":
+            # 智能模式：使用新的对话式问卷
+            from components.smart_questionnaire import render_smart_questionnaire
+            user_profile = render_smart_questionnaire(app)
+            if user_profile:
+                # 问卷完成，保存结果
+                st.session_state["user_profile"] = user_profile
+                st.session_state["onboarding_completed"] = True
+                st.rerun()
         else:
+            # 快速模式：使用 v2 固定选项问卷
             from components.onboarding_v2 import render_onboarding_dialog
-            # 提供切回对话式的入口
-            if st.button("💬 改用对话式规划", key="switch_to_v3"):
-                st.session_state["_onboarding_mode"] = "v3"
+            # 提供切换到智能模式的入口
+            if st.button("💬 改用智能模式", key="switch_to_smart"):
+                st.session_state["_questionnaire_mode"] = "smart"
                 st.rerun()
             if render_onboarding_dialog():
                 st.rerun()
+
         return  # 问答未完成时阻止后续内容渲染
 
     # ── 问卷完成后的分支逻辑 ──────────────────────────────
+
+    # ✨ Step 3: 参数配置界面（在 wizard 之前）
+    if not st.session_state.get("params_confirmed", False):
+        st.markdown("## 🔧 Step 3: 参数配置")
+        st.info(
+            "根据你的问卷信息，AI 为你推荐了最优参数。\n\n"
+            "你可以直接采用，或根据实际情况调整。"
+        )
+
+        # 生成 AI 推荐参数
+        user_profile = st.session_state.get("user_profile", {})
+
+        # 检查是否已有推荐参数，避免重复生成
+        if "recommended_params" not in st.session_state or "ai_reasons" not in st.session_state:
+            recommended_params, ai_reasons = recommend_parameters(user_profile)
+            st.session_state["recommended_params"] = recommended_params
+            st.session_state["ai_reasons"] = ai_reasons
+        else:
+            recommended_params = st.session_state["recommended_params"]
+            ai_reasons = st.session_state["ai_reasons"]
+
+        # 渲染参数配置界面
+        confirmed_params = render_parameter_section(
+            recommended_params=recommended_params,
+            user_profile=user_profile,
+            current_values=st.session_state.get("confirmed_params", {}),
+            ai_reasons=ai_reasons
+        )
+
+        # 保存到 session_state 和 graph state
+        if confirmed_params:
+            st.session_state["confirmed_params"] = confirmed_params
+            st.session_state["params_confirmed"] = True
+
+            # 同步到 graph state
+            if hasattr(state, "params"):
+                state.params.update(confirmed_params)
+
+            # 同步到 state 的顶层属性（cryosparc_workflow 会读取这些）
+            for key, value in confirmed_params.items():
+                if hasattr(state, key):
+                    setattr(state, key, value)
+
+            st.success("✅ 参数配置完成！")
+            st.rerun()
+
+        return  # 等待用户确认参数后再继续
+
     wizard_completed = st.session_state.get("wizard_completed", False)
     wizard_active = st.session_state.get("wizard_active", False)
 

@@ -160,7 +160,7 @@
       "step": "cp_03",
       "symptoms": [],
       "symptoms_text": "不知道 CTF 计算结果是否良好",
-      "solution": "**判断标准：** CTF Fit Resolution 条形图的分布\n\n**✅ 好数据（Good）：**\n- 峰形尖锐，大部分 micrograph 集中在 3.0-4.0 Å 狭窄范围\n- 单峰分布，表示数据高度均一性和可靠性\n- 是后续高分辨率结构解析的坚实基础\n\n**❌ 需警惕（Bad）：**\n- 大量 micrograph 的 CTF Fit Resolution 在 7 Å 以上\n- 条形图分散，表示数据存在异质性\n- 需要回头检查制样或数据收集环节\n\n**总结：** 条形图的"集中"代表均一性，"分散"是警示信号",
+      "solution": "**判断标准：** CTF Fit Resolution 条形图的分布\n\n**✅ 好数据（Good）：**\n- 峰形尖锐，大部分 micrograph 集中在 3.0-4.0 Å 狭窄范围\n- 单峰分布，表示数据高度均一性和可靠性\n- 是后续高分辨率结构解析的坚实基础\n\n**❌ 需警惕（Bad）：**\n- 大量 micrograph 的 CTF Fit Resolution 在 7 Å 以上\n- 条形图分散，表示数据存在异质性\n- 需要回头检查制样或数据收集环节\n\n**总结：** 条形图的'集中'代表均一性，'分散'是警示信号",
       "related_params": {
         "good_range": "3.0-4.0 Å",
         "warning_threshold": "> 7 Å"
@@ -206,7 +206,7 @@
       "step": "cp_03",
       "symptoms": [],
       "symptoms_text": "Patch CTF 曲面有起伏，不知道是否正常",
-      "solution": "**曲面含义：** Z 轴是 defocus 值，X/Y 是空间坐标，表示"defocus 随位置变化"\n\n**起伏形态判断：**\n\n1. **✅ 可接受：单向平滑倾斜（像斜坡）**\n   - 原因：grid 整体倾斜\n   - 处理：Patch CTF 能校正\n\n2. **⚠️ 需关注：波浪状、碗状、马鞍状弯曲**\n   - 原因：grid 弯曲或冰厚不均\n   - 处理：关注局部分辨率\n\n3. **❌ 直接剔除：局部尖锐突起/凹陷**\n   - 原因：污染、冰晶、气泡\n   - 处理：删除整张图\n\n**幅度阈值：**\n- ✅ **无碍：** 整图 defocus 变化 < 1500 Å\n- ⚠️ **警惕：** > 3000-5000 Å\n\n**配合指标：**\n- CTF fit resolution < 5 Å\n- Astigmatism < 200 nm\n\n**实操建议：**\n1. 先用 Exposure Curation 按 ctf_fit_resolution 和 astigmatism 筛一轮\n2. 回头看保留图是否还普遍起伏\n3. 如果大量图都严重弯曲 → 制样问题（冰太厚、grid 没夹紧、vitrification 不均）→ 需优化 grid 制备\n\n**一句话总结：** 平面看 grid 倾斜与冰厚均匀度，起伏形态看制样质量，幅度+CTF fit 看该删哪些图",
+      "solution": "**曲面含义：** Z 轴是 defocus 值，X/Y 是空间坐标，表示'defocus 随位置变化'\n\n**起伏形态判断：**\n\n1. **✅ 可接受：单向平滑倾斜（像斜坡）**\n   - 原因：grid 整体倾斜\n   - 处理：Patch CTF 能校正\n\n2. **⚠️ 需关注：波浪状、碗状、马鞍状弯曲**\n   - 原因：grid 弯曲或冰厚不均\n   - 处理：关注局部分辨率\n\n3. **❌ 直接剔除：局部尖锐突起/凹陷**\n   - 原因：污染、冰晶、气泡\n   - 处理：删除整张图\n\n**幅度阈值：**\n- ✅ **无碍：** 整图 defocus 变化 < 1500 Å\n- ⚠️ **警惕：** > 3000-5000 Å\n\n**配合指标：**\n- CTF fit resolution < 5 Å\n- Astigmatism < 200 nm\n\n**实操建议：**\n1. 先用 Exposure Curation 按 ctf_fit_resolution 和 astigmatism 筛一轮\n2. 回头看保留图是否还普遍起伏\n3. 如果大量图都严重弯曲 → 制样问题（冰太厚、grid 没夹紧、vitrification 不均）→ 需优化 grid 制备\n\n**一句话总结：** 平面看 grid 倾斜与冰厚均匀度，起伏形态看制样质量，幅度+CTF fit 看该删哪些图",
       "related_params": {
         "defocus_ok": "< 1500 Å",
         "defocus_warning": "> 3000-5000 Å",
@@ -256,7 +256,7 @@
       "step": "cp_06",
       "symptoms": [],
       "symptoms_text": "2D class 结果不知道如何判断好坏",
-      "solution": "**Blob Picking 的特点：** 无模板、纯靠形状大小筛颗粒，不引入 model bias，是对"样品里到底有什么"的一次诚实照镜子\n\n**✅ 好的 2D class（保留）：**\n- 轮廓清晰锐利\n- 有二级结构特征（α-螺旋点状密度、β-折叠条纹）\n- 颗粒边界锐利\n- 内部密度分布合理\n- 不同 class 间呈连续取向分布（说明方向覆盖好）\n\n**含义：** 蛋白表达良好、冰层厚度合适、颗粒取向覆盖充分，后续大概率能拿到好的 3D 结构\n\n**❌ 坏的 2D class（删除）：**\n- 纯噪声背景\n- 模糊一团无法分辨结构\n- 明显是冰/碳边/污染碎片\n- 颗粒聚集堆叠成块\n- 只有极少数颗粒且取向高度重复（preferred orientation）\n\n**含义：** 样品或制样出了问题\n\n**选择原则：** "看得清结构、取向多样"的留，"看不清、是垃圾、或取向单一"的删，这一步筛得越狠，后面 3D refinement 越干净\n\n**配图说明：**\n- 左侧 Good：清晰的蛋白结构投影，可见二级结构\n- 右侧 Bad：模糊、聚集、噪声",
+      "solution": "**Blob Picking 的特点：** 无模板、纯靠形状大小筛颗粒，不引入 model bias，是对'样品里到底有什么'的一次诚实照镜子\n\n**✅ 好的 2D class（保留）：**\n- 轮廓清晰锐利\n- 有二级结构特征（α-螺旋点状密度、β-折叠条纹）\n- 颗粒边界锐利\n- 内部密度分布合理\n- 不同 class 间呈连续取向分布（说明方向覆盖好）\n\n**含义：** 蛋白表达良好、冰层厚度合适、颗粒取向覆盖充分，后续大概率能拿到好的 3D 结构\n\n**❌ 坏的 2D class（删除）：**\n- 纯噪声背景\n- 模糊一团无法分辨结构\n- 明显是冰/碳边/污染碎片\n- 颗粒聚集堆叠成块\n- 只有极少数颗粒且取向高度重复（preferred orientation）\n\n**含义：** 样品或制样出了问题\n\n**选择原则：** '看得清结构、取向多样'的留，'看不清、是垃圾、或取向单一'的删，这一步筛得越狠，后面 3D refinement 越干净\n\n**配图说明：**\n- 左侧 Good：清晰的蛋白结构投影，可见二级结构\n- 右侧 Bad：模糊、聚集、噪声",
       "related_params": {},
       "tags": ["2D Classification", "Blob Picking", "质量评估", "二级结构"],
       "images": ["46.png"],

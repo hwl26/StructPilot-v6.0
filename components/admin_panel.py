@@ -186,6 +186,7 @@ def render_user_management():
                             users_data["users"] = users
                             save_users(users_data)
                             st.success(f"✅ 已删除用户：{username}")
+                            st.session_state.pop(f"confirm_delete_{username}", None)
                             st.rerun()
                         else:
                             st.session_state[f"confirm_delete_{username}"] = True
@@ -249,7 +250,7 @@ def render_experience_review():
                             if e.get("id") == exp.get("id"):
                                 e["status"] = "approved"
                                 e["approved_at"] = datetime.now().isoformat()
-                                e["approved_by"] = "admin"  # TODO: 使用实际管理员用户名
+                                e["approved_by"] = st.session_state.get("username", "admin")
                                 break
 
                         _LAB_EXP_PATH.write_text(
@@ -282,7 +283,7 @@ def render_experience_review():
                             if e.get("id") == exp.get("id"):
                                 e["status"] = "rejected"
                                 e["rejected_at"] = datetime.now().isoformat()
-                                e["rejected_by"] = "admin"
+                                e["rejected_by"] = st.session_state.get("username", "admin")
                                 break
 
                         _LAB_EXP_PATH.write_text(

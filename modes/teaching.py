@@ -158,7 +158,10 @@ def _render_quiz(cp_id: str, questions: list[dict]) -> None:
             if st.session_state[answers_key].get(i) == q.get("correct")
         )
         prog["score"] = correct
-        prog["attempts"] = prog.get("attempts", 0) + 1
+        # 只在首次进入结果页时累加 attempts，避免每次 rerun 都递增
+        if not st.session_state.get(f"_quiz_attempts_counted_{cp_id}", False):
+            prog["attempts"] = prog.get("attempts", 0) + 1
+            st.session_state[f"_quiz_attempts_counted_{cp_id}"] = True
 
         if correct >= len(questions) * 0.67:
             prog["quiz_passed"] = True

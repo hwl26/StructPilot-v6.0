@@ -42,7 +42,11 @@ _DEFAULTS: Dict[str, Any] = {
     "history_limit": 8,
     "last_answer": "",
     "last_feedback": "",
+    # app_mode: UI渲染模式，控制界面呈现方式（beginner/teaching/expert）
+    # 注意与 output_mode 区分：output_mode 是 LLM 回复风格，app_mode 是界面渲染模式
+    "app_mode": "beginner",
     # Output mode: "concise" | "teaching" | "expert"
+    # LLM回复风格，与 app_mode（UI渲染模式）相互独立
     "output_mode": "teaching",
     # Mode: "basic" | "ai" — auto-detected from API key availability
     "llm_mode": "basic",

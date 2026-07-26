@@ -7,7 +7,11 @@ import re
 import time
 from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple
 
+import logging
+
 from langgraph.graph import END, StateGraph
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from agents.navigator_agent import NavigatorAgent
@@ -776,7 +780,13 @@ class StructPilotApp:
         self._stream_sink = stream_sink
         try:
             self.memory.ingest_user_message(state, user_text)
-            result = self.graph.invoke(state)
+            try:
+                result = self.graph.invoke(state)
+            except Exception as e:
+                logger.error(f"graph.invoke 执行失败: {e}")
+                state.error = str(e)
+                state.error_node = "graph.invoke"
+                result = state
         finally:
             self._stream_sink = None
         if isinstance(result, PipelineState):

@@ -48,7 +48,7 @@ def validate_file_path(path: str, allowed_base: Path) -> Path | None:
         base_resolved = allowed_base.resolve()
 
         # 检查是否在允许的目录内
-        if not str(resolved).startswith(str(base_resolved)):
+        if not resolved.is_relative_to(base_resolved):
             return None
 
         return resolved
@@ -132,6 +132,6 @@ def sanitize_user_input(text: str, max_length: int = 10000) -> str:
     text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', text)
 
     # 转义 HTML
-    text = html.escape(text, quote=False)
+    text = html.escape(text)
 
     return text

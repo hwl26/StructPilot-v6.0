@@ -307,13 +307,19 @@ def _render_kb_contribute_panel(current_cp: dict) -> None:
                     threshold=0.80
                 )
                 if similar:
-                    st.warning(
-                        f"⚠️ 发现相似的经验（相似度 {similar[0]['similarity']:.0%}）：\n\n"
-                        f"**{similar[0]['entry'].get('title', '')}**\n\n"
-                        f"确定要继续提交吗？可能造成重复。"
-                    )
-                    if not st.button("✓ 确认提交（不是重复）", key=f"confirm_submit_{cp_id}"):
+                    if not st.session_state.get("_expert_dup_confirmed", False):
+                        st.warning(
+                            f"⚠️ 发现相似的经验（相似度 {similar[0]['similarity']:.0%}）：\n\n"
+                            f"**{similar[0]['entry'].get('title', '')}**\n\n"
+                            f"确定要继续提交吗？可能造成重复。"
+                        )
+                        if st.button("✓ 确认提交（不是重复）", key=f"confirm_submit_{cp_id}"):
+                            st.session_state["_expert_dup_confirmed"] = True
+                            st.rerun()
                         st.stop()
+                    else:
+                        # 已确认，清除 flag，继续执行保存逻辑
+                        st.session_state.pop("_expert_dup_confirmed", None)
             except (ImportError, Exception):
                 pass  # 去重检测可选
 

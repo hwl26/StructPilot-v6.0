@@ -231,5 +231,45 @@
     "source": "official_doc_relion",
     "source_url": "https://relion.readthedocs.io/en/release-5.0/SPA_tutorial/Introduction.html",
     "imported_at": "2026-07-10T10:52:44"
+  },
+  {
+    "doc_id": "[实验室操作指南] RELION详细操作·数据导入图文教程",
+    "software": "relion",
+    "checkpoint_id": "cp_01",
+    "title_cn": "RELION Import 图文操作指南（含界面截图）",
+    "title_en": "RELION Import Step-by-Step Guide with Screenshots",
+    "summary": "RELION 数据导入的实际操作步骤与界面截图。关键要点：1. 不点击Browse，直接手动输入 Movies/*.eer 或 *.tif；2. 填写 pixel size (0.96)、voltage (300kV)、Cs (2.7mm)；3. 点击 Run 后检查生成的 movies.star 文件；4. 确认导入成功：命令行显示 'Written Import/job001/movies.star with XXX items'。包含6张实际界面截图。",
+    "action_steps": [
+      "打开 RELION GUI：relion & 或 module load relion/5.0.4",
+      "在 Import 界面手动输入 Raw input files: Movies/*.eer（不用Browse）",
+      "填写参数：Pixel size 0.96, Voltage 300, Cs 2.7, Optics group opticsGroup1",
+      "点击 Run，在下方窗口点击 001: Import/job001/ 确认生成 movies.star",
+      "验证导入成功：日志显示 'Written Import/job001/movies.star with XXX items'"
+    ],
+    "qc_checks": [
+      "日志输出 'Written Import/job001/movies.star with XXX items (XXX new items)'",
+      "下方窗口可点击 001: Import/job001/",
+      "生成了有效的 .star 文件"
+    ],
+    "common_errors": [
+      "点击 Browse 按钮可能无法识别通配符 *",
+      "手动输入路径更可靠"
+    ],
+    "image_refs": [
+      "../../assets/relion_screenshots/import_interface.png",
+      "../../assets/relion_screenshots/import_success.png"
+    ],
+    "tags": [
+      "lab_guide",
+      "relion",
+      "cp_01",
+      "screenshot",
+      "beginner_friendly"
+    ],
+    "tier": "note",
+    "status": "formal_ready",
+    "source": "lab_operation_guide",
+    "source_url": "../../docs/relion_spa/DetailedOperationGuide.md",
+    "imported_at": "2026-07-26T20:00:00"
   }
 ]

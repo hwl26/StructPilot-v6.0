@@ -8,8 +8,30 @@
 """
 
 import re
+import json
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Tuple
+
+_FAILED_ATTEMPTS_FILE = Path(__file__).parent.parent / "runtime" / "failed_attempts.json"
+
+
+def _load_attempts() -> dict:
+    try:
+        if _FAILED_ATTEMPTS_FILE.exists():
+            return json.loads(_FAILED_ATTEMPTS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_attempts(data: dict) -> None:
+    try:
+        _FAILED_ATTEMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _FAILED_ATTEMPTS_FILE.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
 
 # 强密码策略配置
 PASSWORD_POLICY = {
@@ -56,55 +78,58 @@ def validate_password_strength(password: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def check_failed_attempts(username: str, failed_attempts: dict) -> Tuple[bool, str]:
-    """检查登录失败次数，防暴力破解。
-
-    Parameters
-    ----------
-    username : str
-        用户名
-    failed_attempts : dict
-        {username: {"count": 3, "last_attempt": datetime}}
+def check_failed_attempts(username: str, failed_attempts: dict = None) -> Tuple[bool, str]:
+    """检查登录失败次数，防暴力破解。使用持久化文件存储，failed_attempts 参数保留向后兼容但忽略。
 
     Returns
     -------
     (is_locked, message)
     """
-    if username not in failed_attempts:
+    data = _load_attempts()
+
+    if username not in data:
         return False, ""
 
-    record = failed_attempts[username]
+    record = data[username]
     count = record.get("count", 0)
-    last_attempt = record.get("last_attempt")
+    last_attempt_str = record.get("last_attempt")
 
-    if count >= PASSWORD_POLICY["max_failed_attempts"]:
-        # 检查锁定是否过期
-        if last_attempt:
-            lockout_until = last_attempt + timedelta(seconds=PASSWORD_POLICY["lockout_duration"])
-            if datetime.now() < lockout_until:
-                remaining = int((lockout_until - datetime.now()).total_seconds())
-                return True, f"账号已锁定，请 {remaining} 秒后重试"
-            else:
-                # 锁定过期，重置计数
-                failed_attempts[username] = {"count": 0, "last_attempt": None}
-                return False, ""
+    if count >= PASSWORD_POLICY["max_failed_attempts"] and last_attempt_str:
+        try:
+            last_attempt = datetime.fromisoformat(last_attempt_str)
+        except Exception:
+            return False, ""
+        lockout_until = last_attempt + timedelta(seconds=PASSWORD_POLICY["lockout_duration"])
+        if datetime.now() < lockout_until:
+            remaining = int((lockout_until - datetime.now()).total_seconds())
+            return True, f"账号已锁定，请 {remaining} 秒后重试"
+        else:
+            # 锁定过期，重置计数
+            data[username] = {"count": 0, "last_attempt": None}
+            _save_attempts(data)
+            return False, ""
 
     return False, ""
 
 
-def record_failed_attempt(username: str, failed_attempts: dict) -> None:
-    """记录登录失败。"""
-    if username not in failed_attempts:
-        failed_attempts[username] = {"count": 0, "last_attempt": None}
+def record_failed_attempt(username: str, failed_attempts: dict = None) -> None:
+    """记录登录失败。使用持久化文件存储，failed_attempts 参数保留向后兼容但忽略。"""
+    data = _load_attempts()
 
-    failed_attempts[username]["count"] += 1
-    failed_attempts[username]["last_attempt"] = datetime.now()
+    if username not in data:
+        data[username] = {"count": 0, "last_attempt": None}
+
+    data[username]["count"] += 1
+    data[username]["last_attempt"] = datetime.now().isoformat()
+    _save_attempts(data)
 
 
-def reset_failed_attempts(username: str, failed_attempts: dict) -> None:
-    """登录成功后重置失败计数。"""
-    if username in failed_attempts:
-        del failed_attempts[username]
+def reset_failed_attempts(username: str, failed_attempts: dict = None) -> None:
+    """登录成功后重置失败计数。使用持久化文件存储，failed_attempts 参数保留向后兼容但忽略。"""
+    data = _load_attempts()
+    if username in data:
+        del data[username]
+        _save_attempts(data)
 
 
 def check_password_expiry(user: dict) -> Tuple[bool, str]:

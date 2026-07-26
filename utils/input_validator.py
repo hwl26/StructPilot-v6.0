@@ -84,8 +84,8 @@ def sanitize_html(text: str, strip: bool = False) -> str:
                 strip=True,
             )
     else:
-        # Fallback：使用 html.escape
-        return html.escape(text) if strip else text
+        # Fallback：bleach 不可用时，始终做 HTML 转义防止 XSS
+        return html.escape(text, quote=True)
 
 
 def detect_dangerous_content(text: str) -> tuple[bool, list[str]]:

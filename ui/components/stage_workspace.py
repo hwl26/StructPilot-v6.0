@@ -933,6 +933,7 @@ def _render_qc_tab(
         st.caption("本阶段无质控标准。")
     else:
         st.markdown("**✅ 质控检查清单**")
+        st.caption("点击复选框标记完成，帮助您追踪质控进度")
 
         # 交互性质控清单
         qc_state_key = f"_qc_checks_done_{key_prefix}_{cp_id}"
@@ -941,18 +942,30 @@ def _render_qc_tab(
         last_qc = getattr(state, "last_qc_result", {}) or {}
         qc_passed = last_qc.get("passed")
 
+        # 使用美观的卡片式设计
         for idx, check in enumerate(qc_checks):
             is_checked = idx in qc_done
-            col1, col2 = st.columns([1, 20])
-            with col1:
-                if st.checkbox("done", value=is_checked, key=f"{key_prefix}_qc_{idx}", label_visibility="collapsed"):
+
+            # 单个质控项容器
+            with st.container():
+                # 使用checkbox作为主要交互元素，标签文字放在checkbox内部
+                checkbox_label = f"{'✅' if is_checked else '☐'} {check}"
+                new_checked = st.checkbox(
+                    checkbox_label,
+                    value=is_checked,
+                    key=f"{key_prefix}_qc_{idx}",
+                    label_visibility="visible"
+                )
+
+                # 更新状态
+                if new_checked:
                     qc_done.add(idx)
                 else:
                     qc_done.discard(idx)
                 st.session_state[qc_state_key] = qc_done
-            with col2:
-                st.markdown(f"{'✅' if is_checked else '☐'} {check}")
 
+        # 显示质控结果
+        st.divider()
         if qc_passed is True:
             render_qa_card({"status": "pass", "message": "当前质控通过"})
         elif qc_passed is False:

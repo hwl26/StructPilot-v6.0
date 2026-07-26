@@ -117,9 +117,11 @@ def _verify_password(password: str, password_hash: str) -> bool:
         except Exception:
             return False
     else:
-        # 旧的 SHA256 哈希（向后兼容）
-        computed = hashlib.sha256(password.encode()).hexdigest()
-        return secrets.compare_digest(computed, password_hash)
+        # 兼容旧的无盐SHA256（不安全，建议用户重置密码）
+        # 假设是 SHA256(password)
+        import hashlib
+        computed_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        return computed_hash == password_hash
 
 
 def authenticate(username: str, password: str) -> dict | None:
@@ -130,10 +132,33 @@ def authenticate(username: str, password: str) -> dict | None:
     dict | None
         成功返回用户信息，失败返回 None
     """
+    from utils.password_policy import check_failed_attempts, record_failed_attempt, reset_failed_attempts
+    from utils.server_session import generate_session_id, save_server_session
+
+    # 暴力破解防护检查
+    is_locked, lock_msg = check_failed_attempts(username, {})
+    if is_locked:
+        return None
+
     data = load_users()
     for user in data.get("users", []):
-        if user["username"] == username and _verify_password(password, user["password_hash"]):
+        # 用户名是公开信息，直接字符串比较即可
+        if user.get("username") == username and _verify_password(password, user["password_hash"]):
+            reset_failed_attempts(username, {})
+
+            # 生成 session_id 并保存到服务端
+            session_id = generate_session_id()
+            save_server_session(session_id, {
+                "username": user["username"],
+                "role": user.get("role", "user"),
+                "display_name": user.get("display_name", user["username"]),
+                "logged_in": True
+            })
+            user["session_id"] = session_id
+
             return user
+
+    record_failed_attempt(username, {})
     return None
 
 

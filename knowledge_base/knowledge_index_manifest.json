@@ -13,13 +13,13 @@
       "file": "cp_01_import.json",
       "checkpoint_id": "cp_01",
       "label": "import",
-      "doc_count": 5
+      "doc_count": 6
     },
     {
       "file": "cp_02_motioncorr.json",
       "checkpoint_id": "cp_02",
       "label": "motioncorr",
-      "doc_count": 7
+      "doc_count": 8
     },
     {
       "file": "cp_03_ctf.json",
@@ -82,6 +82,6 @@
       "doc_count": 6
     }
   ],
-  "total_doc_count": 62,
+  "total_doc_count": 64,
   "source_file": "knowledge_index.json (now a backup placeholder)"
 }

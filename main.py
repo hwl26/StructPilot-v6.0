@@ -83,6 +83,7 @@ from ui.components.desk_pet import render_desk_pet, handle_pet_quick_question
 from ui.components.simple_desk_pet import update_pet_mood
 from components.answer_source_display import render_answer_sources
 from components.forum_ui import render_forum_tab, render_question_detail  # 修正函数名
+from components.quick_note_v2 import check_split_note_mode
 from ui.styles import (
     THEMES, _WORKSPACE_CSS, _workspace_theme_css, build_global_styles,
 )
@@ -265,399 +266,6 @@ def prewarm_runtime_caches() -> dict:
     except Exception as exc:
         report["errors"].append(f"rag:{exc}")
     return report
-
-
-# NOTE: render_guide_card is currently unused (no callers in main.py or other modules).
-# Preserved for potential future reactivation. Consider removing if unused after next release cycle.
-def render_guide_card(card: dict, key_prefix: str = "") -> None:
-    """Render image tabs, clickable hot spots and parameter cards."""
-    if not isinstance(card, dict) or not card:
-        return
-    substeps = card.get("substeps") if isinstance(card.get("substeps"), list) else []
-    if not substeps:
-        return
-
-    st.markdown(
-        """
-<style>
-.sp-guide-placeholder {
-  min-height: 220px;
-  border: 1px dashed #b8c4d6;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: #64748b;
-  background: #f8fafc;
-  padding: 18px;
-  margin-top: 8px;
-}
-.sp-param-grid {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.9fr) minmax(180px, 1.4fr) minmax(180px, 1.4fr) minmax(120px, 1fr);
-  gap: 1px;
-  background: #dbe3ef;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-top: 10px;
-}
-.sp-param-cell {
-  background: #ffffff;
-  padding: 9px 10px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-.sp-param-head {
-  background: #eef4fb;
-  font-weight: 650;
-  color: #334155;
-}
-.sp-param-name {
-  font-weight: 650;
-  color: #0f766e;
-  cursor: help;
-  text-decoration: underline dotted #94a3b8;
-  text-underline-offset: 3px;
-}
-.sp-guide-image-wrap {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-.sp-guide-image-wrap img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.sp-guide-image-wrap img.sp-lazy-img {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 220px;
-  width: 100%;
-}
-.sp-hotspot {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 2px solid #fff;
-  background: #2563eb;
-  color: #fff !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-decoration: none !important;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.28);
-}
-.sp-hotspot:hover { background: #0f766e; }
-.sp-image-switch-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 8px 0 10px 0;
-}
-.sp-image-badge {
-  border: 1px solid #dbe3ef;
-  background: #f8fafc;
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 0.78rem;
-  color: #334155;
-}
-.sp-param-card {
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  background: #fff;
-  padding: 10px 12px;
-  margin-top: 8px;
-}
-.sp-param-card summary {
-  cursor: pointer;
-  font-weight: 650;
-  color: #0f172a;
-}
-.sp-param-meta {
-  color: #64748b;
-  font-size: 0.82rem;
-  margin: 4px 0 8px 0;
-}
-.sp-param-tip {
-  margin-top: 6px;
-  font-size: 0.88rem;
-  line-height: 1.5;
-}
-@media (max-width: 720px) {
-  .sp-param-grid { grid-template-columns: 1fr; }
-  .sp-param-head { display: none; }
-}
-.sp-guide-shell {
-  border: 1px solid #d9e2ef;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 14px 16px;
-  margin: 10px 0 12px 0;
-}
-.sp-guide-kicker {
-  color: #2563eb;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.sp-guide-title {
-  color: #0f172a;
-  font-size: 1.12rem;
-  font-weight: 750;
-  line-height: 1.35;
-  margin: 0;
-}
-.sp-guide-note {
-  color: #64748b;
-  font-size: 0.88rem;
-  line-height: 1.55;
-  margin-top: 6px;
-}
-.sp-screen-panel {
-  border: 1px solid #d9e2ef;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 10px;
-  margin-top: 10px;
-}
-.sp-screen-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #475569;
-  font-size: 0.82rem;
-  margin-bottom: 8px;
-}
-.sp-screen-title { font-weight: 650; color: #334155; }
-.sp-image-badge { border-radius: 6px; padding: 5px 9px; background: #ffffff; }
-.sp-param-list {
-  border: 1px solid #d9e2ef;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-top: 12px;
-  background: #ffffff;
-}
-.sp-param-list-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #eef4fb;
-  color: #334155;
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-.sp-param-card {
-  border-radius: 0;
-  border-width: 1px 0 0 0;
-  margin-top: 0;
-}
-.sp-param-titleline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sp-param-check {
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  border: 1px solid #93c5fd;
-  background: #dbeafe;
-  display: inline-block;
-}
-.sp-param-chip {
-  border: 1px solid #dbe3ef;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
-  font-size: 0.74rem;
-  font-weight: 650;
-  padding: 2px 7px;
-}
-</style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    title = str(card.get("title") or "Guide card")
-    cp_id = str(card.get("checkpoint_id") or card.get("cp_id") or "StructPilot Guide")
-    status = str(card.get("status") or "")
-    review_note = "阶段切换后优先显示真实界面截图、关键参数和可点击热区；参数建议仍需结合项目记录核对。"
-    if status and status not in {"reviewed", "runtime_allowed"}:
-        review_note = f"Draft guide card pending expert review. {review_note}"
-    st.markdown(
-        f'<section class="sp-guide-shell"><div class="sp-guide-kicker">{html.escape(cp_id)}</div>'
-        f'<h3 class="sp-guide-title">{html.escape(title)}</h3>'
-        f'<div class="sp-guide-note">{html.escape(review_note)}</div></section>',
-        unsafe_allow_html=True,
-    )
-
-    labels = [str(item.get("label") or item.get("tab_name") or item.get("id") or f"step_{i + 1}") for i, item in enumerate(substeps)]
-    tabs = st.tabs(labels)
-    used_image_signatures = set()
-    used_visual_hashes = []
-    for tab_idx, (tab, item) in enumerate(zip(tabs, substeps)):
-        with tab:
-            images = item.get("images") if isinstance(item.get("images"), list) else []
-            if not images and item.get("image"):
-                images = [{"path": item.get("image"), "caption": item.get("caption") or item.get("label"), "image_id": "1"}]
-            if not images and item.get("path"):
-                images = [{"path": item.get("path"), "caption": item.get("caption") or item.get("label"), "image_id": "1"}]
-
-            unique_images = []
-            duplicate_count = 0
-            for image_item in images:
-                signature = guide_image_signature(image_item)
-                if signature and signature in used_image_signatures:
-                    duplicate_count += 1
-                    continue
-                visual_hash = guide_image_visual_hash(image_item)
-                if visual_hash and any(hamming_distance(visual_hash, seen_hash) <= GUIDE_VISUAL_HASH_DISTANCE_THRESHOLD for seen_hash in used_visual_hashes):
-                    duplicate_count += 1
-                    continue
-                if signature:
-                    used_image_signatures.add(signature)
-                if visual_hash:
-                    used_visual_hashes.append(visual_hash)
-                unique_images.append(image_item)
-            images = unique_images
-
-            params = item.get("parameters") if isinstance(item.get("parameters"), list) else []
-            selected_image_idx = 0
-            if len(images) > 1:
-                image_options = []
-                image_label_map = {}
-                for img_idx, img in enumerate(images, start=1):
-                    img_id = str(img.get("image_id") or img_idx)
-                    caption = str(img.get("caption") or img.get("filename") or img.get("path") or "image")
-                    label = f"图 {img_id}: {caption}"
-                    image_options.append(label)
-                    image_label_map[label] = img_idx - 1
-                item_key = re.sub(r"[^0-9A-Za-z_]+", "_", str(item.get("id") or item.get("label") or tab_idx))
-                selected_label = st.radio(
-                    "选择截图",
-                    image_options,
-                    horizontal=True,
-                    label_visibility="collapsed",
-                    key=f"guide_image_{key_prefix}_{cp_id}_{tab_idx}_{item_key}",
-                )
-                selected_image_idx = image_label_map.get(selected_label, 0)
-
-            if images:
-                image_item = images[min(selected_image_idx, len(images) - 1)]
-                images_to_show = [(selected_image_idx + 1, image_item)]
-            else:
-                placeholder = "该按钮暂无独立截图。" if duplicate_count else "Image placeholder"
-                if duplicate_count:
-                    placeholder = "已隐藏与其他按钮重复或相似的截图，避免 I/O、Motion、2D 等页面显示相同图片。"
-                images_to_show = [(1, {"caption": placeholder})]
-
-            for image_idx, image_item in images_to_show:
-                image_id = str(image_item.get("image_id") or image_idx)
-                image_path = resolve_guide_asset(str(image_item.get("path") or image_item.get("image") or ""))
-                caption = html.escape(str(image_item.get("caption") or item.get("caption") or item.get("label") or ""))
-                if image_path:
-                    data_url = image_data_url(image_path)
-                    hotspots = []
-                    for param in params:
-                        if not isinstance(param, dict):
-                            continue
-                        ref = str(param.get("image_ref") or "@image#1")
-                        match = re.search(r"@image#(\d+)", ref)
-                        ref_id = match.group(1) if match else "1"
-                        if ref_id != image_id:
-                            continue
-                        x = param.get("hotspot_x")
-                        y = param.get("hotspot_y")
-                        if x is None or y is None:
-                            continue
-                        order = html.escape(str(param.get("hotspot_order") or "?"))
-                        pname = html.escape(str(param.get("param_name_cn") or param.get("name_cn") or param.get("name") or param.get("id") or param.get("param_id") or "parameter"))
-                        anchor = html.escape(str(param.get("param_id") or param.get("id") or param.get("name") or pname))
-                        hotspots.append(
-                            f'<a class="sp-hotspot" href="#sp-param-{anchor}" title="{pname}" '
-                            f'style="left:{float(x):.3f}%;top:{float(y):.3f}%;">{order}</a>'
-                        )
-                    # Use lazy_image_html: shows placeholder, swaps to real
-                    # image via IntersectionObserver when scrolled into view.
-                    lazy_img_tag = lazy_image_html(
-                        src=data_url,
-                        alt=caption,
-                        placeholder_text="Scroll to load image...",
-                        img_id=f"guide_img_{cp_id}_{tab_idx}_{image_idx}",
-                    )
-                    st.markdown(
-                        f'<div class="sp-screen-panel"><div class="sp-screen-topbar">'
-                        f'<span class="sp-screen-title">界面截图</span><span>{image_idx} / {max(len(images), 1)}</span></div>'
-                        f'<div class="sp-guide-image-wrap">{lazy_img_tag}{"".join(hotspots)}</div>'
-                        f'<div class="sp-param-meta">{caption}</div></div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    placeholder = html.escape(str(image_item.get("caption") or item.get("caption") or "Image placeholder"))
-                    st.markdown(f'<div class="sp-guide-placeholder">{placeholder}</div>', unsafe_allow_html=True)
-
-            if not params:
-                continue
-
-            # 改动8：过滤掉标记为 show_in_checklist=false 的参数，减少冗余信息
-            visible_params = [
-                p for p in params
-                if isinstance(p, dict) and p.get("show_in_checklist", True)
-            ]
-            if not visible_params:
-                continue
-
-            cells = ['<div class="sp-param-list"><div class="sp-param-list-head"><span>参数核对</span><span>Parameter checklist</span></div>']
-            for param in visible_params:
-                pid = html.escape(str(param.get("param_id") or param.get("id") or param.get("name") or "parameter"))
-                name_cn = html.escape(str(param.get("param_name_cn") or param.get("name_cn") or param.get("name") or pid))
-                name_en = html.escape(str(param.get("param_name_en") or param.get("name_en") or ""))
-                default = html.escape(str(param.get("default_value") or param.get("default") or ""))
-                unit = html.escape(str(param.get("unit") or ""))
-                ptype = html.escape(str(param.get("type") or ""))
-                desc = html.escape(str(param.get("description") or param.get("meaning") or ""))
-                tips = param.get("tips") if isinstance(param.get("tips"), dict) else {}
-                official = html.escape(str(tips.get("official_doc") or param.get("official_doc") or param.get("how_to_choose") or ""))
-                mistake = html.escape(str(tips.get("common_mistake") or param.get("common_mistake") or param.get("risk") or ""))
-                meta = " · ".join(x for x in [name_en, ptype, f"默认 {default}{unit}" if default else ""] if x)
-                chips = []
-                if ptype:
-                    chips.append(f'<span class="sp-param-chip">{ptype}</span>')
-                if default:
-                    chips.append(f'<span class="sp-param-chip">default {default}{unit}</span>')
-                card_parts = [
-                    f'<details id="sp-param-{pid}" class="sp-param-card">',
-                    f'<summary><span class="sp-param-titleline"><span class="sp-param-check"></span><span>{name_cn}</span>{"".join(chips)}</span></summary>',
-                    f'<div class="sp-param-meta">{html.escape(meta)}</div>',
-                    f'<div>{desc}</div>',
-                ]
-                if official:
-                    card_parts.append(f'<div class="sp-param-tip"><b>官方/规则：</b>{official}</div>')
-                # 「实验室经验」字段已移除（见优化建议），仅保留官方说明与常见陷阱
-                if mistake:
-                    card_parts.append(f'<div class="sp-param-tip"><b>⚠️ 常见陷阱：</b>{mistake}</div>')
-                card_parts.append('</details>')
-                cells.append("".join(card_parts))
-            cells.append('</div>')
-            st.markdown("".join(cells), unsafe_allow_html=True)
 
 
 def build_session_report(state: PipelineState, cp_total: int) -> str:
@@ -1046,7 +654,22 @@ def handle_local_flow_command(text: str, response_profile: str = "teaching") -> 
 # --------------------------------------------------------------------------- #
 # Page config & theme
 # --------------------------------------------------------------------------- #
-st.set_page_config(page_title=APP_DISPLAY_NAME, page_icon="🔬", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=APP_DISPLAY_NAME, page_icon="🔬", layout="wide", initial_sidebar_state="collapsed")
+
+# ✨ 服务端 session 恢复（URL params）
+from utils.server_session import load_server_session, cleanup_expired_sessions
+
+# 清理过期 session（后台任务）
+cleanup_expired_sessions()
+
+# 尝试从 URL query params 恢复 session
+if "logged_in" not in st.session_state or not st.session_state.get("logged_in"):
+    query_params = st.query_params
+    if "sid" in query_params:
+        session_data = load_server_session(query_params["sid"])
+        if session_data:
+            st.session_state.update(session_data)
+            st.toast("✅ 会话已恢复", icon="✅")
 
 _ui_settings = load_ui_settings()
 st.session_state.setdefault("ui_theme", _ui_settings["ui_theme"])
@@ -1652,16 +1275,13 @@ def run_command(
         _accum["text"] += chunk
         _stream_box.markdown(_accum["text"] + "▌")
 
-    _spinner_placeholder = st.spinner("正在思考...")
-    try:
+    with st.spinner("正在思考..."):
         new_state = app.handle(
             state,
             agent_text,
             response_profile=response_profile,
             stream_sink=_stream_sink,
         )
-    finally:
-        _spinner_placeholder.empty()
     _stream_box.empty()
     for msg in reversed(new_state.messages):
         if msg.role == "user":
@@ -1806,16 +1426,24 @@ with st.sidebar:
                         st.session_state.username = _user.get("username", "")
                         st.session_state.display_name = _user.get("display_name", _user.get("username", ""))
                         st.session_state.role = _user.get("role", "guest")
+                        st.session_state.session_id = _user.get("session_id", "")
 
-                        # 🆕 保存登录状态到 localStorage（防止刷新后退出）
-                        from utils.session_persistence import save_session_to_storage
-                        save_session_to_storage(
-                            username=_user.get("username", ""),
-                            role=_user.get("role", "guest"),
-                            display_name=_user.get("display_name", _user.get("username", ""))
-                        )
+                        # 🆕 将 session_id 写入 URL query params（Streamlit内部）
+                        if st.session_state.get("session_id"):
+                            sid = st.session_state["session_id"]
+                            st.query_params["sid"] = sid
 
-                        st.success(f"✅ 欢迎，{_user['display_name']}！")
+                            # 🆕 使用JavaScript修改浏览器地址栏（持久化到浏览器）
+                            components.html(f"""
+                            <script>
+                                const url = new URL(window.location.href);
+                                url.searchParams.set('sid', '{sid}');
+                                window.history.replaceState(null, '', url.toString());
+                                console.log('Session ID saved to URL:', '{sid}');
+                            </script>
+                            """, height=0)
+
+                        st.session_state["_login_welcome_msg"] = f"✅ 欢迎，{_user['display_name']}！"
                         # 检查是否需要强制修改密码
                         if _user.get("force_change_password"):
                             st.session_state["show_change_password_dialog"] = True
@@ -1836,14 +1464,34 @@ with st.sidebar:
                 _notes = load_user_notes(_auth_user.get("username", ""))
                 st.caption(f"📝 {len(_notes)} 条笔记")
             if st.button("🚪 退出", use_container_width=True, key="sidebar_logout"):
+                # 清除服务端 session
+                from utils.server_session import delete_server_session
+                if st.session_state.get("session_id"):
+                    delete_server_session(st.session_state["session_id"])
+
                 # 清除登录状态
                 st.session_state.current_user = None
                 st.session_state.logged_in = False
                 st.session_state.username = ""
                 st.session_state.display_name = ""
                 st.session_state.role = "guest"
+                st.session_state.session_id = ""
 
-                # 清除 localStorage
+                # 清除 URL query params（Streamlit内部）
+                if "sid" in st.query_params:
+                    del st.query_params["sid"]
+
+                # 清除浏览器地址栏中的sid参数（持久化）
+                components.html("""
+                <script>
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('sid');
+                    window.history.replaceState(null, '', url.toString());
+                    console.log('Session ID removed from URL');
+                </script>
+                """, height=0)
+
+                # 清除 localStorage（废弃方法，保留兼容性）
                 from utils.session_persistence import clear_session_from_storage
                 clear_session_from_storage()
 
@@ -2060,6 +1708,54 @@ with st.sidebar:
             st.session_state.last_feedback = "已删除会话"
             st.rerun()
 
+    # ✨ 参数调整入口（仅 expert 模式）
+    if st.session_state.app_mode == "expert":
+        st.divider()
+        st.markdown("### ⚙️ 参数管理")
+        if st.button("🔧 调整参数", use_container_width=True, key="adjust_params_btn"):
+            st.session_state["show_param_editor"] = True
+            st.rerun()
+
+        # 参数编辑弹窗
+        if st.session_state.get("show_param_editor", False):
+            with st.expander("📝 参数编辑器", expanded=True):
+                from components.parameter_card import render_parameter_section
+                from utils.param_recommender import recommend_parameters
+
+                # 获取当前参数或生成推荐
+                current_params = st.session_state.get("confirmed_params") or state.params
+                user_profile = st.session_state.get("user_profile", {})
+
+                if not current_params:
+                    recommended_params, ai_reasons = recommend_parameters(user_profile)
+                    current_params = recommended_params
+                    st.session_state["ai_reasons"] = ai_reasons
+
+                # 渲染参数编辑界面
+                confirmed_params = render_parameter_section(
+                    recommended_params=current_params,
+                    user_profile=user_profile,
+                    current_values=current_params,
+                    ai_reasons=st.session_state.get("ai_reasons", {})
+                )
+
+                # 保存参数
+                if confirmed_params:
+                    st.session_state["confirmed_params"] = confirmed_params
+                    state.params.update(confirmed_params)
+
+                    # 同步到 state 顶层属性
+                    for key, value in confirmed_params.items():
+                        if hasattr(state, key):
+                            setattr(state, key, value)
+
+                    st.success("✅ 参数已更新")
+
+                # 关闭按钮
+                if st.button("关闭编辑器", key="close_param_editor"):
+                    st.session_state["show_param_editor"] = False
+                    st.rerun()
+
     st.caption(f"LLM：{app.llm.status_text()}")
 
 
@@ -2151,19 +1847,66 @@ if st.session_state.last_feedback:
     st.info(st.session_state.last_feedback)
     st.session_state.last_feedback = ""
 
+if st.session_state.get("_login_welcome_msg"):
+    st.success(st.session_state.pop("_login_welcome_msg"))
+
+
+# --------------------------------------------------------------------------- #
+# 未读消息计数功能
+# --------------------------------------------------------------------------- #
+def get_unread_count() -> int:
+    """获取社区未读消息总数（讨论区新帖 + 留言板新帖）"""
+    unread = 0
+
+    # 获取上次查看时间戳
+    last_viewed = st.session_state.get("community_last_viewed", "")
+
+    # 检查讨论区新帖子
+    try:
+        from utils.forum_data import load_forum_data
+        forum_data = load_forum_data()
+        posts = forum_data.get("posts", [])
+        for post in posts:
+            if post.get("created_at", "") > last_viewed:
+                unread += 1
+    except Exception:
+        pass
+
+    # 检查留言板新帖子
+    try:
+        from components.lab_board import load_posts
+        board_posts = load_posts()
+        for post in board_posts:
+            if post.get("timestamp", "") > last_viewed:
+                unread += 1
+    except Exception:
+        pass
+
+    return unread
+
+
+# 计算未读消息数
+_community_unread = get_unread_count()
+
 # 动态Tab：根据模式决定显示哪些Tab
 _app_mode = st.session_state.get("app_mode", "beginner")
+
+# 生成社区Tab标签（带未读提示）
+if _community_unread > 0:
+    _community_label = f"👥 社区 🔴 {_community_unread}"
+else:
+    _community_label = "👥 社区"
+
 if _app_mode in ["beginner", "teaching"]:
-    # 快速/教学模式：显示对话、讨论区、我的空间和设置
-    tab_labels = ["对话陪跑", "💬 讨论区", "📝 我的空间", "设置"]
-    tab_chat, tab_forum, tab_myspace, tab_settings = st.tabs(tab_labels)
-    tab_community = None
+    # 快速/教学模式：显示对话、我的空间、社区和设置
+    tab_labels = ["对话陪跑", "📝 我的空间", _community_label, "设置"]
+    tab_chat, tab_myspace, tab_community, tab_settings = st.tabs(tab_labels)
     tab_admin = None
     tab_report = None  # 不显示报告导出
 else:
     # 高级模式：显示全部Tab
-    tab_labels = ["对话陪跑", "💬 讨论区", "📝 我的空间", "👥 社区", "🔧 管理员区", "报告导出", "设置"]
-    tab_chat, tab_forum, tab_myspace, tab_community, tab_admin, tab_report, tab_settings = st.tabs(tab_labels)
+    tab_labels = ["对话陪跑", "📝 我的空间", _community_label, "🔧 管理员区", "报告导出", "设置"]
+    tab_chat, tab_myspace, tab_community, tab_admin, tab_report, tab_settings = st.tabs(tab_labels)
 
 # ----- Tab 1: chat ----- #
 with tab_chat:
@@ -2454,668 +2197,671 @@ with tab_chat:
     # ====================================================================
     # 三模式路由：根据 app_mode 渲染不同界面
     # ====================================================================
-    _current_cp = _get_current_checkpoint_data(app, state)
-    _app_mode = st.session_state.app_mode
-
-    if _app_mode == "beginner":
-        # 快速模式：单栏简化布局
-        from modes import render_beginner_view
-        render_beginner_view(_current_cp, state, app, run_command)
-
-    elif _app_mode == "teaching":
-        # 教学模式：单栏教学卡片+测验
-        from modes import render_teaching_view
-        render_teaching_view(_current_cp, state, app)
-
-    elif _app_mode == "expert":
-        # 高级模式：保留原有双栏布局（workspace + chat）
-        # --- 4. Two-column layout: workspace + chat ---
-        _ws_col, _chat_col = st.columns([0.45, 0.55], gap="small")
-
-        # ===== Left column: Stage workspace =====
-        with _ws_col:
+    # ✨ 分屏笔记功能：根据用户设置决定是否启用双栏布局（主内容 + 笔记面板）
+    with check_split_note_mode() as layout:
+        with layout.main_area():
             _current_cp = _get_current_checkpoint_data(app, state)
+            _app_mode = st.session_state.app_mode
 
-            # 详细工作区（Step 导航 + 内容）
-            try:
-                workspace_container = st.container(height=420, border=False)
-            except TypeError:
-                workspace_container = st.container(border=False)
+            if _app_mode == "beginner":
+                # 快速模式：单栏简化布局
+                from modes import render_beginner_view
+                render_beginner_view(_current_cp, state, app, run_command)
 
-            with workspace_container:
-                render_stage_workspace(
-                    _current_cp,
-                    state.software,
-                    state,
-                    app,
-                    on_switch=switch_checkpoint,
-                    key_prefix="ws_main",
-                )
-                if st.session_state.get("_extracted_cards"):
-                    st.divider()
-                    render_suppressed_cards(key_prefix="ws_extracted")
+            elif _app_mode == "teaching":
+                # 教学模式：单栏教学卡片+测验
+                from modes import render_teaching_view
+                render_teaching_view(_current_cp, state, app)
 
-                # P2-10: 预加载下一检查点的图片（后台线程，不阻塞 UI）
-                try:
-                    from utils.image_lazy import preload_next_step_images
-                    _preload_cp_id = _current_cp.get("checkpoint_id", "") if isinstance(_current_cp, dict) else ""
-                    if _preload_cp_id:
-                        _preload_checkpoints = app.navigator.checkpoints if hasattr(app, "navigator") else []
-                        _preload_guide_cards = load_guide_cards()
-                        threading.Thread(
-                            target=preload_next_step_images,
-                            args=(_preload_cp_id, _preload_checkpoints, _preload_guide_cards),
-                            daemon=True,
-                        ).start()
-                except Exception:
-                    pass  # 预加载失败不影响主流程
+            elif _app_mode == "expert":
+                # 高级模式：保留原有双栏布局（workspace + chat）
+                # --- 4. Two-column layout: workspace + chat ---
+                _ws_col, _chat_col = st.columns([0.45, 0.55], gap="small")
 
-        # ===== Right column: Chat history =====
-        with _chat_col:
-            # 准备搜索和定位所需的变量（在折叠区之前定义，供下方使用）
-            _stage_opts = ["全部"] + [
-                cp.get("checkpoint_id")
-                for cp in sorted(app.navigator.checkpoints, key=lambda c: c.get("order", 999))
-            ]
-            _cp_labels = {
-                cp.get("checkpoint_id"): f"{cp.get('checkpoint_id')} · {cp.get('checkpoint_cn') or cp.get('checkpoint_name', '')}"
-                for cp in app.navigator.checkpoints
-            }
+                # ===== Left column: Stage workspace =====
+                with _ws_col:
+                    _current_cp = _get_current_checkpoint_data(app, state)
 
-            # --- A. 固定高度、内部可滚动的聊天容器 ---
-            # height= 需要 Streamlit >= 1.38；旧版本回退到无高度容器（仍可用，只是不固定高度）
-            # 初始化搜索和定位的默认值
-            _chat_q = ""
-            _stage_filter = "全部"
-            _show_diagnostics = False
+                    # 详细工作区（Step 导航 + 内容）
+                    try:
+                        workspace_container = st.container(height=420, border=False)
+                    except TypeError:
+                        workspace_container = st.container(border=False)
 
-            try:
-                scroll_pane = st.container(height=420, border=True)
-            except TypeError:
-                scroll_pane = st.container(border=True)
-            with scroll_pane:
-                st.markdown('<div id="chat-scroll-pane"></div>', unsafe_allow_html=True)
+                    with workspace_container:
+                        render_stage_workspace(
+                            _current_cp,
+                            state.software,
+                            state,
+                            app,
+                            on_switch=switch_checkpoint,
+                            key_prefix="ws_main",
+                        )
+                        if st.session_state.get("_extracted_cards"):
+                            st.divider()
+                            render_suppressed_cards(key_prefix="ws_extracted")
 
-                # Top anchor + jump-to-latest
-                st.markdown(
-                    '<div id="chat-top"></div>'
-                    '<a href="#chat-bottom" style="text-decoration:none;font-size:0.8rem;color:#64748b;">跳到最新</a>',
-                    unsafe_allow_html=True,
-                )
+                        # P2-10: 预加载下一检查点的图片（后台线程，不阻塞 UI）
+                        try:
+                            from utils.image_lazy import preload_next_step_images
+                            _preload_cp_id = _current_cp.get("checkpoint_id", "") if isinstance(_current_cp, dict) else ""
+                            if _preload_cp_id:
+                                _preload_checkpoints = app.navigator.checkpoints if hasattr(app, "navigator") else []
+                                _preload_guide_cards = load_guide_cards()
+                                threading.Thread(
+                                    target=preload_next_step_images,
+                                    args=(_preload_cp_id, _preload_checkpoints, _preload_guide_cards),
+                                    daemon=True,
+                                ).start()
+                        except Exception:
+                            pass  # 预加载失败不影响主流程
 
-                # --- B./C. 搜索框与步骤定位已移到外部折叠区 ---
-                # 使用 session_state 来获取搜索和过滤条件
-                _chat_q = st.session_state.get("chat_search_query", "")
-                _stage_filter = st.session_state.get("chat_stage_filter", "全部")
-                _show_diagnostics = st.session_state.get("show_diagnostics", False)
+                # ===== Right column: Chat history =====
+                with _chat_col:
+                    # 准备搜索和定位所需的变量（在折叠区之前定义，供下方使用）
+                    _stage_opts = ["全部"] + [
+                        cp.get("checkpoint_id")
+                        for cp in sorted(app.navigator.checkpoints, key=lambda c: c.get("order", 999))
+                    ]
+                    _cp_labels = {
+                        cp.get("checkpoint_id"): f"{cp.get('checkpoint_id')} · {cp.get('checkpoint_cn') or cp.get('checkpoint_name', '')}"
+                        for cp in app.navigator.checkpoints
+                    }
 
-                def _msg_stage(m):
-                    """从消息 metadata 推断其所属步骤（checkpoint_id）。"""
-                    md = getattr(m, "metadata", None) or {}
-                    cp = md.get("checkpoint_id") or ""
-                    if not cp:
-                        nq = md.get("normalized_query") or {}
-                        if isinstance(nq, dict):
-                            cp = nq.get("checkpoint_id") or ""
-                    return cp
+                    # --- A. 固定高度、内部可滚动的聊天容器 ---
+                    # height= 需要 Streamlit >= 1.38；旧版本回退到无高度容器（仍可用，只是不固定高度）
+                    # 初始化搜索和定位的默认值
+                    _chat_q = ""
+                    _stage_filter = "全部"
+                    _show_diagnostics = False
 
-                _q = (_chat_q or "").strip().lower()
-                _filtering = bool(_q) or (_stage_filter != "全部")
+                    try:
+                        scroll_pane = st.container(height=420, border=True)
+                    except TypeError:
+                        scroll_pane = st.container(border=True)
+                    with scroll_pane:
+                        st.markdown('<div id="chat-scroll-pane"></div>', unsafe_allow_html=True)
 
-                if _filtering:
-                    # 在全部历史消息上做关键词 / 步骤过滤，不再走窗口折叠
-                    shown = list(state.messages)
-                    if _stage_filter != "全部":
-                        _ctx = ""
-                        _kept = []
-                        for _m in shown:
-                            _c = _msg_stage(_m)
-                            if _c:
-                                _ctx = _c
-                            if _ctx == _stage_filter:
-                                _kept.append(_m)
-                        shown = _kept
-                    if _q:
-                        shown = [m for m in shown if _q in (getattr(m, "content", "") or "").lower()]
-                    older_messages = []
-                else:
-                    history_limit = int(st.session_state.selected_history_limit)
-                    shown, older_messages = get_chat_display_window(state.messages, history_limit)
-                    if len(state.messages) > history_limit:
-                        st.caption(f"显示最近 {history_limit} 条（共 {len(state.messages)} 条）。可在「设置」中调整条数。")
-
-                # ✨ 经验分享智能提示
-                detected_exp = st.session_state.get("_detected_experience")
-                if detected_exp:
-                    from utils.intent_detection import extract_experience_snippet
-                    snippet = extract_experience_snippet(detected_exp.get("text", ""))
-                    st.info(
-                        f"💡 检测到你可能在分享经验：「{snippet}」\n\n"
-                        f"要保存到经验库吗？"
-                    )
-                    col_save, col_dismiss = st.columns(2)
-                    with col_save:
-                        if st.button("💾 保存为经验", key="save_detected_exp", use_container_width=True):
-                            st.session_state["_distill_prefill"] = {
-                                "question": "",
-                                "answer": detected_exp.get("text", ""),
-                                "checkpoint_id": state.current_cp_id or "",
-                            }
-                            st.session_state["_show_distill_form"] = True
-                            st.session_state["_detected_experience"] = None
-                            st.rerun()
-                    with col_dismiss:
-                        if st.button("忽略", key="dismiss_detected_exp", use_container_width=True):
-                            st.session_state["_detected_experience"] = None
-                            st.rerun()
-
-                # Folded older messages
-                if older_messages:
-                    older_summary = get_older_summary(older_messages)
-                    with st.expander(older_summary, expanded=False):
-                        for oi, omsg in enumerate(older_messages):
-                            with st.chat_message(omsg.role):
-                                content = getattr(omsg, "content", "")
-                                if len(content) > 200:
-                                    first_line = content.lstrip("#").strip().splitlines()[0][:60] if content.strip() else ""
-                                    st.caption(f"{first_line}…" if first_line else "(空消息)")
-                                else:
-                                    st.markdown(content)
-    
-                if not shown:
-                    if _filtering:
-                        st.warning("未找到匹配的对话记录，试着换关键词或切换步骤。")
-                    else:
-                        st.info("还没有对话。点上方「开始」或在下方输入框开始陪跑。")
-
-                st.session_state._extracted_cards = []
-                st.session_state._workspace_guide_cards = []
-    
-                for i, msg in enumerate(shown):
-                    is_last = i == len(shown) - 1
-                    if is_last:
+                        # Top anchor + jump-to-latest
                         st.markdown(
-                            '<div id="latest-message" style="scroll-margin-top: 1rem;"></div>',
+                            '<div id="chat-top"></div>'
+                            '<a href="#chat-bottom" style="text-decoration:none;font-size:0.8rem;color:#64748b;">跳到最新</a>',
                             unsafe_allow_html=True,
                         )
-                    with st.chat_message(msg.role):
-                        action_tag = getattr(msg, "action_tag", "") or ""
-                        is_sop = "sop" in action_tag or "stage_guide" in action_tag
-                        guide_card = getattr(msg, "metadata", {}).get("guide_card") if msg.role == "assistant" else None
-                        _content_len = len(getattr(msg, "content", "") or "")
-                        _meta_keys = list((getattr(msg, "metadata", {}) or {}).keys())
-                        if st.session_state.get("show_diagnostics", False):
-                            st.caption(f"🐛 DEBUG [{i}] role={msg.role}, tag={action_tag}, content_len={_content_len}, meta_keys={_meta_keys}, is_sop={is_sop}, has_guide_card={bool(guide_card)}")
 
-                        # --- B域优化：guide_card 存入 session_state 供工作区消费，不在聊天区内嵌截图 ---
-                        if guide_card and msg.role == "assistant":
-                            _gc_list = st.session_state.get("_workspace_guide_cards", [])
-                            _gc_list.append({"card": guide_card, "action_tag": action_tag, "msg_idx": i})
-                            st.session_state._workspace_guide_cards = _gc_list
+                        # --- B./C. 搜索框与步骤定位已移到外部折叠区 ---
+                        # 使用 session_state 来获取搜索和过滤条件
+                        _chat_q = st.session_state.get("chat_search_query", "")
+                        _stage_filter = st.session_state.get("chat_stage_filter", "全部")
+                        _show_diagnostics = st.session_state.get("show_diagnostics", False)
 
-                        # --- B域优化 v2：SOP 长文本迁移至工作区，聊天区仅显示摘要 ---
-                        if msg.role == "assistant" and guide_card and is_sop:
-                            # 提取 SOP 全文供工作区 📋 SOP tab 消费
-                            _sop_full = msg.content or ""
-                            if _sop_full:
-                                st.session_state["_workspace_sop_full"] = _sop_full
-                                st.session_state["_workspace_sop_cp_id"] = checkpoint_id_from_metadata(msg)
+                        def _msg_stage(m):
+                            """从消息 metadata 推断其所属步骤（checkpoint_id）。"""
+                            md = getattr(m, "metadata", None) or {}
+                            cp = md.get("checkpoint_id") or ""
+                            if not cp:
+                                nq = md.get("normalized_query") or {}
+                                if isinstance(nq, dict):
+                                    cp = nq.get("checkpoint_id") or ""
+                            return cp
 
-                            # 聊天区仅显示精简摘要（2-3行）
-                            _nav_line = ""
-                            if "\n---" in _sop_full:
-                                _nav_line = _sop_full.split("\n---")[0].strip()
-                            elif "\n" in _sop_full:
-                                _nav_line = _sop_full.split("\n")[0].strip()
-                            else:
-                                _nav_line = _sop_full[:120]
+                        _q = (_chat_q or "").strip().lower()
+                        _filtering = bool(_q) or (_stage_filter != "全部")
 
-                            st.markdown(f"📋 **{(_nav_line or '已切换步骤')}**")
-                            st.caption("👈 完整 SOP 流程、参数说明和截图请查看左侧「📋 SOP」面板")
-                            render_qa_trace(msg, f"trace_{i}_guide")
-                            render_answer_feedback(msg, f"{i}_guide")
-                            continue
-
-                        if msg.role == "assistant":
-                            # 助手回答：文本卡（judgment/explanation/steps/decision/qc/log）保留在聊天；
-                            # screenshot + params 卡被抑制，数据累积到 st.session_state._extracted_cards
-                            # 供工作区「💡 课题组经验」区展示。
-                            render_answer_cards(
-                                msg.content,
-                                getattr(msg, "metadata", None),
-                                normalize_response_profile(
-                                    (getattr(msg, "metadata", None) or {}).get("response_profile", "teaching")
-                                ),
-                                is_last,
-                                f"card_{i}",
-                                suppress_types=["screenshot", "params"],
-                            )
-                            # P0-2：来源分层标注（📚基础原理 / 🥇课题组经验 / 💬相关讨论）
-                            _msg_meta = getattr(msg, "metadata", None) or {}
-                            render_answer_sources(
-                                _msg_meta.get("qa_trace"),
-                                key_prefix=f"src_{i}",
-                            )
-                            # 注意：guide_card 不再在聊天中回退渲染（已存入 _workspace_guide_cards）
-                            # 注意：image_refs 不再在聊天内联渲染（图片应在工作区查看）
+                        if _filtering:
+                            # 在全部历史消息上做关键词 / 步骤过滤，不再走窗口折叠
+                            shown = list(state.messages)
+                            if _stage_filter != "全部":
+                                _ctx = ""
+                                _kept = []
+                                for _m in shown:
+                                    _c = _msg_stage(_m)
+                                    if _c:
+                                        _ctx = _c
+                                    if _ctx == _stage_filter:
+                                        _kept.append(_m)
+                                shown = _kept
+                            if _q:
+                                shown = [m for m in shown if _q in (getattr(m, "content", "") or "").lower()]
+                            older_messages = []
                         else:
-                            # 用户消息：纯文本
-                            st.markdown(msg.content)
-                            render_user_multimodal_evidence(msg)
+                            history_limit = int(st.session_state.selected_history_limit)
+                            shown, older_messages = get_chat_display_window(state.messages, history_limit)
+                            if len(state.messages) > history_limit:
+                                st.caption(f"显示最近 {history_limit} 条（共 {len(state.messages)} 条）。可在「设置」中调整条数。")
 
-                        render_qa_trace(msg, f"trace_{i}")
-                        if msg.role == "user":
-                            render_user_understanding_feedback(msg, f"{i}")
-                        elif msg.role == "assistant":
-                            # v6.0 增强：独立 QA 验收流程（在诊断工具外也可见）
-                            _render_qa_acceptance(msg, i, is_last)
-                            render_answer_feedback(msg, f"{i}")
+                        # ✨ 经验分享智能提示
+                        detected_exp = st.session_state.get("_detected_experience")
+                        if detected_exp:
+                            from utils.intent_detection import extract_experience_snippet
+                            snippet = extract_experience_snippet(detected_exp.get("text", ""))
+                            st.info(
+                                f"💡 检测到你可能在分享经验：「{snippet}」\n\n"
+                                f"要保存到经验库吗？"
+                            )
+                            col_save, col_dismiss = st.columns(2)
+                            with col_save:
+                                if st.button("💾 保存为经验", key="save_detected_exp", use_container_width=True):
+                                    st.session_state["_distill_prefill"] = {
+                                        "question": "",
+                                        "answer": detected_exp.get("text", ""),
+                                        "checkpoint_id": state.current_cp_id or "",
+                                    }
+                                    st.session_state["_show_distill_form"] = True
+                                    st.session_state["_detected_experience"] = None
+                                    st.rerun()
+                            with col_dismiss:
+                                if st.button("忽略", key="dismiss_detected_exp", use_container_width=True):
+                                    st.session_state["_detected_experience"] = None
+                                    st.rerun()
 
-                            # ✨ 新增：保存此条为经验
-                            if st.button("💾 保存为经验", key=f"save_exp_{i}", help="将此条回答保存到经验库"):
-                                # 提取用户问题（向前找最近的 user 消息）
-                                user_question = ""
-                                for j in range(i - 1, max(0, i - 5), -1):
-                                    if state.messages[j].role == "user":
-                                        user_question = state.messages[j].content
-                                        break
-
-                                # 预填到沉淀表单
-                                st.session_state["_distill_prefill"] = {
-                                    "question": user_question,
-                                    "answer": msg.content,
-                                    "checkpoint_id": checkpoint_id_from_metadata(msg) or state.current_stage,
-                                }
-                                st.session_state["_show_distill_form"] = True
-                                st.rerun()
-
-
-                # Bottom anchor + back-to-top
-                st.markdown(
-                    '<div id="chat-bottom"></div>'
-                    '<a href="#chat-top" style="text-decoration:none;font-size:0.8rem;color:#64748b;">回到顶部</a>',
-                    unsafe_allow_html=True,
-                )
-
-
-            # --- 紧凑工具栏（搜索/定位/诊断/沉淀 收入 popover，不占垂直空间） ---
-            _tc1, _tc2, _tc3, _tc4 = st.columns([1, 1, 1, 1])
-            with _tc1:
-                with st.popover("🔍 搜索", use_container_width=True):
-                    st.text_input("搜索历史对话", key="chat_search_query")
-            with _tc2:
-                with st.popover("📍 定位", use_container_width=True):
-                    st.selectbox(
-                        "定位到步骤",
-                        options=_stage_opts,
-                        index=0,
-                        format_func=lambda cid: _cp_labels.get(cid, cid),
-                        key="chat_stage_filter",
-                    )
-            with _tc3:
-                with st.popover("🔧 诊断", use_container_width=True):
-                    st.toggle(
-                        "显示诊断信息与审核工具",
-                        value=False,
-                        key="show_diagnostics",
-                        help="显示运行引擎、耗时、RAG 命中、理解纠正和回答审核入口。",
-                    )
-                    # P0-3: QC 分析入口
-                    if st.button("🔍 QC 结果分析", key="open_qc_analysis", use_container_width=True, help="分析 cryoSPARC QC 日志或截图"):
-                        st.session_state["show_qc_analysis"] = True
-                        st.rerun()
-            with _tc4:
-                with st.popover("💾 沉淀", use_container_width=True):
-                    if state.messages:
-                        _last_assistant_msg = next(
-                            (m for m in reversed(state.messages) if m.role == "assistant"), None
-                        )
-                        if _last_assistant_msg:
-                            if st.button("沉淀经验", key="distill_btn", use_container_width=True,
-                                         help="把最新一条 AI 回答抽取成知识条目，存入知识库供后续检索"):
-                                _msgs = state.messages
-                                _last_idx = next(
-                                    (i for i, m in reversed(list(enumerate(_msgs))) if m.role == "assistant"), -1
-                                )
-                                if _last_idx > 0 and _msgs[_last_idx - 1].role == "user":
-                                    _pair = _msgs[_last_idx - 1: _last_idx + 1]
-                                else:
-                                    _user_idx = next(
-                                        (i for i in range(_last_idx - 1, max(0, _last_idx - 5), -1)
-                                         if _msgs[i].role == "user"), -1
-                                    )
-                                    if _user_idx >= 0:
-                                        _pair = [_msgs[_user_idx], _msgs[_last_idx]]
-                                    else:
-                                        _pair = [_msgs[_last_idx]]
-
-                                snippet = "\n\n".join(f"{m.role}: {m.content}" for m in _pair)
-
-                                context_info = []
-                                if state.current_cp_id:
-                                    context_info.append(f"checkpoint: {state.current_cp_id}")
-                                if state.software:
-                                    context_info.append(f"software: {state.software}")
-                                if state.params:
-                                    key_params = list(state.params.items())[:5]
-                                    context_info.append(f"params: {dict(key_params)}")
-
-                                if context_info:
-                                    snippet = f"[Context: {'; '.join(context_info)}]\n\n{snippet}"
-
-                                draft = app.llm.extract_knowledge_doc(snippet)
-                                draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-                                draft.setdefault("checkpoint_id", state.current_cp_id or "")
-                                draft.setdefault("software", state.software or "")
-                                st.session_state.distill_draft = draft
-                                st.rerun()
-                    else:
-                        st.caption("暂无对话可沉淀")
-
-            if st.session_state.get("chat_stage_filter") != "全部":
-                st.session_state._sp_scroll_target = "chat_bottom"
-
-            if st.session_state.get("distill_draft") or st.session_state.get("_show_distill_form"):
-                # ✨ 支持从「💾 保存为经验」按钮预填
-                prefill = st.session_state.get("_distill_prefill", {})
-                if prefill and not st.session_state.get("distill_draft"):
-                    # 从预填数据生成草稿
-                    snippet = f"user: {prefill.get('question', '')}\n\nassistant: {prefill.get('answer', '')}"
-                    draft = app.llm.extract_knowledge_doc(snippet)
-                    draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-                    draft.setdefault("checkpoint_id", prefill.get("checkpoint_id", state.current_cp_id or ""))
-                    draft.setdefault("software", state.software or "")
-                    st.session_state.distill_draft = draft
-                    st.session_state["_distill_prefill"] = {}
-                    st.session_state["_show_distill_form"] = False
-
-                draft = st.session_state.get("distill_draft")
-                if draft:
-                    with st.form("distill_form"):
-                        st.markdown("**沉淀这条经验到知识库**")
-                        d_title = st.text_input("标题（原话）", value=draft.get("title_cn", ""),
-                                                placeholder="用自己的话描述这条经验")
-                        d_polish = st.toggle("✨ AI润色内容", value=True,
-                                             help="开启后 AI 会自动整理摘要、步骤等字段；关闭则直接保存原始提取内容")
-                        fc1, fc2 = st.columns(2)
-                        submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
-                        cancelled = fc2.form_submit_button("取消", use_container_width=True)
-                    if submitted:
-                        _title = d_title.strip() or draft.get("title_cn", "")
-                        if d_polish:
-                            # AI润色：用 LLM 重新提取，覆盖草稿内容
-                            try:
-                                polished = app.llm.extract_knowledge_doc(
-                                    draft.get("_raw_snippet", _title)
-                                )
-                                draft.update({k: v for k, v in polished.items() if k != "doc_id"})
-                            except Exception:
-                                pass  # 润色失败时静默降级，使用原始草稿
-                        doc = KnowledgeDoc(
-                            doc_id=draft.get("doc_id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                            software=draft.get("software", ""),
-                            checkpoint_id=draft.get("checkpoint_id", ""),
-                            title_cn=_title,
-                            summary=draft.get("summary", ""),
-                            action_steps=draft.get("action_steps", []),
-                            qc_checks=draft.get("qc_checks", []),
-                            common_errors=draft.get("common_errors", []),
-                            tags=draft.get("tags", []),
-                            tier=draft.get("tier", "note"),
-                            status=draft.get("status", "draft"),
-                            source="distill",
-                            imported_at=datetime.now().isoformat(timespec="seconds"),
-                        )
-                        add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
-                        app.retriever.invalidate_corpus_cache()
-                        st.session_state.distill_draft = None
-                        st.session_state.last_feedback = (
-                            f"✅ 已沉淀经验：{doc.doc_id}"
-                            f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看"
-                        )
-                        st.rerun()
-                    if cancelled:
-                        st.session_state.distill_draft = None
-                        st.rerun()
-
-            # P0-3: QC 分析对话框
-            if st.session_state.get("show_qc_analysis"):
-                with st.container():
-                    st.markdown("---")
-                    from components.qc_analysis import render_qc_analysis_panel
-                    qc_result = render_qc_analysis_panel(
-                        key_prefix="main_qc",
-                        llm_agent=app.llm,
-                        retriever=app.retriever,
-                    )
-                    if st.button("❌ 关闭", key="close_qc_analysis"):
-                        st.session_state["show_qc_analysis"] = False
-                        st.rerun()
-
-
-        st.session_state.setdefault("pending_pasted", [])
-        st.session_state.setdefault("last_pasted_sig", "")
-        st.session_state.setdefault("voice_transcript", "")
-        st.session_state.setdefault("_temp_voice_transcript", None)
-
-        if st.session_state.get("_temp_voice_transcript") is not None:
-            st.session_state.voice_transcript = st.session_state._temp_voice_transcript
-            st.session_state._temp_voice_transcript = None
-
-        # ---- 语音输入（折叠面板，默认收起） ----
-        with st.expander("🎤 语音输入", expanded=bool(st.session_state.get("voice_transcript", ""))):
-            st.caption(app.llm.audio_status_text())
-            recorded_voice = None
-            if hasattr(st, "audio_input"):
-                use_mic = st.checkbox("启用麦克风录音（需浏览器授权）", key="enable_mic_recording", value=False)
-                if use_mic:
-                    st.caption("💡 录音结束后自动转写；如提示错误请授权麦克风，或使用下方文件上传")
-                    st.info(
-                        "🔊 **麦克风权限授权指引**：\n"
-                        "- Chrome/Edge：点击浏览器地址栏左侧的「🔒」图标，在「权限」中允许麦克风\n"
-                        "- Firefox：点击地址栏左侧的「🔒」图标 → 「麦克风」→ 选择「允许」\n"
-                        "- 如果提示已拒绝，请在浏览器设置中搜索「麦克风」并允许此网站访问\n"
-                        "- 授权后刷新页面，录音按钮会显示为蓝色可点击状态"
-                    )
-                    try:
-                        recorded_voice = st.audio_input("点击开始录音")
-                    except Exception as exc:
-                        recorded_voice = None
-                        st.error(f"麦克风录音初始化失败：{exc}\n\n请检查：\n1. 浏览器是否已授权麦克风权限\n2. 是否有其他程序占用了麦克风\n3. 或使用下方「上传语音文件」功能")
-            uploaded_voice = st.file_uploader(
-                "上传语音文件（上传后自动转写）",
-                type=["mp3", "wav", "m4a", "mp4", "mpeg", "mpga", "webm", "ogg"],
-                key="voice_input_uploader",
-            )
-            voice_file = recorded_voice or uploaded_voice
-
-            def _stable_sig(f):
-                if f is None:
-                    return ""
-                try:
-                    sz = getattr(f, "size", 0) or 0
-                    nm = getattr(f, "name", "") or ""
-                    return f"{nm}:{sz}"
-                except Exception:
-                    return ""
-
-            def _is_valid_audio(f):
-                if f is None:
-                    return False
-                try:
-                    sz = getattr(f, "size", 0) or 0
-                    return sz > 500
-                except Exception:
-                    return False
-
-            valid_voice = voice_file if _is_valid_audio(voice_file) else None
-            if valid_voice is not None and app.llm.audio_enabled:
-                cur_sig = _stable_sig(valid_voice)
-                if cur_sig and st.session_state.get("_last_voice_sig") != cur_sig:
-                    st.session_state._last_voice_sig = cur_sig
-                    try:
-                        with st.status("正在读取并转写语音…", expanded=True) as voice_status:
-                            voice_status.write("正在保存音频...")
-                            audio_path = save_uploaded_audio(valid_voice)
-                            voice_status.write("语音上传完成，正在检查识别缓存…")
-                            audio_digest = file_sha256(audio_path)
-                            audio_cache_key = hashlib.sha256(
-                                f"{audio_digest}:{app.llm.audio_model}:zh".encode("utf-8")
-                            ).hexdigest()
-                            audio_cache_path = AUDIO_CACHE_DIR / f"{audio_cache_key}.json"
-                            cached_audio = _read_json_cache(audio_cache_path)
-                            if cached_audio and cached_audio.get("text"):
-                                transcript = str(cached_audio.get("text", ""))
-                                voice_status.write("已命中相同音频的转写缓存。")
+                        # Folded older messages
+                        if older_messages:
+                            older_summary = get_older_summary(older_messages)
+                            with st.expander(older_summary, expanded=False):
+                                for oi, omsg in enumerate(older_messages):
+                                    with st.chat_message(omsg.role):
+                                        content = getattr(omsg, "content", "")
+                                        if len(content) > 200:
+                                            first_line = content.lstrip("#").strip().splitlines()[0][:60] if content.strip() else ""
+                                            st.caption(f"{first_line}…" if first_line else "(空消息)")
+                                        else:
+                                            st.markdown(content)
+    
+                        if not shown:
+                            if _filtering:
+                                st.warning("未找到匹配的对话记录，试着换关键词或切换步骤。")
                             else:
-                                voice_status.write("正在调用语音识别模型…")
-                                transcript = app.llm.transcribe_audio(audio_path, language="zh")
-                                _write_json_cache(
-                                    audio_cache_path,
-                                    {
-                                        "text": transcript,
-                                        "audio_sha256": audio_digest,
-                                        "model": app.llm.audio_model,
-                                        "language": "zh",
-                                        "created_at": datetime.now().isoformat(),
-                                    },
+                                st.info("还没有对话。点上方「开始」或在下方输入框开始陪跑。")
+
+                        st.session_state._extracted_cards = []
+                        st.session_state._workspace_guide_cards = []
+    
+                        for i, msg in enumerate(shown):
+                            is_last = i == len(shown) - 1
+                            if is_last:
+                                st.markdown(
+                                    '<div id="latest-message" style="scroll-margin-top: 1rem;"></div>',
+                                    unsafe_allow_html=True,
                                 )
-                            voice_status.update(label="语音转写完成，请核对文本", state="complete", expanded=False)
-                        st.session_state._temp_voice_transcript = transcript
-                        st.session_state.last_feedback = "✅ 语音已自动转写，可编辑后发送或追加到输入框。"
-                        st.rerun()
-                    except Exception as exc:
-                        st.session_state.last_feedback = f"语音转写失败：{exc}"
-                        st.session_state._last_voice_sig = f"failed:{cur_sig}"
+                            with st.chat_message(msg.role):
+                                action_tag = getattr(msg, "action_tag", "") or ""
+                                is_sop = "sop" in action_tag or "stage_guide" in action_tag
+                                guide_card = getattr(msg, "metadata", {}).get("guide_card") if msg.role == "assistant" else None
+                                _content_len = len(getattr(msg, "content", "") or "")
+                                _meta_keys = list((getattr(msg, "metadata", {}) or {}).keys())
+                                if st.session_state.get("show_diagnostics", False):
+                                    st.caption(f"🐛 DEBUG [{i}] role={msg.role}, tag={action_tag}, content_len={_content_len}, meta_keys={_meta_keys}, is_sop={is_sop}, has_guide_card={bool(guide_card)}")
 
-            vc1, vc3 = st.columns([1, 1])
-            with vc1:
-                if st.button("🔄 重新转写", use_container_width=True, disabled=voice_file is None or not app.llm.audio_enabled):
-                    st.session_state._last_voice_sig = None
-                    st.rerun()
-            with vc3:
-                if st.button("🗑️ 清空", use_container_width=True):
+                                # --- B域优化：guide_card 存入 session_state 供工作区消费，不在聊天区内嵌截图 ---
+                                if guide_card and msg.role == "assistant":
+                                    _gc_list = st.session_state.get("_workspace_guide_cards", [])
+                                    _gc_list.append({"card": guide_card, "action_tag": action_tag, "msg_idx": i})
+                                    st.session_state._workspace_guide_cards = _gc_list
+
+                                # --- B域优化 v2：SOP 长文本迁移至工作区，聊天区仅显示摘要 ---
+                                if msg.role == "assistant" and guide_card and is_sop:
+                                    # 提取 SOP 全文供工作区 📋 SOP tab 消费
+                                    _sop_full = msg.content or ""
+                                    if _sop_full:
+                                        st.session_state["_workspace_sop_full"] = _sop_full
+                                        st.session_state["_workspace_sop_cp_id"] = checkpoint_id_from_metadata(msg)
+
+                                    # 聊天区仅显示精简摘要（2-3行）
+                                    _nav_line = ""
+                                    if "\n---" in _sop_full:
+                                        _nav_line = _sop_full.split("\n---")[0].strip()
+                                    elif "\n" in _sop_full:
+                                        _nav_line = _sop_full.split("\n")[0].strip()
+                                    else:
+                                        _nav_line = _sop_full[:120]
+
+                                    st.markdown(f"📋 **{(_nav_line or '已切换步骤')}**")
+                                    st.caption("👈 完整 SOP 流程、参数说明和截图请查看左侧「📋 SOP」面板")
+                                    render_qa_trace(msg, f"trace_{i}_guide")
+                                    render_answer_feedback(msg, f"{i}_guide")
+                                    continue
+
+                                if msg.role == "assistant":
+                                    # 助手回答：文本卡（judgment/explanation/steps/decision/qc/log）保留在聊天；
+                                    # screenshot + params 卡被抑制，数据累积到 st.session_state._extracted_cards
+                                    # 供工作区「💡 课题组经验」区展示。
+                                    render_answer_cards(
+                                        msg.content,
+                                        getattr(msg, "metadata", None),
+                                        normalize_response_profile(
+                                            (getattr(msg, "metadata", None) or {}).get("response_profile", "teaching")
+                                        ),
+                                        is_last,
+                                        f"card_{i}",
+                                        suppress_types=["screenshot", "params"],
+                                    )
+                                    # P0-2：来源分层标注（📚基础原理 / 🥇课题组经验 / 💬相关讨论）
+                                    _msg_meta = getattr(msg, "metadata", None) or {}
+                                    render_answer_sources(
+                                        _msg_meta.get("qa_trace"),
+                                        key_prefix=f"src_{i}",
+                                    )
+                                    # 注意：guide_card 不再在聊天中回退渲染（已存入 _workspace_guide_cards）
+                                    # 注意：image_refs 不再在聊天内联渲染（图片应在工作区查看）
+                                else:
+                                    # 用户消息：纯文本
+                                    st.markdown(msg.content)
+                                    render_user_multimodal_evidence(msg)
+
+                                render_qa_trace(msg, f"trace_{i}")
+                                if msg.role == "user":
+                                    render_user_understanding_feedback(msg, f"{i}")
+                                elif msg.role == "assistant":
+                                    # v6.0 增强：独立 QA 验收流程（在诊断工具外也可见）
+                                    _render_qa_acceptance(msg, i, is_last)
+                                    render_answer_feedback(msg, f"{i}")
+
+                                    # ✨ 新增：保存此条为经验
+                                    if st.button("💾 保存为经验", key=f"save_exp_{i}", help="将此条回答保存到经验库"):
+                                        # 提取用户问题（向前找最近的 user 消息）
+                                        user_question = ""
+                                        for j in range(i - 1, max(0, i - 5), -1):
+                                            if state.messages[j].role == "user":
+                                                user_question = state.messages[j].content
+                                                break
+
+                                        # 预填到沉淀表单
+                                        st.session_state["_distill_prefill"] = {
+                                            "question": user_question,
+                                            "answer": msg.content,
+                                            "checkpoint_id": checkpoint_id_from_metadata(msg) or state.current_cp_id,
+                                        }
+                                        st.session_state["_show_distill_form"] = True
+                                        st.rerun()
+
+
+                        # Bottom anchor + back-to-top
+                        st.markdown(
+                            '<div id="chat-bottom"></div>'
+                            '<a href="#chat-top" style="text-decoration:none;font-size:0.8rem;color:#64748b;">回到顶部</a>',
+                            unsafe_allow_html=True,
+                        )
+
+
+                    # --- 紧凑工具栏（搜索/定位/诊断/沉淀 收入 popover，不占垂直空间） ---
+                    _tc1, _tc2, _tc3, _tc4 = st.columns([1, 1, 1, 1])
+                    with _tc1:
+                        with st.popover("🔍 搜索", use_container_width=True):
+                            st.text_input("搜索历史对话", key="chat_search_query")
+                    with _tc2:
+                        with st.popover("📍 定位", use_container_width=True):
+                            st.selectbox(
+                                "定位到步骤",
+                                options=_stage_opts,
+                                index=0,
+                                format_func=lambda cid: _cp_labels.get(cid, cid),
+                                key="chat_stage_filter",
+                            )
+                    with _tc3:
+                        with st.popover("🔧 诊断", use_container_width=True):
+                            st.toggle(
+                                "显示诊断信息与审核工具",
+                                value=False,
+                                key="show_diagnostics",
+                                help="显示运行引擎、耗时、RAG 命中、理解纠正和回答审核入口。",
+                            )
+                            # P0-3: QC 分析入口
+                            if st.button("🔍 QC 结果分析", key="open_qc_analysis", use_container_width=True, help="分析 cryoSPARC QC 日志或截图"):
+                                st.session_state["show_qc_analysis"] = True
+                                st.rerun()
+                    with _tc4:
+                        with st.popover("💾 沉淀", use_container_width=True):
+                            if state.messages:
+                                _last_assistant_msg = next(
+                                    (m for m in reversed(state.messages) if m.role == "assistant"), None
+                                )
+                                if _last_assistant_msg:
+                                    if st.button("沉淀经验", key="distill_btn", use_container_width=True,
+                                                 help="把最新一条 AI 回答抽取成知识条目，存入知识库供后续检索"):
+                                        _msgs = state.messages
+                                        _last_idx = next(
+                                            (i for i, m in reversed(list(enumerate(_msgs))) if m.role == "assistant"), -1
+                                        )
+                                        if _last_idx > 0 and _msgs[_last_idx - 1].role == "user":
+                                            _pair = _msgs[_last_idx - 1: _last_idx + 1]
+                                        else:
+                                            _user_idx = next(
+                                                (i for i in range(_last_idx - 1, max(0, _last_idx - 5), -1)
+                                                 if _msgs[i].role == "user"), -1
+                                            )
+                                            if _user_idx >= 0:
+                                                _pair = [_msgs[_user_idx], _msgs[_last_idx]]
+                                            else:
+                                                _pair = [_msgs[_last_idx]]
+
+                                        snippet = "\n\n".join(f"{m.role}: {m.content}" for m in _pair)
+
+                                        context_info = []
+                                        if state.current_cp_id:
+                                            context_info.append(f"checkpoint: {state.current_cp_id}")
+                                        if state.software:
+                                            context_info.append(f"software: {state.software}")
+                                        if state.params:
+                                            key_params = list(state.params.items())[:5]
+                                            context_info.append(f"params: {dict(key_params)}")
+
+                                        if context_info:
+                                            snippet = f"[Context: {'; '.join(context_info)}]\n\n{snippet}"
+
+                                        draft = app.llm.extract_knowledge_doc(snippet)
+                                        draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                                        draft.setdefault("checkpoint_id", state.current_cp_id or "")
+                                        draft.setdefault("software", state.software or "")
+                                        st.session_state.distill_draft = draft
+                                        st.rerun()
+                            else:
+                                st.caption("暂无对话可沉淀")
+
+                    if st.session_state.get("chat_stage_filter") != "全部":
+                        st.session_state._sp_scroll_target = "chat_bottom"
+
+                    if st.session_state.get("distill_draft") or st.session_state.get("_show_distill_form"):
+                        # ✨ 支持从「💾 保存为经验」按钮预填
+                        prefill = st.session_state.get("_distill_prefill", {})
+                        if prefill and not st.session_state.get("distill_draft"):
+                            # 从预填数据生成草稿
+                            snippet = f"user: {prefill.get('question', '')}\n\nassistant: {prefill.get('answer', '')}"
+                            draft = app.llm.extract_knowledge_doc(snippet)
+                            draft.setdefault("doc_id", f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                            draft.setdefault("checkpoint_id", prefill.get("checkpoint_id", state.current_cp_id or ""))
+                            draft.setdefault("software", state.software or "")
+                            st.session_state.distill_draft = draft
+                            st.session_state["_distill_prefill"] = {}
+                            st.session_state["_show_distill_form"] = False
+
+                        draft = st.session_state.get("distill_draft")
+                        if draft:
+                            with st.form("distill_form"):
+                                st.markdown("**沉淀这条经验到知识库**")
+                                d_title = st.text_input("标题（原话）", value=draft.get("title_cn", ""),
+                                                        placeholder="用自己的话描述这条经验")
+                                d_polish = st.toggle("✨ AI润色内容", value=True,
+                                                     help="开启后 AI 会自动整理摘要、步骤等字段；关闭则直接保存原始提取内容")
+                                fc1, fc2 = st.columns(2)
+                                submitted = fc1.form_submit_button("💾 写入知识库", use_container_width=True)
+                                cancelled = fc2.form_submit_button("取消", use_container_width=True)
+                            if submitted:
+                                _title = d_title.strip() or draft.get("title_cn", "")
+                                if d_polish:
+                                    # AI润色：用 LLM 重新提取，覆盖草稿内容
+                                    try:
+                                        polished = app.llm.extract_knowledge_doc(
+                                            draft.get("_raw_snippet", _title)
+                                        )
+                                        draft.update({k: v for k, v in polished.items() if k != "doc_id"})
+                                    except Exception:
+                                        pass  # 润色失败时静默降级，使用原始草稿
+                                doc = KnowledgeDoc(
+                                    doc_id=draft.get("doc_id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                    software=draft.get("software", ""),
+                                    checkpoint_id=draft.get("checkpoint_id", ""),
+                                    title_cn=_title,
+                                    summary=draft.get("summary", ""),
+                                    action_steps=draft.get("action_steps", []),
+                                    qc_checks=draft.get("qc_checks", []),
+                                    common_errors=draft.get("common_errors", []),
+                                    tags=draft.get("tags", []),
+                                    tier=draft.get("tier", "note"),
+                                    status=draft.get("status", "draft"),
+                                    source="distill",
+                                    imported_at=datetime.now().isoformat(timespec="seconds"),
+                                )
+                                add_doc_to_sharded_index(str(BASE_DIR / "knowledge_base"), doc.to_dict())
+                                app.retriever.invalidate_corpus_cache()
+                                st.session_state.distill_draft = None
+                                st.session_state.last_feedback = (
+                                    f"✅ 已沉淀经验：{doc.doc_id}"
+                                    f" — 可在左侧「⚙️ 设置」→「已导入知识管理」中查看"
+                                )
+                                st.rerun()
+                            if cancelled:
+                                st.session_state.distill_draft = None
+                                st.rerun()
+
+                    # P0-3: QC 分析对话框
+                    if st.session_state.get("show_qc_analysis"):
+                        with st.container():
+                            st.markdown("---")
+                            from components.qc_analysis import render_qc_analysis_panel
+                            qc_result = render_qc_analysis_panel(
+                                key_prefix="main_qc",
+                                llm_agent=app.llm,
+                                retriever=app.retriever,
+                            )
+                            if st.button("❌ 关闭", key="close_qc_analysis"):
+                                st.session_state["show_qc_analysis"] = False
+                                st.rerun()
+
+
+                st.session_state.setdefault("pending_pasted", [])
+                st.session_state.setdefault("last_pasted_sig", "")
+                st.session_state.setdefault("voice_transcript", "")
+                st.session_state.setdefault("_temp_voice_transcript", None)
+
+                if st.session_state.get("_temp_voice_transcript") is not None:
+                    st.session_state.voice_transcript = st.session_state._temp_voice_transcript
                     st.session_state._temp_voice_transcript = None
-                    st.session_state._last_voice_sig = None
-                    st.rerun()
 
-            if not app.llm.audio_enabled:
-                st.warning("请先在「设置」里配置语音转写模型和 API Key。")
+                # ---- 语音输入（折叠面板，默认收起） ----
+                with st.expander("🎤 语音输入", expanded=bool(st.session_state.get("voice_transcript", ""))):
+                    st.caption(app.llm.audio_status_text())
+                    recorded_voice = None
+                    if hasattr(st, "audio_input"):
+                        use_mic = st.checkbox("启用麦克风录音（需浏览器授权）", key="enable_mic_recording", value=False)
+                        if use_mic:
+                            st.caption("💡 录音结束后自动转写；如提示错误请授权麦克风，或使用下方文件上传")
+                            st.info(
+                                "🔊 **麦克风权限授权指引**：\n"
+                                "- Chrome/Edge：点击浏览器地址栏左侧的「🔒」图标，在「权限」中允许麦克风\n"
+                                "- Firefox：点击地址栏左侧的「🔒」图标 → 「麦克风」→ 选择「允许」\n"
+                                "- 如果提示已拒绝，请在浏览器设置中搜索「麦克风」并允许此网站访问\n"
+                                "- 授权后刷新页面，录音按钮会显示为蓝色可点击状态"
+                            )
+                            try:
+                                recorded_voice = st.audio_input("点击开始录音")
+                            except Exception as exc:
+                                recorded_voice = None
+                                st.error(f"麦克风录音初始化失败：{exc}\n\n请检查：\n1. 浏览器是否已授权麦克风权限\n2. 是否有其他程序占用了麦克风\n3. 或使用下方「上传语音文件」功能")
+                    uploaded_voice = st.file_uploader(
+                        "上传语音文件（上传后自动转写）",
+                        type=["mp3", "wav", "m4a", "mp4", "mpeg", "mpga", "webm", "ogg"],
+                        key="voice_input_uploader",
+                    )
+                    voice_file = recorded_voice or uploaded_voice
 
-            # 调试信息（开发模式可见）
-            if st.session_state.get("show_diagnostics", False):
-                transcript_val = st.session_state.get("voice_transcript", "")
-                st.caption(f"DEBUG: voice_transcript = '{transcript_val}' (len={len(transcript_val)})")
+                    def _stable_sig(f):
+                        if f is None:
+                            return ""
+                        try:
+                            sz = getattr(f, "size", 0) or 0
+                            nm = getattr(f, "name", "") or ""
+                            return f"{nm}:{sz}"
+                        except Exception:
+                            return ""
 
-            voice_text = st.text_area(
-                "转写文本（可编辑后发送或填入输入框）",
-                height=70,
-                key="voice_transcript",
-                placeholder="转写结果会出现在这里；可以直接编辑修正术语，然后发送或追加到输入框与手打文字合并。",
-            )
+                    def _is_valid_audio(f):
+                        if f is None:
+                            return False
+                        try:
+                            sz = getattr(f, "size", 0) or 0
+                            return sz > 500
+                        except Exception:
+                            return False
 
-            # 提示用户按钮状态
-            if not voice_text.strip():
-                st.caption("⚠️ 转写文本为空，「填入输入框」和「直接发送」按钮不可用。请先上传语音文件并等待转写完成。")
-            if voice_text.strip():
-                if st.button("✅ 直接发送（含已粘贴的截图）", use_container_width=True, type="primary"):
-                    image_refs = []
+                    valid_voice = voice_file if _is_valid_audio(voice_file) else None
+                    if valid_voice is not None and app.llm.audio_enabled:
+                        cur_sig = _stable_sig(valid_voice)
+                        if cur_sig and st.session_state.get("_last_voice_sig") != cur_sig:
+                            st.session_state._last_voice_sig = cur_sig
+                            try:
+                                with st.status("正在读取并转写语音…", expanded=True) as voice_status:
+                                    voice_status.write("正在保存音频...")
+                                    audio_path = save_uploaded_audio(valid_voice)
+                                    voice_status.write("语音上传完成，正在检查识别缓存…")
+                                    audio_digest = file_sha256(audio_path)
+                                    audio_cache_key = hashlib.sha256(
+                                        f"{audio_digest}:{app.llm.audio_model}:zh".encode("utf-8")
+                                    ).hexdigest()
+                                    audio_cache_path = AUDIO_CACHE_DIR / f"{audio_cache_key}.json"
+                                    cached_audio = _read_json_cache(audio_cache_path)
+                                    if cached_audio and cached_audio.get("text"):
+                                        transcript = str(cached_audio.get("text", ""))
+                                        voice_status.write("已命中相同音频的转写缓存。")
+                                    else:
+                                        voice_status.write("正在调用语音识别模型…")
+                                        transcript = app.llm.transcribe_audio(audio_path, language="zh")
+                                        _write_json_cache(
+                                            audio_cache_path,
+                                            {
+                                                "text": transcript,
+                                                "audio_sha256": audio_digest,
+                                                "model": app.llm.audio_model,
+                                                "language": "zh",
+                                                "created_at": datetime.now().isoformat(),
+                                            },
+                                        )
+                                    voice_status.update(label="语音转写完成，请核对文本", state="complete", expanded=False)
+                                st.session_state._temp_voice_transcript = transcript
+                                st.session_state.last_feedback = "✅ 语音已自动转写，可编辑后发送或追加到输入框。"
+                                st.rerun()
+                            except Exception as exc:
+                                st.session_state.last_feedback = f"语音转写失败：{exc}"
+                                st.session_state._last_voice_sig = f"failed:{cur_sig}"
+
+                    vc1, vc3 = st.columns([1, 1])
+                    with vc1:
+                        if st.button("🔄 重新转写", use_container_width=True, disabled=voice_file is None or not app.llm.audio_enabled):
+                            st.session_state._last_voice_sig = None
+                            st.rerun()
+                    with vc3:
+                        if st.button("🗑️ 清空", use_container_width=True):
+                            st.session_state._temp_voice_transcript = None
+                            st.session_state._last_voice_sig = None
+                            st.rerun()
+
+                    if not app.llm.audio_enabled:
+                        st.warning("请先在「设置」里配置语音转写模型和 API Key。")
+
+                    # 调试信息（开发模式可见）
+                    if st.session_state.get("show_diagnostics", False):
+                        transcript_val = st.session_state.get("voice_transcript", "")
+                        st.caption(f"DEBUG: voice_transcript = '{transcript_val}' (len={len(transcript_val)})")
+
+                    voice_text = st.text_area(
+                        "转写文本（可编辑后发送或填入输入框）",
+                        height=70,
+                        key="voice_transcript",
+                        placeholder="转写结果会出现在这里；可以直接编辑修正术语，然后发送或追加到输入框与手打文字合并。",
+                    )
+
+                    # 提示用户按钮状态
+                    if not voice_text.strip():
+                        st.caption("⚠️ 转写文本为空，「填入输入框」和「直接发送」按钮不可用。请先上传语音文件并等待转写完成。")
+                    if voice_text.strip():
+                        if st.button("✅ 直接发送（含已粘贴的截图）", use_container_width=True, type="primary"):
+                            image_refs = []
+                            for img in st.session_state.pending_pasted:
+                                image_refs.append(save_pasted_image(img))
+                            st.session_state.pending_pasted = []
+                            st.session_state.last_pasted_sig = ""
+                            st.session_state._temp_voice_transcript = None
+                            st.session_state._last_voice_sig = None
+                            run_command(
+                                voice_text.strip(),
+                                image_refs,
+                                input_metadata={"input_modality": "voice", "transcript_reviewed": True},
+                                response_profile=_output_mode,
+                            )
+                            st.session_state._sp_scroll_target = "chat_bottom"
+                            st.rerun()
+                        st.caption("💡 或点「📝 填入输入框」把文字追加到底部输入框，继续手打补充、附加文件后一起发送")
+
+                # ---- JS：将转写文本注入到主 chat_input（必须在 expander 外部，确保始终执行） ----
+                if st.session_state.get("_inject_voice_text"):
+                    inject_text = st.session_state._inject_voice_text
+                    st.session_state._inject_voice_text = ""
+                    escaped = json.dumps(inject_text, ensure_ascii=False)
+                    js_code = f"""
+                    (function() {{
+                        var attempts = 0;
+                        var maxAttempts = 40;
+                        var injectedText = {escaped};
+                        function tryInject() {{
+                            attempts++;
+                            var chatArea = document.querySelector('[data-testid="stChatInputTextArea"]');
+                            if (!chatArea) {{
+                                if (attempts < maxAttempts) setTimeout(tryInject, 200);
+                                return;
+                            }}
+                            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                            var currentVal = chatArea.value || '';
+                            var newVal = currentVal ? (currentVal + (currentVal.endsWith(' ') ? '' : ' ') + injectedText) : injectedText;
+                            nativeSetter.call(chatArea, newVal);
+                            chatArea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            chatArea.focus();
+                            chatArea.setSelectionRange(newVal.length, newVal.length);
+                        }}
+                        setTimeout(tryInject, 300);
+                    }})();
+                    """
+                    js_b64 = base64.b64encode(js_code.encode('utf-8')).decode('ascii')
+                    st.markdown(
+                        f'<img src="data:," style="display:none!important;width:0!important;height:0!important;" onerror="eval(atob(\'{js_b64}\'))">',
+                        unsafe_allow_html=True,
+                    )
+
+                # ---- 截图粘贴（紧凑单行） ----
+                paste_col1, paste_col2 = st.columns([1, 8])
+                with paste_col1:
+                    paste_result = paste_image_button(label="📋 粘贴", key="chat_paste_btn", errors="ignore")
+                with paste_col2:
+                    if not st.session_state.pending_pasted:
+                        st.caption("Ctrl+V 粘贴截图，或下方输入框拖拽文件")
+                if paste_result is not None and paste_result.image_data is not None:
+                    sig = hashlib.sha256(paste_result.image_data.tobytes()).hexdigest()
+                    if sig != st.session_state.last_pasted_sig:
+                        st.session_state.last_pasted_sig = sig
+                        st.session_state.pending_pasted.append(paste_result.image_data)
+                        st.rerun()
+
+                if st.session_state.pending_pasted:
+                    _pc = st.columns(min(len(st.session_state.pending_pasted) + 1, 5))
+                    for i, img in enumerate(st.session_state.pending_pasted):
+                        _pc[i % len(_pc)].image(img, width=80)
+                    with _pc[-1]:
+                        if st.button("🗑️ 清空截图", key="clear_pasted", use_container_width=True):
+                            st.session_state.pending_pasted = []
+                            st.rerun()
+
+                chat_value = st.chat_input("输入：开始 / 完成 / 报错 / box size 怎么设…", accept_file="multiple")
+                if chat_value:
+                    text = (chat_value.text or "").strip()
+                    files = chat_value.files or []
+                    with st.spinner("正在保存图片..."):
+                        image_refs = save_uploaded_images(files)
                     for img in st.session_state.pending_pasted:
                         image_refs.append(save_pasted_image(img))
                     st.session_state.pending_pasted = []
                     st.session_state.last_pasted_sig = ""
-                    st.session_state._temp_voice_transcript = None
-                    st.session_state._last_voice_sig = None
-                    run_command(
-                        voice_text.strip(),
-                        image_refs,
-                        input_metadata={"input_modality": "voice", "transcript_reviewed": True},
-                        response_profile=_output_mode,
-                    )
-                    st.session_state._sp_scroll_target = "chat_bottom"
-                    st.rerun()
-                st.caption("💡 或点「📝 填入输入框」把文字追加到底部输入框，继续手打补充、附加文件后一起发送")
+                    send_text = text or ("[图片消息]" if image_refs else "")
+                    if send_text:
+                        run_command(
+                            send_text,
+                            image_refs,
+                            input_metadata={"input_modality": "image" if image_refs else "text"},
+                            response_profile=_output_mode,
+                        )
+                        st.session_state._sp_scroll_target = "chat_bottom"
+                        st.rerun()
 
-        # ---- JS：将转写文本注入到主 chat_input（必须在 expander 外部，确保始终执行） ----
-        if st.session_state.get("_inject_voice_text"):
-            inject_text = st.session_state._inject_voice_text
-            st.session_state._inject_voice_text = ""
-            escaped = json.dumps(inject_text, ensure_ascii=False)
-            js_code = f"""
-            (function() {{
-                var attempts = 0;
-                var maxAttempts = 40;
-                var injectedText = {escaped};
-                function tryInject() {{
-                    attempts++;
-                    var chatArea = document.querySelector('[data-testid="stChatInputTextArea"]');
-                    if (!chatArea) {{
-                        if (attempts < maxAttempts) setTimeout(tryInject, 200);
-                        return;
-                    }}
-                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-                    var currentVal = chatArea.value || '';
-                    var newVal = currentVal ? (currentVal + (currentVal.endsWith(' ') ? '' : ' ') + injectedText) : injectedText;
-                    nativeSetter.call(chatArea, newVal);
-                    chatArea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    chatArea.focus();
-                    chatArea.setSelectionRange(newVal.length, newVal.length);
-                }}
-                setTimeout(tryInject, 300);
-            }})();
-            """
-            js_b64 = base64.b64encode(js_code.encode('utf-8')).decode('ascii')
-            st.markdown(
-                f'<img src="data:," style="display:none!important;width:0!important;height:0!important;" onerror="eval(atob(\'{js_b64}\'))">',
-                unsafe_allow_html=True,
-            )
-
-        # ---- 截图粘贴（紧凑单行） ----
-        paste_col1, paste_col2 = st.columns([1, 8])
-        with paste_col1:
-            paste_result = paste_image_button(label="📋 粘贴", key="chat_paste_btn", errors="ignore")
-        with paste_col2:
-            if not st.session_state.pending_pasted:
-                st.caption("Ctrl+V 粘贴截图，或下方输入框拖拽文件")
-        if paste_result is not None and paste_result.image_data is not None:
-            sig = hashlib.sha256(paste_result.image_data.tobytes()).hexdigest()
-            if sig != st.session_state.last_pasted_sig:
-                st.session_state.last_pasted_sig = sig
-                st.session_state.pending_pasted.append(paste_result.image_data)
-                st.rerun()
-
-        if st.session_state.pending_pasted:
-            _pc = st.columns(min(len(st.session_state.pending_pasted) + 1, 5))
-            for i, img in enumerate(st.session_state.pending_pasted):
-                _pc[i % len(_pc)].image(img, width=80)
-            with _pc[-1]:
-                if st.button("🗑️ 清空截图", key="clear_pasted", use_container_width=True):
-                    st.session_state.pending_pasted = []
-                    st.rerun()
-
-        chat_value = st.chat_input("输入：开始 / 完成 / 报错 / box size 怎么设…", accept_file="multiple")
-        if chat_value:
-            text = (chat_value.text or "").strip()
-            files = chat_value.files or []
-            with st.spinner("正在保存图片..."):
-                image_refs = save_uploaded_images(files)
-            for img in st.session_state.pending_pasted:
-                image_refs.append(save_pasted_image(img))
-            st.session_state.pending_pasted = []
-            st.session_state.last_pasted_sig = ""
-            send_text = text or ("[图片消息]" if image_refs else "")
-            if send_text:
-                run_command(
-                    send_text,
-                    image_refs,
-                    input_metadata={"input_modality": "image" if image_refs else "text"},
-                    response_profile=_output_mode,
-                )
-                st.session_state._sp_scroll_target = "chat_bottom"
-                st.rerun()
-
-        # 智能整页滚动：根据本次 rerun 的触发源定位到最佳位置
-        inject_smart_scroll()
+                # 智能整页滚动：根据本次 rerun 的触发源定位到最佳位置
+                inject_smart_scroll()
 
 # ----- Tab 2: report (仅高级模式) ----- #
 if tab_report is not None:
@@ -3166,14 +2912,17 @@ if tab_report is not None:
             import json
 
             workflow = st.session_state.get("recommended_workflow", {})
+
+            # ✨ 优先使用用户确认的参数，否则从 state 读取
+            confirmed_params = st.session_state.get("confirmed_params", {})
             params = {
-                "pixel_size": getattr(state, "pixel_size", None),
-                "voltage": getattr(state, "voltage", None),
-                "Cs": getattr(state, "Cs", None),
-                "total_dose": getattr(state, "total_dose", None),
-                "particle_diameter": getattr(state, "particle_diameter", None),
-                "bfactor": getattr(state, "bfactor", None),
-                "box_size": getattr(state, "box_size", None),
+                "pixel_size": confirmed_params.get("pixel_size") or getattr(state, "pixel_size", None),
+                "voltage": confirmed_params.get("voltage") or getattr(state, "voltage", None),
+                "Cs": confirmed_params.get("Cs") or getattr(state, "Cs", None),
+                "total_dose": confirmed_params.get("total_dose") or getattr(state, "total_dose", None),
+                "particle_diameter": confirmed_params.get("particle_diameter") or getattr(state, "particle_diameter", None),
+                "bfactor": confirmed_params.get("bfactor") or getattr(state, "bfactor", None),
+                "box_size": confirmed_params.get("box_size") or getattr(state, "box_size", None),
             }
             wf_json = generate_cryosparc_workflow(workflow, params,
                                                   workflow_name=f"StructPilot_{state.session_id[:8]}",
@@ -3225,14 +2974,6 @@ if tab_report is not None:
             st.session_state.last_feedback = "当前会话已保存到本地 SQLite。"
             st.rerun()
 
-# ----- Tab 2: Forum (论坛) ----- #
-with tab_forum:
-    # 检查是否查看特定问题详情
-    if st.session_state.get("forum_view_question"):
-        render_question_detail()  # 修正函数名
-    else:
-        render_forum_tab()
-
 # ----- Tab: 我的空间 ----- #
 if tab_myspace is not None:
     with tab_myspace:
@@ -3242,53 +2983,186 @@ if tab_myspace is not None:
 # ----- Tab: 社区 ----- #
 if tab_community is not None:
     with tab_community:
+        # 标记为已读（更新查看时间戳）
+        from datetime import datetime
+        st.session_state["community_last_viewed"] = datetime.now().isoformat()
+
         st.markdown("### 👥 社区")
         st.caption("课题组交流与协作")
 
-        # 简单显示：链接到讨论区
-        st.info("💬 **讨论区** - 在「💬 讨论区」Tab 中查看完整论坛")
+        # 创建子Tab：讨论区 | 留言板 | 知识库贡献 | 经验库
+        sub_tabs = st.tabs(["💬 讨论区", "📋 留言板", "📚 知识库贡献", "🏆 经验库"])
 
-        st.divider()
-        st.markdown("### 💬 企业微信群机器人")
-        st.caption("审核通过经验后，自动推送到企业微信群（单向推送，无需服务器）")
+        # 子Tab 1：讨论区
+        with sub_tabs[0]:
+            # 检查是否查看特定问题详情
+            if st.session_state.get("forum_view_question"):
+                render_question_detail()
+            else:
+                render_forum_tab()
 
-        from utils.wework_bot import load_wework_config as _ww_load, save_wework_config as _ww_save, send_wework_message as _ww_send
-        _ww_cfg = _ww_load()
+        # 子Tab 2：留言板
+        with sub_tabs[1]:
+            from components.lab_board import render_board as _render_lab_board
+            from utils.user_manager import get_current_user as _get_user
+            _board_user = _get_user()
+            _render_lab_board(_board_user or "匿名用户")
 
-        with st.expander("⚙️ 配置机器人", expanded=not _ww_cfg.get("webhook_url")):
-            st.markdown("""
+        # 子Tab 3：知识库贡献（企业微信群机器人）
+        with sub_tabs[2]:
+            st.markdown("### 💬 企业微信群机器人")
+            st.caption("审核通过经验后，自动推送到企业微信群（单向推送，无需服务器）")
+
+            from utils.wework_bot import load_wework_config as _ww_load, save_wework_config as _ww_save, send_wework_message as _ww_send
+            _ww_cfg = _ww_load()
+
+            with st.expander("⚙️ 配置机器人", expanded=not _ww_cfg.get("webhook_url")):
+                st.markdown("""
 **使用步骤：**
 1. 企业微信群 → 群设置 → 群机器人 → 添加机器人
 2. 复制 Webhook 地址到下方
 3. 点击「测试推送」验证
-            """)
+                """)
 
-            _ww_webhook = st.text_input(
-                "Webhook URL",
-                value=_ww_cfg.get("webhook_url", ""),
-                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
-                key="ww_webhook_input"
-            )
-            _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
+                _ww_webhook = st.text_input(
+                    "Webhook URL",
+                    value=_ww_cfg.get("webhook_url", ""),
+                    placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+                    key="ww_webhook_input"
+                )
+                _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
-                    if _ww_save(_ww_webhook, _ww_enabled):
-                        st.success("✅ 配置已保存")
-                    else:
-                        st.error("保存失败")
-
-            with col2:
-                if st.button("🧪 测试推送", use_container_width=True, key="ww_test_btn"):
-                    if not _ww_webhook:
-                        st.error("请先填写 Webhook URL")
-                    else:
-                        ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
-                        if ok:
-                            st.success("✅ 测试成功，企业微信群应收到消息")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
+                        if _ww_save(_ww_webhook, _ww_enabled):
+                            st.success("✅ 配置已保存")
                         else:
-                            st.error("❌ 推送失败，请检查 Webhook URL 是否正确")
+                            st.error("保存失败")
+
+                with col2:
+                    if st.button("🧪 测试推送", use_container_width=True, key="ww_test_btn"):
+                        if not _ww_webhook:
+                            st.error("请先填写 Webhook URL")
+                        else:
+                            ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
+                            if ok:
+                                st.success("✅ 测试成功，企业微信群应收到消息")
+                            else:
+                                st.error("❌ 推送失败，请检查 Webhook URL 是否正确")
+
+        # 子Tab 4：经验库
+        with sub_tabs[3]:
+            st.markdown("### 🏆 经验库")
+            st.caption("查看个人经验和实验室共享经验")
+
+            # 创建二级Tab：我的经验 | 实验室经验
+            exp_tabs = st.tabs(["📝 我的经验", "🏛️ 实验室经验"])
+
+            # 我的经验（个人笔记）
+            with exp_tabs[0]:
+                st.markdown("#### 📝 我的经验")
+                st.caption("您在实验过程中记录的个人笔记和心得")
+
+                current_user = st.session_state.get("username", "")
+                if not current_user:
+                    st.info("💡 请先登录以查看您的个人经验", icon="ℹ️")
+                else:
+                    from utils.user_manager import load_user_notes
+                    user_notes = load_user_notes(current_user)
+
+                    if user_notes:
+                        st.success(f"📚 共 {len(user_notes)} 条个人经验")
+
+                        # 按时间倒序排列
+                        sorted_notes = sorted(
+                            user_notes,
+                            key=lambda x: x.get("created_at", ""),
+                            reverse=True
+                        )
+
+                        for note in sorted_notes[:20]:  # 显示最近20条
+                            with st.expander(f"📌 {note.get('title', '未命名笔记')}", expanded=False):
+                                st.markdown(f"**内容**：\n{note.get('content', '')}")
+                                if note.get("step"):
+                                    st.caption(f"步骤：{note.get('step')} · {note.get('created_at', '')}")
+                                else:
+                                    st.caption(f"创建于：{note.get('created_at', '')}")
+
+                                # 标签
+                                tags = note.get("tags", [])
+                                if tags:
+                                    st.caption(f"🏷️ {' · '.join(tags)}")
+                    else:
+                        st.info("💡 还没有个人经验，在对话过程中记录笔记后会显示在这里")
+
+            # 实验室共享经验
+            with exp_tabs[1]:
+                st.markdown("#### 🏛️ 实验室共享经验")
+                st.caption("已审核通过的团队经验，全组成员可查看")
+
+                try:
+                    exp_data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
+                    approved_exps = [e for e in exp_data.get("entries", []) if e.get("status") == "approved"]
+
+                    if approved_exps:
+                        st.info(f"📖 共 {len(approved_exps)} 条已验证经验")
+
+                        # 简单的步骤筛选
+                        step_filter = st.selectbox(
+                            "按步骤筛选",
+                            ["全部"] + ["cp_01 数据导入", "cp_02 运动校正", "cp_03 CTF估计",
+                                        "cp_04 颗粒挑选", "cp_05 颗粒提取", "cp_06 2D分类",
+                                        "cp_07 Ab-initio", "cp_08 3D分类", "cp_09 3D精修"],
+                            key="exp_lib_step_filter"
+                        )
+
+                        if step_filter != "全部":
+                            step_id = step_filter.split()[0]
+                            filtered_exps = [e for e in approved_exps if e.get('step') == step_id]
+                        else:
+                            filtered_exps = approved_exps
+
+                        # 显示经验
+                        for exp in filtered_exps[:20]:
+                            with st.expander(f"✅ {exp.get('title', '')}", expanded=False):
+                                st.markdown(f"**分类**：{exp.get('category', '')}")
+                                st.markdown(f"**步骤**：{exp.get('step', '')}")
+                                st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
+                                st.markdown("---")
+                                st.markdown(f"**解决方案**：")
+                                st.markdown(exp.get('solution', ''))
+
+                                # 显示配图
+                                images = exp.get('images', [])
+                                if images:
+                                    st.markdown("---")
+                                    st.markdown("**📷 配图说明**：")
+
+                                    for img_name in images:
+                                        img_paths = [
+                                            BASE_DIR / "runtime" / "images" / "experiences" / img_name,
+                                            BASE_DIR / "knowledge_base" / "images" / img_name,
+                                        ]
+
+                                        img_found = False
+                                        for img_path in img_paths:
+                                            if img_path.exists():
+                                                try:
+                                                    st.image(str(img_path), caption=img_name, use_container_width=True)
+                                                    img_found = True
+                                                    break
+                                                except Exception:
+                                                    continue
+
+                                        if not img_found:
+                                            st.caption(f"🖼️ 配图：{img_name}（图片文件未找到）")
+
+                                st.caption(f"贡献者：{exp.get('author', '')} · {exp.get('date', '')}")
+                    else:
+                        st.info("💡 还没有已验证的共享经验，欢迎贡献你的心得！")
+                except Exception as e:
+                    st.warning(f"⚠️ 无法加载共享经验库：{e}")
 
 # ----- Tab: 管理员区 ----- #
 if tab_admin is not None:
@@ -3462,7 +3336,7 @@ with tab_settings:
                                 img_paths = [
                                     BASE_DIR / "runtime" / "images" / "experiences" / img_name,
                                     BASE_DIR / "knowledge_base" / "images" / img_name,
-                                    Path(f"C:/Users/17706/.claude/image-cache/a6558aff-b50b-4474-aab4-ac8115bc8507/{img_name}")
+                                    Path(os.environ.get("STRUCTPILOT_IMAGE_CACHE_DIR", str(Path(__file__).parent / "runtime" / "image-cache"))) / img_name,
                                 ]
 
                                 img_found = False
@@ -3832,90 +3706,7 @@ with tab_settings:
             else:
                 st.caption("暂无笔记")
 
-        # ✨ 经验审核面板（管理员功能）
-        st.divider()
-        st.markdown("### 📋 经验审核（管理员）")
-        st.caption("审核用户贡献的经验，通过后改为「已验证」状态")
-
-        # 审核状态筛选器
-        review_filter = st.radio(
-            "显示条目",
-            options=["待审核", "已驳回", "全部"],
-            horizontal=True,
-            key="exp_review_filter",
-        )
-
-        try:
-            exp_data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
-            all_entries = exp_data.get("entries", [])
-
-            # 根据筛选器过滤
-            if review_filter == "待审核":
-                filtered_exps = [e for e in all_entries if e.get("status") == "pending"]
-            elif review_filter == "已驳回":
-                filtered_exps = [e for e in all_entries if e.get("status") == "rejected"]
-            else:  # 全部
-                filtered_exps = [e for e in all_entries if e.get("status") in ("pending", "rejected")]
-
-            if filtered_exps:
-                st.info(f"📝 {review_filter}：{len(filtered_exps)} 条经验")
-                for exp in filtered_exps[:10]:  # 最多显示10条
-                    status_badge = "⏳" if exp.get("status") == "pending" else "❌"
-                    with st.expander(f"{status_badge} {exp.get('title', '')}", expanded=False):
-                        st.markdown(f"**分类**：{exp.get('category', '')}")
-                        st.markdown(f"**步骤**：{exp.get('step', '')}")
-                        st.markdown(f"**症状**：{exp.get('symptoms_text', '')}")
-                        st.markdown(f"**解决方案**：{exp.get('solution', '')}")
-                        st.caption(f"提交者：{exp.get('author', '')} · {exp.get('date', '')}")
-
-                        col_approve, col_reject = st.columns(2)
-                        with col_approve:
-                            if st.button("✅ 通过", key=f"approve_{exp.get('id')}", use_container_width=True):
-                                # 修改状态为 approved
-                                for e in exp_data["entries"]:
-                                    if e.get("id") == exp.get("id"):
-                                        e["status"] = "approved"
-                                        e["approved_at"] = datetime.now().isoformat()
-                                        break
-                                _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-                                # 🆕 企业微信推送通知
-                                from utils.wework_bot import load_wework_config as _ww_cfg_load, send_wework_message as _ww_msg
-                                _ww_cfg_notify = _ww_cfg_load()
-                                if _ww_cfg_notify.get("enabled") and _ww_cfg_notify.get("webhook_url"):
-                                    _notify_content = (
-                                        f"✅ **新经验已审核通过**\n\n"
-                                        f"**标题**：{exp.get('title', '')}\n"
-                                        f"**作者**：{exp.get('author', '')}\n"
-                                        f"**步骤**：{exp.get('step', '')}\n"
-                                        f"**标签**：{', '.join(exp.get('tags', []))}\n\n"
-                                        f"[查看详情](http://localhost:8501)"  # TODO: 替换为实际部署URL
-                                    )
-                                    _ww_msg(_ww_cfg_notify["webhook_url"], _notify_content)
-
-                                st.success("✅ 已通过审核")
-                                st.rerun()
-                        with col_reject:
-                            if st.button("❌ 驳回", key=f"reject_{exp.get('id')}", use_container_width=True):
-                                # 修改状态为 rejected（保留条目，供后续查看）
-                                for e in exp_data["entries"]:
-                                    if e.get("id") == exp.get("id"):
-                                        e["status"] = "rejected"
-                                        e["rejected_at"] = datetime.now().isoformat()
-                                        e["rejected_by"] = current_user
-                                        break
-                                _LAB_EXP_PATH.write_text(json.dumps(exp_data, ensure_ascii=False, indent=2), encoding="utf-8")
-                                st.warning("❌ 已驳回（条目保留）")
-                                st.rerun()
-            else:
-                if review_filter == "待审核":
-                    st.success("✅ 没有待审核的经验")
-                elif review_filter == "已驳回":
-                    st.info("📭 没有已驳回的经验")
-                else:
-                    st.success("✅ 没有需要处理的经验")
-        except Exception as exc:
-            st.error(f"加载审核列表失败：{exc}")
+        # ✅ 经验审核功能已移至「管理员区」Tab
 
         # ✨ 用户管理面板（仅管理员可见）
         from utils.auth import (
@@ -3935,14 +3726,17 @@ with tab_settings:
             import json
 
             workflow = st.session_state.get("recommended_workflow", {})
+
+            # ✨ 优先使用用户确认的参数，否则从 state 读取
+            confirmed_params = st.session_state.get("confirmed_params", {})
             params = {
-                "pixel_size": getattr(state, "pixel_size", None),
-                "voltage": getattr(state, "voltage", None),
-                "Cs": getattr(state, "Cs", None),
-                "total_dose": getattr(state, "total_dose", None),
-                "particle_diameter": getattr(state, "particle_diameter", None),
-                "bfactor": getattr(state, "bfactor", None),
-                "box_size": getattr(state, "box_size", None),
+                "pixel_size": confirmed_params.get("pixel_size") or getattr(state, "pixel_size", None),
+                "voltage": confirmed_params.get("voltage") or getattr(state, "voltage", None),
+                "Cs": confirmed_params.get("Cs") or getattr(state, "Cs", None),
+                "total_dose": confirmed_params.get("total_dose") or getattr(state, "total_dose", None),
+                "particle_diameter": confirmed_params.get("particle_diameter") or getattr(state, "particle_diameter", None),
+                "bfactor": confirmed_params.get("bfactor") or getattr(state, "bfactor", None),
+                "box_size": confirmed_params.get("box_size") or getattr(state, "box_size", None),
             }
             wf_json = generate_cryosparc_workflow(workflow, params,
                                                   workflow_name=f"StructPilot_{state.session_id[:8]}",
@@ -4223,11 +4017,11 @@ with tab_settings:
                 conflicts = detect_conflicts(all_docs)
                 if conflicts:
                     for cf in conflicts:
-                        with st.warning(f"⚠️ 站点 {cf['checkpoint_id']} 可能存在知识矛盾"):
-                            st.write(f"**{cf['reason']}**")
-                            for did, title in zip(cf["docs"], cf["titles"]):
-                                st.markdown(f"- `{did}` — {title}")
-                            st.caption("建议在下方列表中审核并调整权重/状态")
+                        st.warning(f"⚠️ 站点 {cf['checkpoint_id']} 可能存在知识矛盾")
+                    st.write(f"**{cf['reason']}**")
+                    for did, title in zip(cf["docs"], cf["titles"]):
+                        st.markdown(f"- `{did}` — {title}")
+                    st.caption("建议在下方列表中审核并调整权重/状态")
     
                 fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 1])
                 with fc1:
@@ -4305,6 +4099,7 @@ with tab_settings:
                             if st.button(f"→{new_tier_label}", key=f"kb_tier_{i}", use_container_width=True):
                                 update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, status, new_tier)
                                 app.retriever.invalidate_corpus_cache()
+                                st.toast(f"✅ 已切换至{new_tier_label}", icon="✅")
                                 st.rerun()
                         with bc3:
                             new_status = "draft" if status == "formal_ready" else "formal_ready"
@@ -4312,6 +4107,7 @@ with tab_settings:
                             if st.button(f"{status_icon}{new_status_label}", key=f"kb_status_{i}", use_container_width=True):
                                 update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, new_status)
                                 app.retriever.invalidate_corpus_cache()
+                                st.toast(f"✅ {new_status_label}成功", icon="✅")
                                 st.rerun()
                         with bc4:
                             new_status = "draft" if status == "deprecated" else "deprecated"
@@ -4319,11 +4115,13 @@ with tab_settings:
                             if st.button(new_status_label, key=f"kb_deprecate_{i}", use_container_width=True):
                                 update_doc_status_in_sharded_index(str(BASE_DIR / "knowledge_base"), did, new_status)
                                 app.retriever.invalidate_corpus_cache()
+                                st.toast(f"✅ {new_status_label}成功", icon="✅")
                                 st.rerun()
                         with bc5:
                             if st.button("🗑️删除", key=f"kb_del_{i}", use_container_width=True):
                                 delete_doc_from_sharded_index(str(BASE_DIR / "knowledge_base"), did)
                                 app.retriever.invalidate_corpus_cache()
+                                st.toast("✅ 已删除", icon="✅")
                                 st.rerun()
                         # ── 内联编辑表单 ──────────────────────────
                         if st.session_state.get(f"kb_editing_{i}", False):
@@ -4420,13 +4218,6 @@ with tab_settings:
                         if st.session_state.get(f"corr_detail_{idx}", False):
                             st.json(item, expanded=False)
                         st.divider()
-    
-        # ── 课题组内部留言板 ──────────────────────────────────────────────────────
-        st.divider()
-        st.markdown("### 💬 课题组内部留言板")
-        from components.lab_board import render_board as _render_lab_board
-        _board_user = get_current_user()
-        _render_lab_board(_board_user or "匿名用户")
 
         # ── Telegram Bot 经验记录 ──────────────────────────────────────────────
         st.divider()
@@ -4486,19 +4277,19 @@ with tab_settings:
                 "Webhook URL",
                 value=_ww_cfg.get("webhook_url", ""),
                 placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
-                key="ww_webhook_input"
+                key="ww_webhook_input_settings"
             )
-            _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
+            _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle_settings")
 
             col_save, col_test = st.columns(2)
             with col_save:
-                if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
+                if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn_settings"):
                     if _ww_save(_ww_webhook, _ww_enabled):
                         st.success("✅ 配置已保存")
                     else:
                         st.error("保存失败")
             with col_test:
-                if st.button("🧪 测试连接", use_container_width=True, key="ww_test_btn"):
+                if st.button("🧪 测试连接", use_container_width=True, key="ww_test_btn_settings"):
                     if _ww_webhook.strip():
                         ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
                         if ok:
@@ -4944,32 +4735,12 @@ if _pet_enabled_check:
             pass
 
 
-# ==================== 右侧快速笔记按钮 ====================
+# ==================== 快速笔记侧边栏 ====================
+# 使用原生 st.sidebar 实现，取代原有的 iframe 方案
 # 仅在已登录且为成员/管理员时显示
 if st.session_state.get("logged_in") and st.session_state.get("role") in ["member", "admin"]:
-    from components.quick_note import render_quick_note_button
-    render_quick_note_button()
-
-    # 处理快速笔记保存（通过 JavaScript 消息）
-    if "_quick_note_data" in st.session_state:
-        note_data = st.session_state.pop("_quick_note_data")
-        from utils.user_manager import save_user_note_dict
-        import uuid
-        from datetime import datetime
-
-        username = st.session_state.get("username", "")
-        note = {
-            "id": str(uuid.uuid4())[:8],
-            "title": note_data.get("title", "快速笔记"),
-            "content": note_data.get("content", ""),
-            "step": "",
-            "tags": ["快速笔记"],
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-        }
-
-        if save_user_note_dict(username, note):
-            st.toast("✅ 笔记已保存", icon="✅")
+    from components.quick_note_v2 import render_quick_note_sidebar
+    render_quick_note_sidebar()
 
 
 

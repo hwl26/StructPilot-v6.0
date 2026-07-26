@@ -334,5 +334,50 @@
     "evidence_grade": "",
     "risk_grade": "",
     "review_status": ""
+  },
+  {
+    "doc_id": "[实验室操作指南] RELION详细操作·运动校正图文教程",
+    "software": "relion",
+    "checkpoint_id": "cp_02",
+    "title_cn": "RELION Motion Correction 图文操作指南（含界面截图）",
+    "title_en": "RELION Motion Correction Step-by-Step Guide with Screenshots",
+    "summary": "RELION 运动校正的实际操作步骤与界面截图。关键要点：1. 选择 Motion correction，浏览选择 Import/job001/movies.star；2. I/O Tab 填写 Dose per frame (1.25)、EER fractionation (37)；3. Motion Tab 设置 patches 7x7、gain文件路径；4. Running Tab 设置 MPI procs (16)、threads (2)，运行前检查组内CPU使用情况。包含4张实际界面截图。",
+    "action_steps": [
+      "左侧菜单选中 Motion correction",
+      "I/O Tab: Browse 选择 Import/job001/movies.star",
+      "I/O Tab: 填写 Dose per frame 1.25, EER fractionation 37",
+      "Motion Tab: Number of patches X,Y 输入 7x7",
+      "Motion Tab: Gain-reference image 输入 171114_EER_GainReference.gain",
+      "Running Tab: Number of MPI procs 16, Number of threads 2",
+      "运行前检查组内CPU使用情况，点击 Run",
+      "确认 Finished jobs 显示 002: MotionCorr/job002/"
+    ],
+    "qc_checks": [
+      "Finished jobs 窗口显示 001: Import/job001/ 和 002: MotionCorr/job002/",
+      "两个job都在Finished列表中",
+      "正常跑完这两个job即可，无需再进行其他操作"
+    ],
+    "common_errors": [
+      "EER fractionation 参数需要提前计算，参考实验室SOP",
+      "运行前未检查组内CPU占用情况，导致资源冲突"
+    ],
+    "image_refs": [
+      "../../assets/relion_screenshots/motion_correction_select.png",
+      "../../assets/relion_screenshots/motion_correction_params.png",
+      "../../assets/relion_screenshots/motion_correction_running.png",
+      "../../assets/relion_screenshots/finished_jobs.png"
+    ],
+    "tags": [
+      "lab_guide",
+      "relion",
+      "cp_02",
+      "screenshot",
+      "beginner_friendly"
+    ],
+    "tier": "note",
+    "status": "formal_ready",
+    "source": "lab_operation_guide",
+    "source_url": "../../docs/relion_spa/DetailedOperationGuide.md",
+    "imported_at": "2026-07-26T20:00:00"
   }
 ]
