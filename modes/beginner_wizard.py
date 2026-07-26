@@ -3,7 +3,7 @@
 逐步引导小白用户填写 cryoSPARC workflow 参数：
 1. 每个 job 一页（或多步合并为一页）
 2. 核心参数（flagged=True）默认展开
-3. 固定参数（locked=True）折叠且灰显
+3. 所有参数均可修改；常用值仅作为参考
 4. 最后生成 workflow JSON 供导出
 
 调用方：main.py 入门模式 Tab
@@ -285,101 +285,6 @@ def render_beginner_wizard(
         _generate_and_export_workflow(st.session_state.wizard_params, state, app)
 
 
-def _render_job_params(job_id: str, params_store: Dict[str, Any]) -> None:
-    """渲染单个 job 的参数输入表单。"""
-    param_configs = _JOB_PARAMS_CONFIG.get(job_id, [])
-    if not param_configs:
-        return  # 无需用户填写参数的 job（如 curate, inspect）
-
-    # 分层：核心参数 vs 固定参数
-    core_params = [p for p in param_configs if p.get("flagged", False)]
-    locked_params = [p for p in param_configs if p.get("locked", False)]
-    other_params = [p for p in param_configs if not p.get("flagged", False) and not p.get("locked", False)]
-
-    # 渲染核心参数（默认展开）
-    if core_params:
-        st.markdown("**核心参数**")
-        for param in core_params:
-            _render_param_input(param, params_store)
-
-    # 渲染固定参数（折叠，但可编辑）
-    if locked_params:
-        with st.expander("🔒 固定参数（通常无需修改）", expanded=False):
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.info("💡 **提示：** 这些参数通常不需要修改，但如果你需要自定义，可以直接编辑下方的值。")
-            with col2:
-                if st.button("✏️ 一键展开编辑", key="expand_locked_params", use_container_width=True):
-                    st.session_state["_locked_params_expanded"] = True
-
-            # 添加视觉分隔
-            st.markdown("---")
-
-            for param in locked_params:
-                _render_param_input(param, params_store)
-
-    # 渲染其他参数（折叠）
-    if other_params:
-        with st.expander("📦 高级参数（可选）", expanded=False):
-            for param in other_params:
-                _render_param_input(param, params_store)
-
-
-def _render_param_input(param: Dict[str, Any], params_store: Dict[str, Any]) -> None:
-    """渲染单个参数输入控件。"""
-    key = param["key"]
-    label = param["label"]
-    param_type = param["type"]
-    required = param.get("required", False)
-    default = param.get("default")
-    help_text = param.get("help", "")
-    placeholder = param.get("placeholder", "")
-
-    # 从 store 中恢复值
-    current_value = params_store.get(key, default)
-
-    if param_type == "text":
-        value = st.text_input(
-            label + (" *" if required else ""),
-            value=current_value or "",
-            placeholder=placeholder,
-            help=help_text,
-            key=f"param_{key}",
-        )
-        params_store[key] = value
-
-    elif param_type == "number":
-        options = param.get("options")
-        if options:
-            # 下拉选择
-            try:
-                index = options.index(current_value) if current_value in options else 0
-            except (ValueError, TypeError):
-                index = 0
-            value = st.selectbox(
-                label + (" *" if required else ""),
-                options=options,
-                index=index,
-                help=help_text,
-                key=f"param_{key}",
-            )
-        else:
-            # 数字输入
-            min_val = param.get("min", 0.0)
-            max_val = param.get("max", 1000.0)
-            step = param.get("step", 1.0 if isinstance(default, int) else 0.01)
-            value = st.number_input(
-                label + (" *" if required else ""),
-                min_value=min_val,
-                max_value=max_val,
-                value=float(current_value) if current_value is not None else float(default),
-                step=step,
-                help=help_text,
-                key=f"param_{key}",
-            )
-        params_store[key] = value
-
-
 def _generate_and_export_workflow(params: Dict[str, Any], state: Any, app: Any) -> None:
     """生成 workflow JSON 并提供下载。"""
     # 构建 workflow 对象（StructPilot 格式）
@@ -448,12 +353,12 @@ def _render_job_params(job_id: str, params_dict: Dict[str, Any]) -> None:
     """渲染单个 job 的参数表单。"""
     param_configs = _JOB_PARAMS_CONFIG.get(job_id, [])
     if not param_configs:
-        st.info(f"📋 {job_id} 无需手动配置参数（使用默认值）")
         return
 
-    # 分组：核心参数（展开）和固定参数（折叠）
-    key_params = [p for p in param_configs if p.get("flagged", False) and not p.get("locked", False)]
-    locked_params = [p for p in param_configs if p.get("locked", False)]
+    # 分组：核心参数（展开）和其他可选参数（折叠）
+    # 模板元数据不能使向导中的任何参数变为只读。
+    key_params = [param for param in param_configs if param.get("flagged", False)]
+    other_params = [param for param in param_configs if not param.get("flagged", False)]
 
     # 渲染核心参数
     if key_params:
@@ -461,60 +366,51 @@ def _render_job_params(job_id: str, params_dict: Dict[str, Any]) -> None:
         for param in key_params:
             _render_param_input(param, params_dict)
 
-    # 渲染固定参数（折叠）
-    if locked_params:
-        with st.expander("🔒 固定参数（通常无需修改）", expanded=False):
-            for param in locked_params:
-                _render_param_input(param, params_dict, disabled=True)
+    # 渲染其他参数（折叠，但始终可编辑）
+    if other_params:
+        with st.expander("更多参数（均可修改）", expanded=False):
+            for param in other_params:
+                _render_param_input(param, params_dict)
 
 
-def _render_param_input(param: Dict[str, Any], params_dict: Dict[str, Any], disabled: bool = False) -> None:
-    """渲染单个参数输入控件。"""
+def _render_param_input(param: Dict[str, Any], params_dict: Dict[str, Any]) -> None:
+    """Render an editable input; suggested values never constrain the user."""
     key = param["key"]
     label = param["label"]
     param_type = param["type"]
     default_value = param.get("default")
     help_text = param.get("help", "")
+    options = param.get("options", [])
+    if options:
+        suggestions = "、".join(str(option) for option in options)
+        help_text = f"{help_text}\n常用值参考：{suggestions}".strip()
 
-    # 从 params_dict 读取已有值
     current_value = params_dict.get(key, default_value)
+    input_label = label + (" *" if param.get("required", False) else "")
 
     if param_type == "text":
         value = st.text_input(
-            label,
+            input_label,
             value=current_value or "",
             placeholder=param.get("placeholder", ""),
             help=help_text,
             key=f"param_{key}",
-            disabled=disabled,
         )
         params_dict[key] = value
 
     elif param_type == "number":
-        if "options" in param:
-            # 下拉选择
-            options = param["options"]
-            index = options.index(current_value) if current_value in options else 0
-            value = st.selectbox(
-                label,
-                options=options,
-                index=index,
-                help=help_text,
-                key=f"param_{key}",
-                disabled=disabled,
-            )
-        else:
-            # 数字输入
-            value = st.number_input(
-                label,
-                value=float(current_value) if current_value is not None else float(default_value or 0),
-                min_value=float(param.get("min", 0)),
-                max_value=float(param.get("max", 1000)),
-                step=float(param.get("step", 1)),
-                help=help_text,
-                key=f"param_{key}",
-                disabled=disabled,
-            )
+        is_integer = isinstance(default_value, int) and not isinstance(default_value, bool)
+        value_type = int if is_integer else float
+        fallback_value = default_value if default_value is not None else 0
+        value = st.number_input(
+            input_label,
+            min_value=value_type(param["min"]) if "min" in param else None,
+            max_value=value_type(param["max"]) if "max" in param else None,
+            value=value_type(current_value if current_value is not None else fallback_value),
+            step=value_type(param.get("step", 1 if is_integer else 0.1)),
+            help=help_text,
+            key=f"param_{key}",
+        )
         params_dict[key] = value
 
 
@@ -774,4 +670,3 @@ relion
     # 底部提示
     st.markdown("---")
     st.success("✅ **完成 RELION 前期处理后，记得切换到 cryoSPARC 继续后续流程！**")
-
