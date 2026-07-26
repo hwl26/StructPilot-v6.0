@@ -25,13 +25,21 @@ RUNTIME_ROOT = Path(
 
 
 def _default_screenshot_root() -> Path:
-    """上级目录提供的视觉 UI 截图根（各步骤截图存放位置）。"""
-    return (
+    """上级目录提供的视觉 UI 截图根（各步骤截图存放位置）。
+
+    在 Streamlit Cloud 等容器环境中，上级目录结构不存在，此时回退到
+    工程内 assets/guides 目录，避免引用不存在的路径。
+    """
+    candidate = (
         BASE_DIR.parent
         / "StructPilot_Visual_UI"
         / "StructPilot_Visual_UI"
         / "images"
     )
+    # 云端环境上级目录不存在时，直接使用工程内兜底目录
+    if not candidate.exists():
+        return BASE_DIR / "assets" / "guides"
+    return candidate
 
 
 # 截图根目录：默认指向上级目录 StructPilot_Visual_UI images，

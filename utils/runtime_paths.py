@@ -25,7 +25,12 @@ os.environ.setdefault("STRUCTPILOT_RUNTIME_DIR", str(RUNTIME_ROOT))
 
 
 def ensure_runtime_dir(preferred: Path, fallback_name: str) -> Path:
-    """Return a writable runtime directory from several Windows-friendly locations."""
+    """Return a writable runtime directory from several locations.
+
+    Tries multiple roots so the app works on Windows, Linux, and read-only
+    cloud environments (Streamlit Community Cloud).  Never raises — falls
+    back to the system temp dir if every candidate fails.
+    """
     roots = [preferred]
     if os.getenv("STRUCTPILOT_RUNTIME_DIR"):
         runtime = Path(os.getenv("STRUCTPILOT_RUNTIME_DIR", ""))
@@ -51,9 +56,16 @@ def ensure_runtime_dir(preferred: Path, fallback_name: str) -> Path:
             return path
         except OSError as exc:
             tried.append(f"{path} ({exc})")
-    raise PermissionError("无法创建可写运行目录：" + " | ".join(tried))
+    # Last-resort fallback: system temp dir (always writable on all platforms)
+    fallback = Path(tempfile.gettempdir()) / "StructPilot_v4" / fallback_name
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
 
 
+# ---------------------------------------------------------------------------
+# Runtime directories — resolved at import time but with guaranteed fallback
+# so that read-only environments (Streamlit Cloud) never crash on import.
+# ---------------------------------------------------------------------------
 MEMORY_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory", "memory")
 UPLOAD_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory" / "uploads", "uploads")
 AUDIO_DIR = ensure_runtime_dir(RUNTIME_ROOT / "memory" / "audio", "audio")

@@ -9,6 +9,7 @@ streamlit-paste-button>=0.1.2
 Pillow>=10.0
 tenacity>=8.0.0
 audio-recorder-streamlit>=0.0.10
+bcrypt>=4.0.0
 
 # 安全防护
 bleach>=6.0.0
