@@ -55,7 +55,7 @@ def _classify_source_type(doc_id: str) -> str:
     d = (doc_id or "").lower()
     if d.startswith("glossary:") or re.match(r"^cp_\d+", d):
         return "principle"
-    if d.startswith("lab_exp") or "experience" in d or "lab_kb" in d:
+    if d.startswith("lab_") or d.startswith("lab_exp") or "experience" in d or "lab_kb" in d:
         return "lab_exp"
     return "discussion"
 
@@ -490,7 +490,7 @@ class StructPilotApp:
         ]
 
         references = "\n\n".join(
-            f"[R{i}] {doc_id} score={score:.2f}\n{text}"
+            f"[R{i}] source_type={_classify_source_type(doc_id)} doc_id={doc_id} score={score:.2f}\n{text}"
             for i, (doc_id, text, score) in enumerate(filtered, start=1)
         )
         # 将 SmartQA 推理结果追加到 references（此时 references 已定义）

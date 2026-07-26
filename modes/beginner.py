@@ -296,10 +296,10 @@ def render_beginner_view(
                 # 同步到 state 的顶层属性（cryosparc_workflow 会读取这些）
                 for key, value in confirmed_params.items():
                     if hasattr(state, key):
-                    setattr(state, key, value)
+                        setattr(state, key, value)
 
-            st.success("✅ 参数配置完成！")
-            st.rerun()
+                st.success("✅ 参数配置完成！")
+                st.rerun()
 
         return  # 等待用户确认参数后再继续
 

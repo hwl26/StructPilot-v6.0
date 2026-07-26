@@ -21,24 +21,25 @@ _USER_DATA_DIR = BASE_DIR / "runtime" / "user_data"
 def get_current_user() -> Optional[str]:
     """获取当前用户 ID。
 
+    以 utils.auth 的登录态为准（session_state.username），未登录返回 None。
+
     Returns
     -------
     str or None
-        用户 ID（Streamlit Cloud 的 email 或本地输入的 username）
+        用户名，未登录时为 None
     """
-    # 尝试 Streamlit Cloud 的 user API
+    if st.session_state.get("logged_in") and st.session_state.get("username"):
+        return st.session_state["username"]
+
+    # Streamlit Cloud 的 user API 作为兜底（本项目自带账号体系时通常不触发）
     try:
         user_info = st.user
-        if hasattr(user_info, "email") and user_info.email:
+        if getattr(user_info, "email", None):
             return user_info.email
     except Exception:
         pass
 
-    # 本地模式：从 session_state 读取
-    if "structpilot_user_id" not in st.session_state:
-        st.session_state.structpilot_user_id = None
-
-    return st.session_state.structpilot_user_id
+    return None
 
 
 def set_local_user(username: str) -> None:

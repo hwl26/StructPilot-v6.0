@@ -461,36 +461,7 @@ def render_onboarding_dialog() -> bool:
         if "_edited_params" not in st.session_state:
             st.session_state._edited_params = params.copy()
 
-        # 关键参数（必须准确）
-        st.markdown("#### 🔴 关键参数（请与电镜管理员确认）")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            voltage = st.number_input(
-                "加速电压 (kV) *",
-                value=st.session_state._edited_params.get("voltage", 300),
-                min_value=100,
-                max_value=500,
-                step=100,
-                help="必须准确！通常为 200kV 或 300kV",
-                key="param_voltage"
-            )
-            st.session_state._edited_params["voltage"] = voltage
-
-        with col2:
-            pixel_size = st.number_input(
-                "像素尺寸 (Å/pix) *",
-                value=st.session_state._edited_params.get("pixel_size", 0.86),
-                min_value=0.1,
-                max_value=5.0,
-                step=0.01,
-                format="%.3f",
-                help="⚠️ 此参数错误会导致全流程失败！请使用电镜管理员提供的准确值",
-                key="param_pixel_size"
-            )
-            st.session_state._edited_params["pixel_size"] = pixel_size
-
-        st.caption(f"💡 推荐值：加速电压 {params.get('voltage')} kV，像素尺寸 {params.get('pixel_size')} Å/pix")
+        # 加速电压 / 像素尺寸在后续「参数向导」的数据导入步骤中采集，此处不重复询问
 
         # 推荐参数（可后续调整）
         with st.expander("🟡 推荐参数（可后续调整，点击展开编辑）", expanded=False):

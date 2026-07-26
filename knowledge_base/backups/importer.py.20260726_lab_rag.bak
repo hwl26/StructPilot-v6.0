@@ -17,7 +17,6 @@ except Exception:  # pragma: no cover
 TIER_WEIGHTS = {
     "builtin": 1.0,
     "sop": 0.95,
-    "lab": 0.92,
     "note": 0.7,
     "draft": 0.4,
 }
@@ -25,7 +24,6 @@ TIER_WEIGHTS = {
 TIER_LABELS = {
     "builtin": "内置",
     "sop": "正式SOP",
-    "lab": "课题组经验",
     "note": "个人笔记",
     "draft": "草稿",
 }

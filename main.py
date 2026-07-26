@@ -2985,12 +2985,18 @@ if tab_myspace is not None:
 # ----- Tab: 社区 ----- #
 if tab_community is not None:
     with tab_community:
-        # 标记为已读（更新查看时间戳）
-        from datetime import datetime
-        st.session_state["community_last_viewed"] = datetime.now().isoformat()
-
-        st.markdown("### 👥 社区")
-        st.caption("课题组交流与协作")
+        # 注意：Streamlit 的 tab 是 CSS 显隐，每次 rerun 都会执行所有 tab 的 body，
+        # 因此不能在这里无条件更新时间戳（会让未读数恒为 0），改为显式按钮。
+        _c_head, _c_mark = st.columns([4, 1])
+        with _c_head:
+            st.markdown("### 👥 社区")
+            st.caption("课题组交流与协作")
+        with _c_mark:
+            if _community_unread > 0:
+                if st.button(f"✓ 标记已读（{_community_unread}）", use_container_width=True, key="mark_community_read"):
+                    from datetime import datetime as _dt
+                    st.session_state["community_last_viewed"] = _dt.now().isoformat()
+                    st.rerun()
 
         # 创建子Tab：讨论区 | 留言板 | 知识库贡献 | 经验库
         sub_tabs = st.tabs(["💬 讨论区", "📋 留言板", "📚 知识库贡献", "🏆 经验库"])
@@ -3226,69 +3232,7 @@ with tab_settings:
             st.success("✅ 界面设置已保存")
             st.rerun()
 
-        # ✨ 个人笔记管理（入门模式）
-        st.divider()
-        st.markdown("### 📝 个人笔记")
-        st.caption("记录你的实验心得、参数设置、问题解决方案")
-
-        from utils.user_manager import get_current_user, load_user_notes, save_user_note, delete_user_note
-        current_user = get_current_user()
-
-        if not current_user:
-            st.warning("⚠️ 请先登录才能使用个人笔记功能")
-            st.info("💡 在左侧边栏「👤 用户笔记」中登录")
-        else:
-            notes = load_user_notes(current_user)
-            st.caption(f"📊 共 {len(notes)} 条笔记")
-
-            # 新建笔记（简化版）
-            with st.expander("➕ 新建笔记", expanded=False):
-                note_title = st.text_input("笔记标题 *", placeholder="如：Motion Correction 参数设置")
-                note_content = st.text_area(
-                    "笔记内容 *",
-                    placeholder="记录你的实验心得、参数设置、遇到的问题和解决方案...",
-                    height=150
-                )
-                note_step = st.selectbox(
-                    "相关步骤（可选）",
-                    [""] + ["cp_01 数据导入", "cp_02 运动校正", "cp_03 CTF估计",
-                            "cp_04 颗粒挑选", "cp_05 颗粒提取", "cp_06 2D分类",
-                            "cp_07 Ab-initio", "cp_08 3D分类", "cp_09 3D精修"]
-                )
-
-                if st.button("💾 保存笔记", type="primary", use_container_width=True):
-                    if not note_title or not note_content:
-                        st.error("请填写标题和内容")
-                    else:
-                        # 提取步骤ID
-                        step_id = note_step.split()[0] if note_step else ""
-                        save_user_note(
-                            user=current_user,
-                            title=note_title,
-                            content=note_content,
-                            checkpoint_id=step_id,
-                            software=""
-                        )
-                        st.success("✅ 笔记已保存！")
-                        st.rerun()
-
-            # 显示现有笔记
-            if notes:
-                st.markdown("#### 我的笔记")
-                for i, note in enumerate(notes):
-                    with st.expander(f"📄 {note.get('title', '无标题')}", expanded=False):
-                        st.markdown(f"**创建时间：** {note.get('created_at', '')[:10]}")
-                        if note.get('checkpoint_id'):
-                            st.markdown(f"**相关步骤：** {note.get('checkpoint_id')}")
-                        st.markdown("---")
-                        st.markdown(note.get('content', ''))
-
-                        if st.button(f"🗑️ 删除", key=f"del_note_{i}"):
-                            delete_user_note(current_user, note.get('id'))
-                            st.success("✅ 笔记已删除")
-                            st.rerun()
-            else:
-                st.info("💡 还没有笔记，点击上方「➕ 新建笔记」开始记录你的实验心得")
+        # 个人笔记已统一到「📝 我的空间」Tab，此处不再重复入口
 
         # ✨ 实验室共同知识库（所有成员可见）
         st.divider()
@@ -3574,7 +3518,7 @@ with tab_settings:
                            value=st.session_state.get("pet_enabled", True),
                            key="pet_enabled",
                            help="在右下角显示一只可爱的科研伙伴，摸头、摸身体、拽尾巴有不同反应，还可以拖动哦～")
-        _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "AI助手"}
+        _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "科研助手"}
         # 确保 session_state 中的 pet_type 合法（防止旧配置或异常值导致空白选项）
         if st.session_state.get("pet_type", "penguin") not in _pet_options:
             st.session_state.pet_type = "penguin"
@@ -4020,9 +3964,9 @@ with tab_settings:
                 if conflicts:
                     for cf in conflicts:
                         st.warning(f"⚠️ 站点 {cf['checkpoint_id']} 可能存在知识矛盾")
-                    st.write(f"**{cf['reason']}**")
-                    for did, title in zip(cf["docs"], cf["titles"]):
-                        st.markdown(f"- `{did}` — {title}")
+                        st.write(f"**{cf['reason']}**")
+                        for did, title in zip(cf["docs"], cf["titles"]):
+                            st.markdown(f"- `{did}` — {title}")
                     st.caption("建议在下方列表中审核并调整权重/状态")
     
                 fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 1])
@@ -4533,7 +4477,7 @@ if _pet_enabled_check:
                 '</svg>'
             ),
             "msgs": {
-                "idle": ["系统就绪，等待指令。", "StructPilot AI助手已启动。", "请点击「开始」初始化流程。"],
+                "idle": ["系统就绪，等待指令。", "StructPilot 科研助手已启动。", "请点击「开始」初始化流程。"],
                 "working": [
                     f"当前阶段：{_cp_name}，执行中...",
                     f"进度：{_completed}/{_cp_total_num}，继续处理",

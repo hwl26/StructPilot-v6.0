@@ -942,27 +942,17 @@ def _render_qc_tab(
         last_qc = getattr(state, "last_qc_result", {}) or {}
         qc_passed = last_qc.get("passed")
 
-        # 使用美观的卡片式设计
         for idx, check in enumerate(qc_checks):
-            is_checked = idx in qc_done
-
-            # 单个质控项容器
-            with st.container():
-                # 使用checkbox作为主要交互元素，标签文字放在checkbox内部
-                checkbox_label = f"{'✅' if is_checked else '☐'} {check}"
-                new_checked = st.checkbox(
-                    checkbox_label,
-                    value=is_checked,
-                    key=f"{key_prefix}_qc_{idx}",
-                    label_visibility="visible"
-                )
-
-                # 更新状态
-                if new_checked:
-                    qc_done.add(idx)
-                else:
-                    qc_done.discard(idx)
-                st.session_state[qc_state_key] = qc_done
+            new_checked = st.checkbox(
+                check,
+                value=idx in qc_done,
+                key=f"{key_prefix}_qc_{idx}",
+            )
+            if new_checked:
+                qc_done.add(idx)
+            else:
+                qc_done.discard(idx)
+        st.session_state[qc_state_key] = qc_done
 
         # 显示质控结果
         st.divider()

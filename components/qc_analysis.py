@@ -198,6 +198,7 @@ def _generate_diagnosis(
                         "ref": f"R{i}",
                         "doc_id": doc_id,
                         "score": score,
+                        "source_type": "lab_exp" if str(doc_id).startswith("lab_") else "discussion",
                         "snippet": snippet,
                     })
         except Exception:

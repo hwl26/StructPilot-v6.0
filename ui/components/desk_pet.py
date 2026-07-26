@@ -363,7 +363,7 @@ def render_desk_pet(
         <div class="sp-pet-ctx-item" data-action="switch" data-pet="penguin">🐧 冷冻企鹅</div>
         <div class="sp-pet-ctx-item" data-action="switch" data-pet="dog">🐶 实验小狗</div>
         <div class="sp-pet-ctx-item" data-action="switch" data-pet="rabbit">🐰 实验兔兔</div>
-        <div class="sp-pet-ctx-item" data-action="switch" data-pet="robot">🤖 AI助手</div>
+        <div class="sp-pet-ctx-item" data-action="switch" data-pet="robot">🤖 科研助手</div>
         <div class="sp-pet-ctx-separator"></div>
         <div class="sp-pet-ctx-header">尺寸</div>
         <div class="sp-pet-ctx-item" data-action="size" data-size="48">📏 小号</div>

@@ -677,7 +677,7 @@ class RAGRetrievalOptimizer:
                         "doc_id": doc_id,
                         "text": text,
                         "score": score,
-                        "source_type": "vector",
+                        "source_type": "lab_exp" if str(doc_id).startswith("lab_") else "vector",
                     })
             except Exception:
                 pass

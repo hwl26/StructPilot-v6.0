@@ -217,52 +217,13 @@ def render_smart_questionnaire(app: Any) -> Optional[Dict[str, Any]]:
     if "sq_history" not in st.session_state:
         st.session_state["sq_history"] = []  # 已回答的问题key列表
 
-    # 步骤1：选择模式
+    # 模式选择由 modes/beginner.py 统一负责，这里直接进入智能问卷
     if st.session_state["sq_mode"] is None:
-        st.markdown("### 🚀 开始配置您的实验")
-        st.caption("请选择问卷模式")
+        st.session_state["sq_mode"] = "smart"
+    if st.session_state["sq_current_question"] is None and not st.session_state["sq_history"]:
+        st.session_state["sq_current_question"] = "sample_type"
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        padding: 20px; border-radius: 10px; color: white; text-align: center;">
-                <h3>⚡ 快速模式</h3>
-                <p>传统选项问卷<br>3分钟完成</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.button("选择快速模式", use_container_width=True, type="secondary", key="choose_fast"):
-                st.session_state["sq_mode"] = "fast"
-                st.rerun()
-
-        with col2:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                        padding: 20px; border-radius: 10px; color: white; text-align: center;">
-                <h3>🤖 智能模式</h3>
-                <p>AI对话式问卷<br>自然交流，更智能</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.button("选择智能模式", use_container_width=True, type="primary", key="choose_smart"):
-                st.session_state["sq_mode"] = "smart"
-                st.session_state["sq_current_question"] = "sample_type"  # 从第一个问题开始
-                st.rerun()
-
-        return None
-
-    # 步骤2：快速模式 - 调用原有的固定问卷
-    if st.session_state["sq_mode"] == "fast":
-        from components.onboarding_v2 import render_onboarding_v2
-        result = render_onboarding_v2()
-        if result:
-            # 清空状态，准备下次使用
-            st.session_state["sq_mode"] = None
-        return result
-
-    # 步骤3：智能模式 - 多轮对话
+    # 智能模式 - 多轮对话
     if st.session_state["sq_mode"] == "smart":
         st.markdown("### 🤖 智能问卷")
 

@@ -22,7 +22,12 @@
         "B_factor": 500
       },
       "success_rate": "3/3 有效",
-      "tags": ["运动校正", "漂移", "B-factor", "local motion"],
+      "tags": [
+        "运动校正",
+        "漂移",
+        "B-factor",
+        "local motion"
+      ],
       "last_verified": "2026-07-01"
     },
     {
@@ -48,7 +53,11 @@
         "mask_diameter": "直径 × 1.2"
       },
       "success_rate": "2/2 有效",
-      "tags": ["2D分类", "少量颗粒", "参数调整"],
+      "tags": [
+        "2D分类",
+        "少量颗粒",
+        "参数调整"
+      ],
       "last_verified": "2026-06-10"
     },
     {
@@ -74,7 +83,12 @@
         "max_resolution": "5 Å"
       },
       "success_rate": "2/3 有效（1次因冰层问题无法解决）",
-      "tags": ["CTF", "拟合率低", "像素尺寸", "冰层"],
+      "tags": [
+        "CTF",
+        "拟合率低",
+        "像素尺寸",
+        "冰层"
+      ],
       "last_verified": "2026-06-01"
     },
     {
@@ -98,7 +112,12 @@
         "max_res_ctf": 5,
         "num_classes_2d": 50
       },
-      "tags": ["TRPV1", "膜蛋白", "Krios", "标准流程"],
+      "tags": [
+        "TRPV1",
+        "膜蛋白",
+        "Krios",
+        "标准流程"
+      ],
       "last_verified": "2026-07-10"
     },
     {
@@ -123,7 +142,11 @@
         "max_diameter": "颗粒尺寸 × 1.3",
         "threshold": "0.3-0.4"
       },
-      "tags": ["Blob Picker", "颗粒挑选", "threshold"],
+      "tags": [
+        "Blob Picker",
+        "颗粒挑选",
+        "threshold"
+      ],
       "last_verified": "2026-06-25"
     },
     {
@@ -142,8 +165,14 @@
       "symptoms_text": "导入数据后不知道是否成功",
       "solution": "**关键检查：** 查看 `imported_micrographs` 和 `failed_micrographs` 的数量\n\n**判断标准：**\n- ✅ **Good：** imported 数量 > 2000，failed 数量 = 0\n- ⚠️ **Warning：** failed 数量 > 0，检查文件路径和格式\n\n**配图说明：** 红框标注 `imported_micrographs: 2,586 exposures` 和 `failed_micrographs: 0 exposures`",
       "related_params": {},
-      "tags": ["数据导入", "import", "checklist"],
-      "images": ["41.png"],
+      "tags": [
+        "数据导入",
+        "import",
+        "checklist"
+      ],
+      "images": [
+        "41.png"
+      ],
       "last_verified": "2026-07-25"
     },
     {
@@ -165,8 +194,15 @@
         "good_range": "3.0-4.0 Å",
         "warning_threshold": "> 7 Å"
       },
-      "tags": ["CTF", "quality", "resolution", "判断标准"],
-      "images": ["42.png"],
+      "tags": [
+        "CTF",
+        "quality",
+        "resolution",
+        "判断标准"
+      ],
+      "images": [
+        "42.png"
+      ],
       "last_verified": "2026-07-25"
     },
     {
@@ -188,8 +224,15 @@
         "astigmatism_ideal": "< 500 Å",
         "astigmatism_warning": "> 500 Å"
       },
-      "tags": ["CTF", "astigmatism", "像散", "四大指标"],
-      "images": ["43.png"],
+      "tags": [
+        "CTF",
+        "astigmatism",
+        "像散",
+        "四大指标"
+      ],
+      "images": [
+        "43.png"
+      ],
       "last_verified": "2026-07-25"
     },
     {
@@ -213,8 +256,15 @@
         "ctf_fit_threshold": "< 5 Å",
         "astigmatism_threshold": "< 200 nm"
       },
-      "tags": ["Patch CTF", "defocus", "曲面", "制样质量"],
-      "images": ["44.png"],
+      "tags": [
+        "Patch CTF",
+        "defocus",
+        "曲面",
+        "制样质量"
+      ],
+      "images": [
+        "44.png"
+      ],
       "last_verified": "2026-07-25"
     },
     {
@@ -238,8 +288,15 @@
         "motion_threshold": "5-10 Å",
         "defocus_range": "-0.5 to -3.0 µm"
       },
-      "tags": ["Curate", "筛选", "删除标准", "checklist"],
-      "images": ["45.png"],
+      "tags": [
+        "Curate",
+        "筛选",
+        "删除标准",
+        "checklist"
+      ],
+      "images": [
+        "45.png"
+      ],
       "last_verified": "2026-07-25"
     },
     {
@@ -258,15 +315,815 @@
       "symptoms_text": "2D class 结果不知道如何判断好坏",
       "solution": "**Blob Picking 的特点：** 无模板、纯靠形状大小筛颗粒，不引入 model bias，是对'样品里到底有什么'的一次诚实照镜子\n\n**✅ 好的 2D class（保留）：**\n- 轮廓清晰锐利\n- 有二级结构特征（α-螺旋点状密度、β-折叠条纹）\n- 颗粒边界锐利\n- 内部密度分布合理\n- 不同 class 间呈连续取向分布（说明方向覆盖好）\n\n**含义：** 蛋白表达良好、冰层厚度合适、颗粒取向覆盖充分，后续大概率能拿到好的 3D 结构\n\n**❌ 坏的 2D class（删除）：**\n- 纯噪声背景\n- 模糊一团无法分辨结构\n- 明显是冰/碳边/污染碎片\n- 颗粒聚集堆叠成块\n- 只有极少数颗粒且取向高度重复（preferred orientation）\n\n**含义：** 样品或制样出了问题\n\n**选择原则：** '看得清结构、取向多样'的留，'看不清、是垃圾、或取向单一'的删，这一步筛得越狠，后面 3D refinement 越干净\n\n**配图说明：**\n- 左侧 Good：清晰的蛋白结构投影，可见二级结构\n- 右侧 Bad：模糊、聚集、噪声",
       "related_params": {},
-      "tags": ["2D Classification", "Blob Picking", "质量评估", "二级结构"],
-      "images": ["46.png"],
+      "tags": [
+        "2D Classification",
+        "Blob Picking",
+        "质量评估",
+        "二级结构"
+      ],
+      "images": [
+        "46.png"
+      ],
       "last_verified": "2026-07-25"
+    },
+    {
+      "id": "lab_012",
+      "title": "统一组内 CTF 曝光筛选标准",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "王立群",
+      "author_role": "教授",
+      "date": "2024-03-15",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_03",
+      "category": "postmortem",
+      "symptoms": [
+        "CTF 合格标准不一致",
+        "组内数据质量参差",
+        "曝光筛选口径不同"
+      ],
+      "symptoms_text": "今天组会上一口气看了三个人提交的 CTF 拟合结果，发现大家对\"合格\"的定义差得太远：有人把 8 Å 也算合格，有人像散 3000 Å 还留着。我决定把课题组标准写到共享文档里：拟合分辨率 ≤6 Å，像散 <2000 Å，保留率 ≥80%。这不是为了卡人，是为了大家的数据能互相比较。后续我会把这条加到新人培训里。",
+      "solution": "制定并发布课题组统一标准，写入培训文档。",
+      "lesson": "标准比技巧更重要，尤其是多人协作时。",
+      "related_params": {
+        "ctf_fit_resolution": "≤ 5 Å",
+        "astigmatism": "< 2000 Å",
+        "retention_rate": "≥ 80%"
+      },
+      "success_rate": "",
+      "tags": [
+        "CTF",
+        "曝光筛选",
+        "质量标准",
+        "组内协作"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_013",
+      "title": "2D 分类质量差时优先回查上游颗粒挑选",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "王立群",
+      "author_role": "教授",
+      "date": "2024-09-22",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "2D 好类比例低",
+        "过度调整 2D 参数",
+        "Topaz 训练集过小"
+      ],
+      "symptoms_text": "上个月review一个学生提交的2D分类结果，发现好类比例只有5%，但他还在死磕加大迭代次数。我让他回上游查颗粒挑选，果然 Topaz 训练集只有 200 颗粒，模型过拟合了。这件事提醒我：2D分类是\"试金石\"，如果2D都不行，不要在3D参数上浪费时间。",
+      "solution": "建立\"上游优先\"排查原则，2D差时先查挑选、CTF、运动校正。",
+      "lesson": "教学生建立诊断思路，比告诉他某个参数值更有价值。",
+      "related_params": {
+        "topaz_training_particles": 200,
+        "good_class_ratio": "8%"
+      },
+      "success_rate": "定位到 Topaz 训练集仅 200 颗粒导致过拟合",
+      "tags": [
+        "2D 分类",
+        "Topaz",
+        "上游排查",
+        "过拟合"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_014",
+      "title": "box size 过大导致 2D 条纹类",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "王立群",
+      "author_role": "教授",
+      "date": "2025-06-08",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_05",
+      "category": "postmortem",
+      "symptoms": [
+        "box size 过大",
+        "2D 分类条纹类",
+        "经验参数硬搬"
+      ],
+      "symptoms_text": "和张宇讨论 box size 选择，他一开始按文献用了 320 px，结果 2D 分类全是条纹类。我们一起算了一下：他的粒子直径约 110 Å，按 1.2 倍算 box 只需要 256 px 左右。调小后果然好了很多。这件事让我意识到，很多\"经验参数\"必须结合自己的像素尺寸和粒子大小来算，不能硬搬。",
+      "solution": "根据粒子直径和像素尺寸计算，box 取粒子直径的 1.2~1.5 倍，粒径占比 ≤40%。",
+      "lesson": "参数值要会算，不能只会背。",
+      "related_params": {
+        "box_size": "约 256 px",
+        "particle_diameter": "约 110 Å",
+        "box_to_particle_ratio": "1.2~1.5",
+        "particle_box_occupancy": "≤ 60%"
+      },
+      "success_rate": "box size 从 320 px 调至约 256 px 后条纹类明显改善",
+      "tags": [
+        "box size",
+        "颗粒提取",
+        "2D 条纹类",
+        "像素尺寸"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_015",
+      "title": "Falcon4 数据未启用 ePT 导致高频信息损失",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "王立群",
+      "author_role": "教授",
+      "date": "2026-02-14",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_03",
+      "category": "postmortem",
+      "symptoms": [
+        "Falcon4 分辨率偏差",
+        "ePT 未启用",
+        "高频信息损失"
+      ],
+      "symptoms_text": "最近几批 Falcon4 数据分辨率普遍比 K3 差，我查了一下发现是学生没开 ePT。Falcon4 的相位迁移效应不能忽略，开了 ePT 后拟合分辨率能提升 0.3~0.5 Å。我已经在课题组群里发了提醒，并在检查清单里加了这一条。",
+      "solution": "在 CTF 估计时强制启用 ePT，并写入课题组检查清单。",
+      "lesson": "新设备的新特性必须及时沉淀成组内规范。",
+      "related_params": {
+        "ept_enabled": true,
+        "detector": "Falcon4"
+      },
+      "success_rate": "启用 ePT 后拟合分辨率提升约 0.3~0.5 Å",
+      "tags": [
+        "Falcon4",
+        "ePT",
+        "CTF",
+        "高频信息"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_016",
+      "title": "EER 导入时混淆 super-res 与 counting 像素",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2024-05-20",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_01",
+      "category": "postmortem",
+      "symptoms": [
+        "导入像素尺寸错误",
+        "super-res/counting 混淆",
+        "后续参数连锁错误"
+      ],
+      "symptoms_text": "第一次自己导 EER 数据，像素尺寸输了物理像素的 2 倍，后面所有 box size、mask 直径全错。重做了三天才发现是导入时的 super-res / counting 像素搞混了。现在我的习惯是：导入前先看采集软件的元数据文件，确认是 super-res 还是 counting，然后在项目笔记里写清楚。",
+      "solution": "导入前解析元数据，明确 super-res / counting 模式，并在笔记中记录。",
+      "lesson": "导入阶段多花 5 分钟，能省后续两三天返工。",
+      "related_params": {
+        "pixel_size_mode": "super-res/counting",
+        "pixel_size": "读取采集元数据"
+      },
+      "success_rate": "定位导入像素错误后重新处理，避免继续沿用错误 box 和 mask",
+      "tags": [
+        "EER",
+        "数据导入",
+        "像素尺寸",
+        "元数据"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_017",
+      "title": "运动校正漂移过大时先排查采集硬件状态",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2024-11-03",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "RELION",
+      "step": "cp_02",
+      "category": "postmortem",
+      "symptoms": [
+        "微图漂移过大",
+        "调参无改善",
+        "采集批次异常"
+      ],
+      "symptoms_text": "运动校正后发现有一批数据漂移特别大，总漂移量中位数到了 12 Å。我试了各种 B-factor 和 patch 组合都没用，后来查采集日志发现那天液氮液面低于警戒线。虽然很心疼，但直接剔除了这批数据。这件事让我学会：软件能做的是有限的，硬件状态不好时数据救不回来。",
+      "solution": "检查采集日志中的液氮液面、样品台温度等硬件状态，剔除异常批次。",
+      "lesson": "不要盲目相信参数能拯救一切，该扔的数据要果断扔。",
+      "related_params": {
+        "total_motion_median": "12 Å",
+        "b_factor": "多组测试",
+        "patch_size": "多组测试"
+      },
+      "success_rate": "确认液氮液面异常并剔除不可挽救批次",
+      "tags": [
+        "运动校正",
+        "漂移",
+        "采集日志",
+        "硬件状态"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_018",
+      "title": "Topaz 训练集分布偏差导致跨 defocus 泛化差",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2025-03-18",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_04",
+      "category": "postmortem",
+      "symptoms": [
+        "Topaz 泛化差",
+        "训练集 defocus 单一",
+        "不同微图挑选差异大"
+      ],
+      "symptoms_text": "我的 Topaz 训练集一开始只从 defocus 1.0 μm 的微图里挑了 1000 颗粒，结果在其他 defocus 的微图上挑选效果很差。后来按 defocus 分层抽样，覆盖 1.0~2.5 μm 全范围，模型泛化能力明显提高。这个细节很多人都忽略了。",
+      "solution": "从整批数据中按 defocus、冰厚等维度分层抽样训练颗粒。",
+      "lesson": "训练集的代表性比数量更重要。",
+      "related_params": {
+        "topaz_training_particles": 1000,
+        "defocus_range": "1.0~2.5 µm",
+        "sampling": "按 defocus 和冰厚分层"
+      },
+      "success_rate": "覆盖 1.0~2.5 µm defocus 后模型泛化明显提高",
+      "tags": [
+        "Topaz",
+        "训练集",
+        "defocus",
+        "分层抽样"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_019",
+      "title": "手动 B-factor 过激导致锐化假密度",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2025-12-10",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "手动 B-factor 过激",
+        "椒盐状假密度",
+        "锐化结果不可靠"
+      ],
+      "symptoms_text": "在非均匀细化后，分辨率从 7.2 Å 提升到 5.8 Å，很兴奋。但后续 B-factor 手动调到 -80 后，密度图出现椒盐状假密度，反而是自动 B-factor（-45）最可靠。这件事提醒我：锐化是\"锦上添花\"，分辨率不够时硬调参数只会引入假信号。",
+      "solution": "优先使用自动 B-factor，手动调整时从小步长开始并目视检查。",
+      "lesson": "锐化不能创造奇迹，上游分辨率才是根本。",
+      "related_params": {
+        "manual_b_factor": -80,
+        "auto_b_factor": -45,
+        "resolution": "7.2→5.8 Å"
+      },
+      "success_rate": "自动 B-factor（约 -45）比手动 -80 更可靠",
+      "tags": [
+        "B-factor",
+        "锐化",
+        "假密度",
+        "参数边界"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_020",
+      "title": "用检查清单减少新人重复踩坑",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2026-06-05",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "新人重复犯错",
+        "经验分散",
+        "合格标准不统一"
+      ],
+      "symptoms_text": "最近整理了一套\"INS-1E 类样品\"的处理检查清单，从导入到 2D 分类每个步骤都写了合格标准。发现把自己踩过的坑写成 checklist 后，师弟师妹重复犯错的概率低了很多。知识沉淀比单次成功更重要。",
+      "solution": "将个人经验整理成检查清单和流程文档，放入共享知识库。",
+      "lesson": "把经验写出来，是让自己的错误变得有价值的方式。",
+      "related_params": {},
+      "success_rate": "形成导入到 2D 分类检查清单后，重复犯错明显减少",
+      "tags": [
+        "检查清单",
+        "知识沉淀",
+        "新人培训",
+        "流程标准化"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_021",
+      "title": "用对照实验确定 EER grouping",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "李明",
+      "author_role": "博士后",
+      "date": "2024-07-12",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_01",
+      "category": "postmortem",
+      "symptoms": [
+        "EER grouping 缺少依据",
+        "担心分组损失信息",
+        "计算效率低"
+      ],
+      "symptoms_text": "为了确定 EER grouping 的最优值，我同时跑了 grouping=4、6、8、12 四组。结果显示 grouping=8 和 grouping=4 的最终分辨率几乎一样（差 <0.1 Å），但 grouping=8 快了一倍。这个实验让我对\"分组越大越丢信息\"的恐惧消除了，现在我们组默认 grouping=8。",
+      "solution": "设计对照实验，比较不同 grouping 的分辨率和计算时间。",
+      "lesson": "用实验数据消除经验焦虑。",
+      "related_params": {
+        "eer_grouping": [
+          4,
+          6,
+          8,
+          12
+        ],
+        "recommended_grouping": 8
+      },
+      "success_rate": "grouping=8 与 grouping=4 分辨率差 <0.1 Å，计算约快一倍",
+      "tags": [
+        "EER",
+        "grouping",
+        "对照实验",
+        "计算效率"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_022",
+      "title": "用矩阵测试选择运动校正 B-factor 与 patch",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "李明",
+      "author_role": "博士后",
+      "date": "2024-12-05",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "RELION",
+      "step": "cp_02",
+      "category": "postmortem",
+      "symptoms": [
+        "运动校正参数凭感觉",
+        "B-factor 与 patch 组合不稳定",
+        "低颗粒密度数据"
+      ],
+      "symptoms_text": "我做了一批 B-factor 和 patch 数的矩阵测试：B-factor 100/150/200/300 × patch 3×3/5×5/7×7。结论是 B-factor=150~200、patch=5×5 对大多数数据最稳定。B-factor>300 容易过拟合，patch>5×5 在粒子密度低时反而不稳定。",
+      "solution": "系统对比不同 B-factor 和 patch 组合，建立参数选择依据。",
+      "lesson": "参数优化要做矩阵测试，不能只看单次结果。",
+      "related_params": {
+        "b_factor": "150~200",
+        "patch_size": "5×5",
+        "tested_b_factor": [
+          100,
+          150,
+          200,
+          300
+        ],
+        "tested_patch": [
+          "3×3",
+          "5×5",
+          "7×7"
+        ]
+      },
+      "success_rate": "矩阵测试显示 B-factor 150~200、patch 5×5 对多数数据更稳定",
+      "tags": [
+        "运动校正",
+        "B-factor",
+        "patch",
+        "矩阵测试"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_023",
+      "title": "按信噪比与成本选择 Blob Picker 或 Topaz",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "李明",
+      "author_role": "博士后",
+      "date": "2025-04-20",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_04",
+      "category": "postmortem",
+      "symptoms": [
+        "挑选策略缺少量化依据",
+        "Blob 假阳性高",
+        "Topaz 有训练成本"
+      ],
+      "symptoms_text": "对比了 Blob Picker 和 Topaz 在同一批数据上的表现：Blob Picker 假阳性率 ~45%，Topaz（1000 颗粒训练集）假阳性率 ~22%，但 Topaz 训练需要 20 分钟。我的结论是：信噪比中等的数据优先用 Topaz，信噪比很高的数据 Blob Picker 也够快。",
+      "solution": "统计同一批数据下不同挑选策略的假阳性率和耗时。",
+      "lesson": "策略选择要结合数据特点和计算成本。",
+      "related_params": {
+        "topaz_training_particles": 2000,
+        "blob_false_positive_rate": "约 45%",
+        "topaz_false_positive_rate": "约 22%",
+        "topaz_training_time": "约 20 分钟"
+      },
+      "success_rate": "同批数据中 Topaz 假阳性率约 22%，Blob Picker 约 45%",
+      "tags": [
+        "Blob Picker",
+        "Topaz",
+        "假阳性率",
+        "策略选择"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_024",
+      "title": "两轮 bin 策略降低大数据集 2D 分类成本",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "李明",
+      "author_role": "博士后",
+      "date": "2025-08-31",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "2D 分类计算成本高",
+        "大颗粒数数据集",
+        "一次性全量处理低效"
+      ],
+      "symptoms_text": "我测试了两轮 bin 策略：第一轮 bin4 + crop 128px 粗筛，第二轮 bin2 精挑，对比一次性 bin2 全量处理。结果两轮策略节省约 65% 计算时间，且最终保留的好类数量更多。这个流程现在已经成为我们处理大数据集的标准做法。",
+      "solution": "第一轮 bin4 粗筛去垃圾，第二轮 bin2 精挑，分阶段降低计算量。",
+      "lesson": "计算策略和参数优化同样重要。",
+      "related_params": {
+        "round_1": "bin4 + crop 128 px",
+        "round_2": "bin2"
+      },
+      "success_rate": "两轮策略节省约 65% 计算时间，并保留更多好类",
+      "tags": [
+        "2D 分类",
+        "bin",
+        "crop",
+        "计算成本"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_025",
+      "title": "CTF 精修应在颗粒富集和模型稳定后进行",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "李明",
+      "author_role": "博士后",
+      "date": "2026-03-07",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_03",
+      "category": "postmortem",
+      "symptoms": [
+        "CTF 精修时机不明",
+        "过早精修分辨率下降",
+        "小数据集收益不明显"
+      ],
+      "symptoms_text": "最近验证 CTF 精修的最佳时机：在 3D 初始模型之前做 Global CTF 精修，分辨率反而下降；在 3D 初始模型之后做，通常能提升 0.2~0.3 Å。数据量 <5 万颗粒时 Local CTF 精修收益不明显。这个结论帮我们省了不少盲目精修的时间。",
+      "solution": "在不同处理阶段测试 Global/Local CTF 精修的效果。",
+      "lesson": "精修不是越早越好，要在颗粒富集、模型稳定后再做。",
+      "related_params": {
+        "global_ctf_refinement": "3D 初始模型后",
+        "local_ctf_particle_threshold": "≥ 50000"
+      },
+      "success_rate": "在模型稳定后执行通常提升约 0.2~0.3 Å；少于 5 万颗粒时 Local CTF 收益不明显",
+      "tags": [
+        "CTF 精修",
+        "Global CTF",
+        "Local CTF",
+        "时机选择"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_026",
+      "title": "Blob Picker 直径范围过宽导致假阳性过高",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "张宇",
+      "author_role": "硕士二年级",
+      "date": "2024-10-18",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_04",
+      "category": "postmortem",
+      "symptoms": [
+        "Blob Picker 假阳性高",
+        "冰晶碎片被挑选",
+        "碳膜边缘被挑选"
+      ],
+      "symptoms_text": "第一次做颗粒挑选，Blob Picker 直径设得太大，结果挑出来一堆冰晶碎片和碳膜边缘，假阳性率目测超过 60%。我请教了小玲师姐，她把直径范围收紧到粒子真实尺寸的 ±20%，又调了 Min separation 和 Max local maxima，假阳性率降到了 25% 左右。我记下了这个教训：参数范围不能拍脑袋。",
+      "solution": "根据粒子真实尺寸设置直径范围，调整 Min separation 和 Max local maxima。",
+      "lesson": "新手最常犯的错误是参数范围设得太宽。",
+      "related_params": {
+        "particle_diameter_range": "真实尺寸 ±20%",
+        "min_separation": "按粒径调整",
+        "max_local_maxima": "按微图密度调整"
+      },
+      "success_rate": "假阳性率由目测超过 60% 降至约 25%",
+      "tags": [
+        "Blob Picker",
+        "粒径范围",
+        "假阳性",
+        "Min separation"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_027",
+      "title": "2D class 数不足导致好类被垃圾颗粒淹没",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "张宇",
+      "author_role": "硕士二年级",
+      "date": "2025-02-09",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "class 数过少",
+        "好类不清晰",
+        "垃圾颗粒混入好类"
+      ],
+      "symptoms_text": "2D 分类时 class 数量设得太少，只有 20 个，结果好类被垃圾颗粒淹没了。后来加到 50 个，好类明显变清晰。老师说过\"class 数宁多勿少\"，我现在终于理解了——多出来的 class 会自然变成垃圾类，但好类不会被稀释。",
+      "solution": "根据颗粒总数增加 class 数量，5~20 万颗粒建议 50 类。",
+      "lesson": "宁多勿少这个词在 2D 分类里是真理。",
+      "related_params": {
+        "num_classes": "20→50",
+        "particle_count": "5~20 万"
+      },
+      "success_rate": "class 数从 20 增至 50 后好类明显变清晰",
+      "tags": [
+        "2D 分类",
+        "num classes",
+        "好类筛选",
+        "颗粒数量"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_028",
+      "title": "2D 取向覆盖差可能源于样品制备而非参数",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "张宇",
+      "author_role": "硕士二年级",
+      "date": "2025-11-22",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "2D 取向覆盖差",
+        "优先取向",
+        "误判为参数问题"
+      ],
+      "symptoms_text": "有一批数据 2D 分类只出少数几个取向的好类，我以为是参数问题，调了很久。老师过来看了一眼说这是取向偏侧，是样品制备问题，让我别在软件上死磕。后来优化了载网制备条件，取向覆盖明显改善。这个教训让我明白：不是所有问题都能用参数解决。",
+      "solution": "区分软件参数问题和样品制备问题，取向偏侧需优化冷冻/载网条件。",
+      "lesson": "学会判断问题归属，比学会调参更重要。",
+      "related_params": {
+        "orientation_coverage": "检查类别投影方向",
+        "grid_preparation": "优化冷冻/载网条件"
+      },
+      "success_rate": "优化载网制备条件后取向覆盖明显改善",
+      "tags": [
+        "2D 分类",
+        "优先取向",
+        "样品制备",
+        "问题归因"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_029",
+      "title": "2D 分类大量条纹类的组合参数排查",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "小玲",
+      "author_role": "博士三年级",
+      "date": "2025-07-29",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_06",
+      "category": "postmortem",
+      "symptoms": [
+        "2D 分类条纹类",
+        "颗粒 average 不清晰",
+        "Force max 影响收敛"
+      ],
+      "symptoms_text": "2D 分类总是出条纹类，我把 box 从 320 降到 256，mask 从 300 降到 240，关了 Force max，迭代从 40 加到 80，问题才解决。回头看，是三个参数同时出了小问题叠加成大麻烦。现在我会先关 Force max，再调 mask，最后才动 box。",
+      "solution": "优先关闭 Force max，再逐步缩小 mask 和 box，增加迭代次数至 60~80。",
+      "lesson": "条纹类通常是多个参数共同作用，不要只改一个参数。",
+      "related_params": {
+        "box_size": "320→256 px",
+        "mask_diameter": "300→240 px",
+        "force_max_over_poses": false,
+        "num_iterations": "40→80"
+      },
+      "success_rate": "关闭 Force max、缩小 mask/box 并增加迭代后问题解决",
+      "tags": [
+        "2D 分类",
+        "条纹类",
+        "Force max",
+        "mask diameter",
+        "box size"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_030",
+      "title": "不同探测器数据格式混用导致导入失败",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "陈昊",
+      "author_role": "联合培养博士生",
+      "date": "2025-01-30",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_01",
+      "category": "postmortem",
+      "symptoms": [
+        "K3 与 Falcon4 格式混用",
+        "数据导入失败",
+        "mdoc 元数据未解析"
+      ],
+      "symptoms_text": "从合作实验室带了一批 K3 数据回来，格式是 .tiff + .mdoc，和我们常用的 Falcon4 EER 完全不一样。我一开始想直接混进同一个项目里，结果导入就报错了。后来单独建了一个 K3 项目，又写了个小脚本提取 mdoc 里的关键字段，总算跑起来了。跨实验室协作时，数据格式兼容真是个大问题。",
+      "solution": "按探测器/格式单独建项目，用脚本统一提取关键元数据。",
+      "lesson": "数据格式不兼容时，强行混合只会浪费时间。",
+      "related_params": {
+        "k3_format": ".tiff + .mdoc",
+        "falcon4_format": "EER",
+        "project_isolation": "按探测器/格式分项目"
+      },
+      "success_rate": "按格式单独建项目并提取 mdoc 关键字段后成功导入",
+      "tags": [
+        "K3",
+        "Falcon4",
+        "数据格式",
+        "mdoc",
+        "导入"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_031",
+      "title": "导入像素与 bin 后像素混淆导致粒子截断",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "陈昊",
+      "author_role": "联合培养博士生",
+      "date": "2025-09-14",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_05",
+      "category": "postmortem",
+      "symptoms": [
+        "粒子密度截断",
+        "box size 不匹配",
+        "导入像素与 bin 后像素混淆"
+      ],
+      "symptoms_text": "颗粒提取后发现蛋白密度被截断了，检查了好久才发现是导入时填了 bin 前的 super-res 像素，但提取时按 bin 后像素计算的 box 又没用对应的转换。最后重新导入，像素填 counting 值，box 按 bin 后像素重新算，问题解决。这种\"像素坑\"新手特别容易踩。",
+      "solution": "明确导入像素模式，bin 后所有参数按新像素值重新计算。",
+      "lesson": "像素和 bin 是新手最容易连环犯错的地方。",
+      "related_params": {
+        "import_pixel_size": "counting 值",
+        "box_size": "按 bin 后像素重新计算",
+        "binning": "全链路一致"
+      },
+      "success_rate": "重新导入并按 bin 后像素计算 box 后解决粒子截断",
+      "tags": [
+        "像素尺寸",
+        "bin",
+        "box size",
+        "颗粒提取"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
+    },
+    {
+      "id": "lab_032",
+      "title": "cp_01~cp_06 关键参数速查",
+      "source": "lab_experience",
+      "source_type": "lab_exp",
+      "author": "王立群",
+      "author_role": "教授",
+      "date": "2026-07-26",
+      "status": "approved",
+      "reviewer": "王立群",
+      "software": "cryoSPARC",
+      "step": "cp_01~cp_06",
+      "category": "summary",
+      "symptoms": [
+        "参数速查",
+        "流程检查清单",
+        "组内经验值"
+      ],
+      "symptoms_text": "课题组从数据导入到 2D 分类的关键参数速查附录。",
+      "solution": "步骤\t参数\t经验值/建议\n导入\tEER grouping\t4~8（Falcon4 建议 8）\n导入\t像素尺寸\t确认 super-res / counting，bin 后按新像素计算\n运动校正\tB-factor\t150~200，patch 5×5\n运动校正\t漂移阈值\t<5Å 合格，>8Å 剔除\nCTF 估计\t拟合分辨率\t≤6Å 合格，保留率 ≥80%\nCTF 估计\t像散\t<2000Å，Falcon4 开 ePT\n颗粒挑选\tBlob 直径\t粒子直径 ±20%\n颗粒挑选\tTopaz 训练集\t≥1000 颗粒，跨 defocus 分层抽样\n颗粒提取\tbox size\t粒子直径 1.2~1.5 倍，粒径占比 ≤40%\n2D 分类\tclass 数\t>20万→100，5~20万→50，<5万→20~30\n2D 分类\t迭代次数\t60~80，关闭 Force max",
+      "lesson": "速查值用于建立检查起点，实际设置仍须结合探测器、像素尺寸、粒径、冰厚和数据质量复核。",
+      "related_params": {
+        "eer_grouping": "4~8（Falcon4 建议 8）",
+        "motion_b_factor": "150~200",
+        "motion_patch": "5×5",
+        "ctf_fit_resolution": "≤ 5 Å",
+        "astigmatism": "< 2000 Å",
+        "blob_diameter": "粒径 ±20%",
+        "topaz_training_particles": "≥ 2000",
+        "box_size": "粒径 1.2~1.5 倍，粒径占比 ≤ 60%",
+        "num_classes": ">20万→100；5~20万→50；<5万→20~30",
+        "num_iterations": "60~80，并关闭 Force max"
+      },
+      "success_rate": "",
+      "tags": [
+        "参数速查",
+        "cp_01~cp_06",
+        "组内标准",
+        "质量控制",
+        "检查清单"
+      ],
+      "tier": "lab",
+      "verified": true,
+      "last_verified": "2026-07-26"
     }
   ],
   "meta": {
-    "total_entries": 11,
-    "last_updated": "2026-07-25",
+    "total_entries": 32,
+    "last_updated": "2026-07-26",
     "pending_review": 0,
-    "description": "课题组私有经验库，优先级高于官方文档和 GitHub 经验。所有条目需经审核后才标记为 approved。新增6条实战经验（含图文对比）。"
+    "description": "课题组私有经验库；原有 11 条保持不变，新增 20 条复盘经验和 1 条 cp_01~cp_06 参数速查汇总。"
   }
 }

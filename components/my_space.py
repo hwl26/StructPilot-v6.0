@@ -186,7 +186,7 @@ def render_personal_notes(username):
                             note["content"] = edit_content.strip()
                             note["updated_at"] = datetime.now().isoformat()
 
-                            if save_user_note(username, note, update=True):
+                            if save_user_note(username, note):
                                 st.session_state.pop(f"editing_note_{note_id}", None)
                                 st.success("✅ 笔记已更新")
                                 st.rerun()
@@ -259,20 +259,24 @@ def render_note_polish(username):
 
     if st.button("✨ 开始润色", use_container_width=True, type="primary"):
         with st.spinner("正在使用 AI 润色..."):
-            from utils.note_to_experience import polish_note
+            try:
+                from utils.note_to_experience import polish_note
 
-            polished = polish_note(
-                note.get("content", ""),
-                style=polish_style,
-                include_code=include_code
-            )
+                polished = polish_note(
+                    note.get("content", ""),
+                    style=polish_style,
+                    include_code=include_code
+                )
+            except Exception as exc:
+                polished = ""
+                st.error(f"❌ 润色模块调用失败：{exc}")
 
             if polished:
                 st.session_state["polished_result"] = polished
                 st.success("✅ 润色完成！")
                 st.rerun()
             else:
-                st.error("❌ 润色失败，请检查 LLM 配置")
+                st.error("❌ 润色失败，请在「设置」中确认已配置 LLM API Key")
 
     # 显示润色结果
     if st.session_state.get("polished_result"):

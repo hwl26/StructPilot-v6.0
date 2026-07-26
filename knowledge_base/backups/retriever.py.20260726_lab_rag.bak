@@ -39,12 +39,11 @@ _INDEX_PATH = os.path.join(_BASE_DIR, "knowledge_base", "knowledge_index.json")
 # retriever 现在通过 load_sharded_knowledge_index 遍历分片加载；保留 _INDEX_PATH
 # 仅作为占位文件引用，不再用于读取语料。
 _INDEX_DIR = os.path.join(_KNOWLEDGE_DIR, "knowledge_index")
-_LAB_EXP_PATH = os.path.join(_KNOWLEDGE_DIR, "lab_experience_kb.json")
 _CACHE_PATH = os.path.join(_BASE_DIR, "config", "embeddings_cache.json")
 _CORPUS_CACHE_PATH = os.path.join(_BASE_DIR, "config", "corpus_cache.json")
 _RUNTIME_ROOT = os.getenv("STRUCTPILOT_RUNTIME_DIR", os.path.join(_BASE_DIR, "runtime"))
 _HIT_COUNTS_PATH = os.path.join(_RUNTIME_ROOT, "knowledge_hit_counts.json")
-_CORPUS_CACHE_VERSION = 3
+_CORPUS_CACHE_VERSION = 2
 _DEFAULT_MIN_SCORE = 0.30
 
 # P2-9: _record_hits 热路径改为内存累积 + 定时落盘，避免每次检索同步写文件。
@@ -108,8 +107,6 @@ def _lexical_search(corpus: List[Tuple[str, str, float]], query: str, top_k: int
         score = len(overlap) / max(len(query_set), 1) * weight
         if any(token in doc_set for token in query_set if token in {"relion", "ctf", "star"}):
             score += 0.15 * weight
-        if doc_id.startswith("lab_"):
-            score += 0.1
         # 不再用 min(score, 1.0) 封顶：单 token 命中的 checkpoint（权重 1.0）
         # 会得满分 1.0 并挤占 top_k，把多 token 命中的官方文档（权重 0.95）挤出。
         # 去掉封顶后，token 覆盖度更高的文档自然排在前面。
@@ -229,64 +226,6 @@ def _glossary_to_text(item: Dict[str, Any]) -> str:
     if isinstance(aliases, list):
         parts.append("; ".join(str(alias) for alias in aliases if alias))
     return "\n".join(part for part in parts if part)
-
-
-def _lab_exp_to_text(exp: Dict[str, Any]) -> str:
-    """Flatten an approved lab experience into retrieval text."""
-    parts: List[str] = []
-    for key in ("title", "symptoms_text", "solution", "lesson"):
-        value = exp.get(key)
-        if isinstance(value, str) and value.strip():
-            parts.append(value.strip())
-
-    for key in ("symptoms", "tags"):
-        value = exp.get(key)
-        if isinstance(value, list):
-            cleaned = [str(item).strip() for item in value if str(item).strip()]
-            if cleaned:
-                parts.append("; ".join(cleaned))
-
-    related_params = exp.get("related_params")
-    if isinstance(related_params, dict) and related_params:
-        parts.append(json.dumps(related_params, ensure_ascii=False, sort_keys=True))
-    elif isinstance(related_params, list):
-        parts.append("; ".join(str(item) for item in related_params if str(item).strip()))
-
-    for key, label in (
-        ("source_type", "source_type"),
-        ("step", "step"),
-        ("author", "author"),
-        ("author_role", "author_role"),
-        ("date", "date"),
-    ):
-        value = exp.get(key)
-        if isinstance(value, str) and value.strip():
-            parts.append(f"{label}: {value.strip()}")
-    return "\n".join(parts)
-
-
-def _load_lab_experience() -> List[Tuple[str, str, float]]:
-    """Load approved lab experiences with the lab-tier priority boost."""
-    if not os.path.exists(_LAB_EXP_PATH):
-        return []
-    try:
-        with open(_LAB_EXP_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        entries = data.get("entries", []) if isinstance(data, dict) else []
-        if not isinstance(entries, list):
-            return []
-        weight = min(TIER_WEIGHTS.get("lab", 0.92) * 1.10, 0.98)
-        corpus: List[Tuple[str, str, float]] = []
-        for exp in entries:
-            if not isinstance(exp, dict):
-                continue
-            doc_id = str(exp.get("id") or "").strip()
-            text = _lab_exp_to_text(exp)
-            if doc_id and text.strip():
-                corpus.append((doc_id, text, weight))
-        return corpus
-    except Exception:
-        return []
 
 
 class KnowledgeRetriever:
@@ -415,8 +354,6 @@ class KnowledgeRetriever:
             except Exception:
                 pass
 
-            corpus.extend(_load_lab_experience())
-
             self._corpus_cache = corpus
             self._cache_loaded = True
             self._save_corpus_cache(corpus)
@@ -518,25 +455,7 @@ class KnowledgeRetriever:
             raw_scores = (doc_matrix @ query_vec) / denom
             weighted_scores = raw_scores * weights
 
-            candidate_count = min(len(weighted_scores), max(top_k * 3, top_k))
-            order = list(np.argsort(-weighted_scores, kind="stable")[:candidate_count])
-
-            # Keep score order, but prefer lab experience inside near-tie groups.
-            cursor = 0
-            while cursor < len(order):
-                group_end = cursor + 1
-                anchor_score = float(weighted_scores[order[cursor]])
-                while (
-                    group_end < len(order)
-                    and anchor_score - float(weighted_scores[order[group_end]]) < 0.02
-                ):
-                    group_end += 1
-                order[cursor:group_end] = sorted(
-                    order[cursor:group_end],
-                    key=lambda idx: 0 if corpus[idx][0].startswith("lab_") else 1,
-                )
-                cursor = group_end
-            order = order[:top_k]
+            order = np.argsort(weighted_scores)[::-1][:top_k]
             results = [
                 (corpus[i][0], corpus[i][1], float(weighted_scores[i]))
                 for i in order
