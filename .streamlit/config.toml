@@ -5,15 +5,13 @@ secondaryBackgroundColor = "#f1f5f9"
 textColor = "#1e293b"
 font = "sans serif"
 
+# 注意：不要在此处设置 server.port / server.address。
+# Streamlit Community Cloud 自行分配端口并经反向代理转发，写死端口会导致
+# 容器监听错误地址，表现为 /_stcore/host-config 返回 403、页面停在 BOOTING。
+# 本地或局域网部署请用命令行参数指定：
+#   streamlit run main.py --server.port 8501 --server.address 0.0.0.0
 [server]
-headless = true
-port = 8501
-address = "0.0.0.0"  # 绑定到所有网络接口，允许局域网访问
-enableXsrfProtection = true
-enableCORS = false  # 局域网环境可关闭 CORS 检查
 maxUploadSize = 200  # 最大上传文件 200MB（支持大截图）
-enableStaticServing = true  # 启用静态文件服务
-fileWatcherType = "none"  # Streamlit Cloud不需要文件监控
 
 [browser]
 gatherUsageStats = false
@@ -21,7 +19,3 @@ gatherUsageStats = false
 [client]
 toolbarMode = "minimal"
 showErrorDetails = false
-
-[runner]
-magicEnabled = true
-fastReruns = true  # 启用快速重运行
