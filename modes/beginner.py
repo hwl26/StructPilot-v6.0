@@ -490,3 +490,31 @@ def render_beginner_view(
 
     # 智能滚动锚点：供 inject_smart_scroll() 定位聊天底部
     st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
+    # The template editor already contains the complete 2D topology. Export it
+    # directly so a legacy wizard cannot discard job connections or parameters.
+    editor_params = st.session_state.get("confirmed_params", {})
+    if isinstance(editor_params, dict) and isinstance(editor_params.get("_workflow_template"), dict):
+        from utils.cryosparc_workflow import generate_cryosparc_workflow, workflow_to_json_str
+
+        workflow_json = generate_cryosparc_workflow(
+            workflow={"steps": []},
+            params=editor_params,
+            workflow_name="StructPilot_2D_Classification",
+            software="cryosparc",
+        )
+        st.markdown("## ?? cryoSPARC Workflow ???")
+        st.caption("????????????? Job????????????? cryoSPARC ? Import Workflow ????")
+        st.download_button(
+            "?????? workflow.json",
+            data=workflow_to_json_str(workflow_json, indent=2),
+            file_name="structpilot_2d_classification.json",
+            mime="application/json",
+            type="primary",
+            use_container_width=True,
+            key="download_template_workflow",
+        )
+        if st.button("??????", use_container_width=True, key="start_template_guidance"):
+            st.session_state["wizard_completed"] = True
+            st.rerun()
+        return
+

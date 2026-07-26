@@ -25,13 +25,13 @@ from utils.security import sanitize_html
 
 def render_forum_tab():
     """渲染论坛主页面"""
-    from utils.user_manager import get_current_user
+    from utils.auth import get_current_user
 
     st.markdown("## 💬 讨论区")
 
     # 获取当前用户权限
-    current_user = get_current_user()
-    user_role = current_user.get("role", "guest") if current_user else "guest"
+    current_user = get_current_user(st.session_state)
+    user_role = current_user.get("role", "guest")
 
     # 访客提示
     if user_role == "guest":
@@ -95,11 +95,11 @@ def render_forum_tab():
 
 def _render_ask_question_form():
     """渲染提问表单（仅成员和管理员）"""
-    from utils.user_manager import get_current_user
+    from utils.auth import get_current_user
 
     # 权限检查
-    current_user = get_current_user()
-    user_role = current_user.get("role", "guest") if current_user else "guest"
+    current_user = get_current_user(st.session_state)
+    user_role = current_user.get("role", "guest")
 
     if user_role not in ["member", "admin"]:
         st.warning("⚠️ 仅登录用户可以提问，请先登录")

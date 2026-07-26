@@ -1,369 +1,397 @@
-"""CryoSPARC Workflow参数配置界面
+"""Interactive CryoSPARC workflow parameter editor.
 
-特点：
-1. 参考cryoSPARC UI设计，卡片式参数分组
-2. 左右分栏：左侧参数编辑区 + 右侧流程图
-3. 参数分类：必填参数 Tab + 高级参数 Tab
-4. 智能关联：蛋白直径自动计算box size和mask diameter
+The editor keeps a real CryoSPARC workflow template intact.  Users edit a
+copy of the template's job parameters; exporting later preserves the original
+``jobs`` and ``groups`` topology so the resulting JSON remains importable.
 """
 
 from __future__ import annotations
-import json
-import streamlit as st
-from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
-import math
 
-# 参数显示名称映射（中英文对照）
+import copy
+import json
+import math
+from pathlib import Path
+from typing import Any, Dict, Iterable, Optional
+
+import streamlit as st
+
+
 PARAM_LABELS = {
     "blob_paths": "数据路径",
-    "psize_A": "像素大小 (Å/pix)",
-    "accel_kv": "加速电压 (kV)",
-    "cs_mm": "球差系数 (mm)",
-    "total_dose_e_per_A2": "总剂量 (e/Å²)",
-    "max_num_hits": "最大颗粒数",
-    "diameter": "颗粒直径最小值 (Å)",
-    "diameter_max": "颗粒直径最大值 (Å)",
+    "gainref_path": "Gain reference 文件",
+    "psize_A": "像素大小",
+    "accel_kv": "加速电压",
+    "cs_mm": "球差系数",
+    "total_dose_e_per_A2": "总剂量",
+    "compute_num_gpus": "GPU 数量",
+    "bfactor": "B-factor",
+    "max_num_hits": "最大挑选颗粒数",
+    "diameter": "颗粒直径下限",
+    "diameter_max": "颗粒直径上限",
     "min_distance": "最小间距比例",
-    "box_size_pix": "提取框大小 (pix)",
-    "bin_size_pix": "降采样大小 (pix)",
-    "class2D_K": "2D分类类别数",
-    "class2D_max_res": "最大分辨率 (Å)",
-    "class2D_window_inner_A": "圆形遮罩直径 (Å)",
-    "class2D_num_full_iter_batch": "迭代轮数",
-    "compute_num_gpus": "GPU数量",
-    "compute_use_ssd": "使用SSD缓存",
+    "box_size_pix": "提取 box size",
+    "bin_size_pix": "降采样 box size",
+    "class2D_K": "2D 类别数",
+    "class2D_max_res": "2D 最大分辨率",
+    "class2D_window_inner_A": "2D 圆形遮罩直径",
+    "class2D_num_full_iter_batch": "2D 完整迭代轮数",
+    "compute_use_ssd": "使用 SSD 缓存",
+    "update_location": "更新颗粒位置",
+    "update_alignments2D": "保留 2D 对齐",
+    "recenter_key": "重心参考",
 }
 
-# 参数占位符提示
-PARAM_PLACEHOLDERS = {
-    "blob_paths": "例如: /data/project/Movies/*.mrc",
-    "psize_A": "根据采集条件填写，如 0.96",
-    "accel_kv": "通常为 300 或 200",
-    "cs_mm": "根据显微镜型号填写，如 2.7",
-    "total_dose_e_per_A2": "根据采集方案填写，通常 40-60",
-    "diameter": "根据蛋白大小估算 (Å)",
-    "diameter_max": "通常与最小值相同或略大",
+PARAM_UNITS = {
+    "psize_A": "A/pix",
+    "accel_kv": "kV",
+    "cs_mm": "mm",
+    "total_dose_e_per_A2": "e-/A2",
+    "diameter": "A",
+    "diameter_max": "A",
+    "box_size_pix": "pix",
+    "bin_size_pix": "pix",
+    "class2D_max_res": "A",
+    "class2D_window_inner_A": "A",
 }
 
-# 必填参数列表（显示在"必填参数"Tab）
-REQUIRED_PARAMS = {
-    "J1": ["blob_paths", "psize_A", "accel_kv", "cs_mm", "total_dose_e_per_A2"],
-    "J4": ["diameter", "diameter_max"],
-    "J5": ["box_size_pix"],
-    "J6": ["class2D_window_inner_A"],
-}
-
-# 高级参数列表（显示在"高级参数"Tab，默认折叠）
-ADVANCED_PARAMS = {
-    "J4": ["max_num_hits", "min_distance"],
-    "J5": ["bin_size_pix", "compute_num_gpus"],
-    "J6": ["class2D_K", "class2D_max_res", "class2D_num_full_iter_batch", "compute_num_gpus", "compute_use_ssd"],
-}
-
-# Job类型显示名称
 JOB_LABELS = {
-    "import_micrographs": "导入显微照片",
-    "patch_ctf_estimation_multi": "CTF估计",
-    "curate_exposures_v2": "曝光筛选",
-    "blob_picker_gpu": "自动挑粒子",
-    "extract_micrographs_multi": "提取颗粒",
-    "class_2D_new": "2D分类",
-    "select_2D": "人工筛选2D类",
+    "import_movies": "Import Movies",
+    "import_micrographs": "Import Micrographs",
+    "patch_motion_correction_multi": "Patch Motion Correction",
+    "patch_ctf_estimation_multi": "Patch CTF Estimation",
+    "curate_exposures_v2": "Manually Curate Exposures",
+    "blob_picker_gpu": "Blob Picker",
+    "template_picker_gpu": "Template Picker",
+    "extract_micrographs_multi": "Extract From Micrographs",
+    "class_2D_new": "2D Classification",
+    "select_2D": "Select 2D Classes",
+}
+
+_ACTIVE_JOB_KEY = "cswf_active_job"
+_INITIALIZED_KEY = "cswf_initialized_template"
+_PENDING_ACTION_KEY = "cswf_pending_action"
+
+# These are starting points only. Applying one never locks a field: every
+# resulting value stays in the manual tab for the user to adjust.
+COMMON_PRESETS = {
+    "300 kV 标准 2D 筛选": {
+        "J1": {"accel_kv": 300, "cs_mm": 2.7, "total_dose_e_per_A2": 50},
+        "J2": {"compute_num_gpus": 4},
+        "J4": {"max_num_hits": 400, "min_distance": 0.6},
+        "J5": {"compute_num_gpus": 1},
+        "J6": {"class2D_K": 100, "class2D_max_res": 5, "class2D_num_full_iter_batch": 40, "compute_num_gpus": 4},
+    },
+    "小颗粒保守挑选": {
+        "J4": {"max_num_hits": 300, "min_distance": 0.7},
+        "J6": {"class2D_K": 150, "class2D_max_res": 6, "class2D_num_full_iter_batch": 50},
+    },
+    "快速预筛 2D": {
+        "J4": {"max_num_hits": 250},
+        "J5": {"compute_num_gpus": 1},
+        "J6": {"class2D_K": 50, "class2D_max_res": 8, "class2D_num_full_iter_batch": 25, "compute_num_gpus": 1},
+    },
 }
 
 
-def calculate_box_size(protein_diameter_A: float, pixel_size: float) -> int:
-    """根据蛋白直径自动计算提取框大小
-
-    公式: box_size = protein_diameter / 0.9 / pixel_size * (1.5~2)
-    取1.75倍作为默认值
-    """
-    if protein_diameter_A <= 0 or pixel_size <= 0:
-        return 0
-
-    box_size = (protein_diameter_A / 0.9 / pixel_size) * 1.75
-    # 取最近的偶数
-    return int(math.ceil(box_size / 2) * 2)
+def _value_key(job_id: str, param_key: str) -> str:
+    return f"cswf_value__{job_id}__{param_key}"
 
 
-def calculate_mask_diameter(protein_diameter_A: float) -> int:
-    """根据蛋白直径自动计算圆形遮罩直径
-
-    公式: mask_diameter = protein_diameter / 0.9
-    """
-    if protein_diameter_A <= 0:
-        return 0
-
-    return int(math.ceil(protein_diameter_A / 0.9))
+def _template_signature(workflow_path: Path, workflow_data: Dict[str, Any]) -> str:
+    return f"{workflow_path.resolve()}::{workflow_data.get('_id', '')}::{len(workflow_data.get('jobs', {}))}"
 
 
-def generate_workflow_diagram(workflow_data: Dict[str, Any]) -> str:
-    """生成Mermaid流程图代码"""
-    jobs = workflow_data.get("jobs", {})
-
-    # 构建节点定义
-    nodes = []
-    edges = []
-
-    for job_id in sorted(jobs.keys()):
-        job = jobs[job_id]
-        job_type = job.get("jobType", "")
-        label = JOB_LABELS.get(job_type, job_type)
-
-        # 节点样式：圆角矩形
-        nodes.append(f'    {job_id}["{job_id}<br/>{label}"]')
-
-        # 解析依赖关系（从groups中提取）
-        groups = job.get("groups", [])
-        for group in groups:
-            if len(group) >= 2:
-                source_job = group[0].split(".")[0]  # 提取Job ID
-                edges.append(f'    {source_job} --> {job_id}')
-
-    # 生成Mermaid图
-    mermaid_code = "graph TD\n" + "\n".join(nodes) + "\n" + "\n".join(edges)
-
-    return mermaid_code
+def _job_label(job_id: str, job: Dict[str, Any]) -> str:
+    return JOB_LABELS.get(job.get("jobType", ""), job.get("jobType", job_id))
 
 
-def render_parameter_card(
+def _iter_parameters(workflow_data: Dict[str, Any]) -> Iterable[tuple[str, str, Dict[str, Any]]]:
+    for job_id, job in workflow_data.get("jobs", {}).items():
+        for param_key, param_data in job.get("parameters", {}).items():
+            if isinstance(param_data, dict):
+                yield job_id, param_key, param_data
+
+
+def _initialise_editor(workflow_path: Path, workflow_data: Dict[str, Any]) -> None:
+    signature = _template_signature(workflow_path, workflow_data)
+    if st.session_state.get(_INITIALIZED_KEY) != signature:
+        for job_id, param_key, param_data in _iter_parameters(workflow_data):
+            st.session_state[_value_key(job_id, param_key)] = param_data.get("value")
+        job_ids = list(workflow_data.get("jobs", {}))
+        st.session_state[_ACTIVE_JOB_KEY] = job_ids[0] if job_ids else ""
+        st.session_state[_INITIALIZED_KEY] = signature
+
+    _apply_pending_action(workflow_data)
+
+
+def _apply_pending_action(workflow_data: Dict[str, Any]) -> None:
+    """Apply presets before the associated Streamlit widgets are created."""
+    action = st.session_state.pop(_PENDING_ACTION_KEY, None)
+    if not action:
+        return
+
+    kind = action.get("kind")
+    if kind == "reset":
+        for job_id, param_key, param_data in _iter_parameters(workflow_data):
+            st.session_state[_value_key(job_id, param_key)] = param_data.get("value")
+        return
+
+    if kind != "preset":
+        return
+
+    preset = COMMON_PRESETS.get(action.get("name"), {})
+    for job_id, values in preset.items():
+        job_params = workflow_data.get("jobs", {}).get(job_id, {}).get("parameters", {})
+        for param_key, value in values.items():
+            if param_key in job_params:
+                st.session_state[_value_key(job_id, param_key)] = value
+
+
+def _suggested_value(param_key: str, values: Dict[str, Dict[str, Any]]) -> Optional[Any]:
+    """Return an optional, never-forced suggestion derived from entered data."""
+    import_job = values.get("J1", {})
+    picker_job = values.get("J4", {})
+    pixel_size = import_job.get("psize_A")
+    diameter = picker_job.get("diameter")
+    if not isinstance(pixel_size, (int, float)) or pixel_size <= 0:
+        return None
+    if not isinstance(diameter, (int, float)) or diameter <= 0:
+        return None
+    if param_key == "box_size_pix":
+        return int(math.ceil((diameter / pixel_size * 1.75) / 2) * 2)
+    if param_key == "class2D_window_inner_A":
+        return int(math.ceil(diameter / 0.9))
+    return None
+
+
+def _read_values(workflow_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    values: Dict[str, Dict[str, Any]] = {}
+    for job_id, param_key, param_data in _iter_parameters(workflow_data):
+        values.setdefault(job_id, {})[param_key] = st.session_state.get(
+            _value_key(job_id, param_key), param_data.get("value")
+        )
+    return values
+
+
+def _render_parameter_input(
     job_id: str,
     param_key: str,
     param_data: Dict[str, Any],
-    pixel_size: float = 0.96,
-    protein_diameter: Optional[float] = None
-) -> Any:
-    """渲染单个参数卡片
+    values: Dict[str, Dict[str, Any]],
+) -> None:
+    value = st.session_state.get(_value_key(job_id, param_key), param_data.get("value"))
+    label = PARAM_LABELS.get(param_key, param_key.replace("_", " "))
+    unit = PARAM_UNITS.get(param_key)
+    if unit:
+        label = f"{label} ({unit})"
+    key = _value_key(job_id, param_key)
 
-    Args:
-        job_id: Job ID (如 J1, J4)
-        param_key: 参数键名
-        param_data: 参数数据字典（包含value, locked等）
-        pixel_size: 像素大小（用于自动计算）
-        protein_diameter: 蛋白直径（用于自动计算）
-
-    Returns:
-        用户输入的参数值
-    """
-    label = PARAM_LABELS.get(param_key, param_key)
-    placeholder = PARAM_PLACEHOLDERS.get(param_key, "")
-    default_value = param_data.get("value", "")
-
-    # 检查是否是自动计算参数
-    auto_calculated = False
-    if param_key == "box_size_pix" and protein_diameter and protein_diameter > 0:
-        calculated_value = calculate_box_size(protein_diameter, pixel_size)
-        st.info(f"💡 **自动计算**: {label} = {calculated_value} pix")
-        st.caption(f"根据蛋白直径 {protein_diameter:.0f} Å 自动计算")
-        return calculated_value
-
-    if param_key == "class2D_window_inner_A" and protein_diameter and protein_diameter > 0:
-        calculated_value = calculate_mask_diameter(protein_diameter)
-        st.info(f"💡 **自动计算**: {label} = {calculated_value} Å")
-        st.caption(f"根据蛋白直径 {protein_diameter:.0f} Å 自动计算")
-        return calculated_value
-
-    # 根据参数类型渲染输入组件
-    unique_key = f"{job_id}_{param_key}"
-
-    if isinstance(default_value, bool):
-        return st.checkbox(label, value=default_value, key=unique_key)
-
-    elif isinstance(default_value, (int, float)):
-        # 数字类型：使用number_input
-        if isinstance(default_value, int):
-            return st.number_input(
-                label,
-                value=default_value,
-                step=1,
-                key=unique_key,
-                help=placeholder
-            )
-        else:
-            return st.number_input(
-                label,
-                value=default_value,
-                step=0.1,
-                format="%.2f",
-                key=unique_key,
-                help=placeholder
-            )
-
-    elif isinstance(default_value, str):
-        # 字符串类型：使用text_input
-        return st.text_input(
-            label,
-            value=default_value,
-            placeholder=placeholder,
-            key=unique_key
-        )
-
+    if isinstance(value, bool):
+        st.checkbox(label, value=value, key=key)
+    elif isinstance(value, int) and not isinstance(value, bool):
+        st.number_input(label, value=value, step=1, key=key)
+    elif isinstance(value, float):
+        st.number_input(label, value=value, step=0.1, format="%.3f", key=key)
     else:
-        # 未知类型：使用text_input
-        return st.text_input(
-            label,
-            value=str(default_value),
-            placeholder=placeholder,
-            key=unique_key
-        )
+        st.text_input(label, value="" if value is None else str(value), key=key)
+
+    suggestion = _suggested_value(param_key, values)
+    if suggestion is not None and suggestion != value:
+        st.caption(f"建议值: {suggestion}。这是可选建议，仍可直接填写任意适用数值。")
 
 
-def render_workflow_config(workflow_path: Path) -> Dict[str, Any]:
-    """渲染Workflow参数配置界面
+def _job_levels(jobs: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
+    """Assign columns from workflow groups so branches remain legible."""
+    levels: Dict[str, int] = {}
 
-    Args:
-        workflow_path: workflow JSON文件路径
+    def level_for(job_id: str, visiting: set[str]) -> int:
+        if job_id in levels:
+            return levels[job_id]
+        if job_id in visiting:
+            return 0
+        visiting.add(job_id)
+        sources = []
+        for group in jobs.get(job_id, {}).get("groups", []):
+            if group and isinstance(group[0], str) and "." in group[0]:
+                source = group[0].split(".", 1)[0]
+                if source in jobs:
+                    sources.append(level_for(source, visiting))
+        visiting.discard(job_id)
+        levels[job_id] = max(sources, default=-1) + 1
+        return levels[job_id]
 
-    Returns:
-        用户配置的参数字典
+    for job_id in jobs:
+        level_for(job_id, set())
+    return levels
+
+
+def _render_interactive_workflow(workflow_data: Dict[str, Any], active_job: str) -> None:
+    jobs = workflow_data.get("jobs", {})
+    levels = _job_levels(jobs)
+    max_level = max(levels.values(), default=0)
+
+    st.markdown("#### Workflow")
+    st.caption("点击任一节点，即可打开左侧对应的参数卡。蓝色节点为当前编辑位置。")
+    st.markdown("<div class='cswf-canvas'>", unsafe_allow_html=True)
+    for level in range(max_level + 1):
+        current = [job_id for job_id in jobs if levels.get(job_id) == level]
+        if not current:
+            continue
+        columns = st.columns(len(current))
+        for col, job_id in zip(columns, current):
+            job = jobs[job_id]
+            with col:
+                title = _job_label(job_id, job)
+                is_active = job_id == active_job
+                if st.button(
+                    f"{job_id}  {title}",
+                    key=f"cswf_node_{job_id}",
+                    type="primary" if is_active else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state[_ACTIVE_JOB_KEY] = job_id
+                    st.rerun()
+                sources = []
+                for group in job.get("groups", []):
+                    if group and isinstance(group[0], str) and "." in group[0]:
+                        sources.append(group[0].split(".", 1)[0])
+                if sources:
+                    st.caption("来自 " + " / ".join(sources))
+        if level < max_level:
+            st.markdown("<div class='cswf-connector'>↓</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _canonical_parameters(values: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Keep existing downstream workflow generation APIs populated."""
+    j1, j4 = values.get("J1", {}), values.get("J4", {})
+    j5, j6 = values.get("J5", {}), values.get("J6", {})
+    return {
+        "movies_path": j1.get("blob_paths", ""),
+        "micrographs_path": j1.get("blob_paths", ""),
+        "pixel_size": j1.get("psize_A"),
+        "voltage": j1.get("accel_kv"),
+        "Cs": j1.get("cs_mm"),
+        "total_dose": j1.get("total_dose_e_per_A2"),
+        "particle_diameter": j4.get("diameter"),
+        "particle_diameter_max": j4.get("diameter_max"),
+        "max_num_hits": j4.get("max_num_hits"),
+        "box_size": j5.get("box_size_pix"),
+        "bin_size": j5.get("bin_size_pix"),
+        "class2d_num_classes": j6.get("class2D_K"),
+        "class2d_gpus": j6.get("compute_num_gpus"),
+    }
+
+
+def render_workflow_config(workflow_path: Path) -> Optional[Dict[str, Any]]:
+    """Render editable cards and return an export-ready configuration on confirm.
+
+    ``None`` means the user is still editing.  A returned value carries both
+    conventional StructPilot parameter names and the full CryoSPARC template
+    plus per-job overrides for exact JSON export.
     """
-    # 加载workflow数据
-    if not workflow_path.exists():
-        st.error(f"❌ 找不到workflow文件: {workflow_path}")
-        return {}
-
     try:
         workflow_data = json.loads(workflow_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        st.error(f"❌ 解析workflow文件失败: {e}")
-        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        st.error(f"无法读取 workflow 模板: {exc}")
+        return None
 
     jobs = workflow_data.get("jobs", {})
-    if not jobs:
-        st.warning("⚠️ Workflow中没有任务")
-        return {}
+    if not isinstance(jobs, dict) or not jobs:
+        st.error("workflow 模板不包含 jobs，无法生成可导入文件。")
+        return None
 
-    # === 左右分栏布局 ===
-    left_col, right_col = st.columns([6, 4])
+    _initialise_editor(workflow_path, workflow_data)
+    active_job = st.session_state.get(_ACTIVE_JOB_KEY)
+    if active_job not in jobs:
+        active_job = next(iter(jobs))
+        st.session_state[_ACTIVE_JOB_KEY] = active_job
 
-    # === 右侧：流程图 ===
-    with right_col:
-        st.markdown("### 📊 Workflow流程图")
-        mermaid_code = generate_workflow_diagram(workflow_data)
-        st.markdown(f"""
-        ```mermaid
-        {mermaid_code}
-        ```
-        """)
-        st.caption("📌 流程自动解析自workflow配置")
+    st.markdown(
+        """
+        <style>
+        .cswf-head { margin: 0.2rem 0 0.45rem; }
+        .cswf-head h2 { margin: 0; font-size: 1.45rem !important; }
+        .cswf-panel { border: 1px solid #d8e1ea; background: #ffffff; padding: 0.7rem; }
+        .cswf-node-caption { color: #64748b; font-size: 0.78rem; }
+        .cswf-connector { text-align: center; color: #94a3b8; line-height: 1.1; font-size: 1.15rem; }
+        .cswf-canvas { border: 1px solid #d8e1ea; background-color: #fbfdff;
+            background-image: radial-gradient(#dbe5ee 1px, transparent 1px); background-size: 14px 14px;
+            padding: 0.75rem; min-height: 540px; }
+        </style>
+        <div class='cswf-head'><h2>🎯 cryoSPARC Workflow 参数填写</h2></div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("基于可导入的 2D 分类模板编辑。所有参数均可修改；确认后会保留 Job 与数据连接结构。")
 
-    # === 左侧：参数配置 ===
+    left_col, right_col = st.columns([0.9, 1.7], gap="large")
     with left_col:
-        st.markdown("### ⚙️ 参数配置")
+        st.markdown("#### 参数卡")
+        job_columns = st.columns(2)
+        for index, (job_id, job) in enumerate(jobs.items()):
+            with job_columns[index % 2]:
+                if st.button(
+                    job_id,
+                    key=f"cswf_card_selector_{job_id}",
+                    type="primary" if job_id == active_job else "secondary",
+                    use_container_width=True,
+                    help=_job_label(job_id, job),
+                ):
+                    st.session_state[_ACTIVE_JOB_KEY] = job_id
+                    st.rerun()
 
-        # 获取像素大小和蛋白直径（用于自动计算）
-        pixel_size = jobs.get("J1", {}).get("parameters", {}).get("psize_A", {}).get("value", 0.96)
-        protein_diameter = None  # 稍后从用户输入获取
+        manual_tab, common_tab = st.tabs(["手动填写", "常用值"])
+        with manual_tab:
+            job = jobs[active_job]
+            st.markdown(f"##### {active_job} · {_job_label(active_job, job)}")
+            st.caption("所有字段均可编辑。选中其他 Job 或点击右侧节点可切换参数卡。")
+            values = _read_values(workflow_data)
+            parameters = job.get("parameters", {})
+            if not parameters:
+                st.info("该 Job 不需要填写参数，可通过右侧节点继续检查后续步骤。")
+            else:
+                for param_key, param_data in parameters.items():
+                    _render_parameter_input(active_job, param_key, param_data, values)
 
-        # === Tab分组：必填参数 + 高级参数 ===
-        tab_required, tab_advanced = st.tabs(["📝 必填参数", "🔧 高级参数（可选）"])
-
-        user_params = {}
-
-        # === 必填参数Tab ===
-        with tab_required:
-            st.caption("请填写以下必填参数，带 * 的参数需要根据课题组/蛋白情况填写")
-
-            for job_id in sorted(jobs.keys()):
-                if job_id not in REQUIRED_PARAMS:
+        with common_tab:
+            st.caption("常用值只会预填模板，应用后仍可在“手动填写”中继续修改。")
+            for preset_name, preset_values in COMMON_PRESETS.items():
+                affected_jobs = [job_id for job_id in preset_values if job_id in jobs]
+                if not affected_jobs:
                     continue
+                st.markdown(f"**{preset_name}**")
+                st.caption("影响 " + "、".join(affected_jobs))
+                if st.button("应用", key=f"cswf_apply_{preset_name}", use_container_width=True):
+                    st.session_state[_PENDING_ACTION_KEY] = {"kind": "preset", "name": preset_name}
+                    st.rerun()
+            st.divider()
+            if st.button("恢复模板默认值", key="cswf_reset", use_container_width=True):
+                st.session_state[_PENDING_ACTION_KEY] = {"kind": "reset"}
+                st.rerun()
 
-                job = jobs[job_id]
-                job_type = job.get("jobType", "")
-                job_label = JOB_LABELS.get(job_type, job_type)
-                parameters = job.get("parameters", {})
+        st.divider()
+        confirmed = st.button("确认参数并生成 Workflow", key="cswf_confirm", type="primary", use_container_width=True)
 
-                # 渲染Job卡片
-                with st.expander(f"**{job_id}**: {job_label}", expanded=True):
-                    for param_key in REQUIRED_PARAMS[job_id]:
-                        if param_key not in parameters:
-                            continue
+    with right_col:
+        _render_interactive_workflow(workflow_data, active_job)
 
-                        param_data = parameters[param_key]
+    if not confirmed:
+        return None
 
-                        # 特殊处理：蛋白直径参数
-                        if param_key == "diameter":
-                            protein_diameter = render_parameter_card(
-                                job_id, param_key, param_data, pixel_size
-                            )
-                            user_params[f"{job_id}.{param_key}"] = protein_diameter
-                        else:
-                            value = render_parameter_card(
-                                job_id, param_key, param_data, pixel_size, protein_diameter
-                            )
-                            user_params[f"{job_id}.{param_key}"] = value
-
-        # === 高级参数Tab ===
-        with tab_advanced:
-            st.caption("以下参数已预设推荐值，一般情况下无需修改")
-
-            for job_id in sorted(jobs.keys()):
-                if job_id not in ADVANCED_PARAMS:
-                    continue
-
-                job = jobs[job_id]
-                job_type = job.get("jobType", "")
-                job_label = JOB_LABELS.get(job_type, job_type)
-                parameters = job.get("parameters", {})
-
-                # 渲染Job卡片（默认折叠）
-                with st.expander(f"**{job_id}**: {job_label}", expanded=False):
-                    for param_key in ADVANCED_PARAMS[job_id]:
-                        if param_key not in parameters:
-                            continue
-
-                        param_data = parameters[param_key]
-                        value = render_parameter_card(
-                            job_id, param_key, param_data, pixel_size, protein_diameter
-                        )
-                        user_params[f"{job_id}.{param_key}"] = value
-
-    return user_params
+    values = _read_values(workflow_data)
+    result = _canonical_parameters(values)
+    result["_workflow_template"] = copy.deepcopy(workflow_data)
+    result["_workflow_values"] = values
+    return result
 
 
 def save_workflow_config(user_params: Dict[str, Any], output_path: Path) -> bool:
-    """保存用户配置的参数到JSON文件
-
-    Args:
-        user_params: 用户配置的参数字典
-        output_path: 输出文件路径
-
-    Returns:
-        是否保存成功
-    """
+    """Save editor state for recovery; final imports use the workflow generator."""
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(user_params, indent=2, ensure_ascii=False), encoding="utf-8")
         return True
-    except Exception as e:
-        st.error(f"❌ 保存失败: {e}")
+    except OSError as exc:
+        st.error(f"保存失败: {exc}")
         return False
-
-
-# ============================================================================
-# 测试代码（直接运行此文件查看效果）
-# ============================================================================
-if __name__ == "__main__":
-    st.set_page_config(page_title="Workflow配置", layout="wide")
-
-    st.title("🔬 CryoSPARC Workflow 参数配置")
-    st.markdown("---")
-
-    # 测试用workflow文件路径
-    workflow_path = Path("2d-classfication_zxl.json")
-
-    if workflow_path.exists():
-        user_params = render_workflow_config(workflow_path)
-
-        st.markdown("---")
-        st.markdown("### 📋 配置预览")
-        st.json(user_params)
-
-        if st.button("💾 保存配置", type="primary"):
-            output_path = Path("workflow_config_output.json")
-            if save_workflow_config(user_params, output_path):
-                st.success(f"✅ 配置已保存到 {output_path}")
-    else:
-        st.error(f"❌ 找不到测试文件: {workflow_path}")
-        st.info("💡 请将 `2d-classfication_zxl.json` 放在同目录下")

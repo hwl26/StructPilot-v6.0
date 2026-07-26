@@ -13,6 +13,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from utils.cryosparc_workflow import generate_cryosparc_workflow, workflow_to_json_str
 
 
+def test_template_export_preserves_cryoSPARC_2d_topology_and_edits():
+    """The visual editor must export the supplied workflow, not a simplified clone."""
+    template_path = Path(__file__).resolve().parent.parent / "knowledge_base" / "workflows" / "2d_classification.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    overrides = {
+        "J1": {"psize_A": 1.12},
+        "J4": {"diameter": 135},
+        "J5": {"box_size_pix": 288},
+        "J6": {"class2D_K": 160},
+    }
+
+    result = generate_cryosparc_workflow(
+        workflow={"steps": []},
+        params={"_workflow_template": template, "_workflow_values": overrides},
+        workflow_name="Edited 2D workflow",
+        software="cryosparc",
+    )
+
+    assert result is not None
+    assert result["title"] == "Edited 2D workflow"
+    assert set(result["jobs"]) == set(template["jobs"])
+    assert result["jobs"]["J5"]["groups"] == template["jobs"]["J5"]["groups"]
+    assert result["jobs"]["J1"]["parameters"]["psize_A"]["value"] == 1.12
+    assert result["jobs"]["J4"]["parameters"]["diameter"]["value"] == 135
+    assert result["jobs"]["J5"]["parameters"]["box_size_pix"]["value"] == 288
+    assert result["jobs"]["J6"]["parameters"]["class2D_K"]["value"] == 160
+
+    required_fields = {"value", "locked", "visible", "flagged", "notes"}
+    for job in result["jobs"].values():
+        for parameter in job["parameters"].values():
+            assert required_fields <= set(parameter)
+            assert parameter["locked"] is False
+
+
 def test_full_workflow():
     """测试完整的 cryoSPARC workflow（从导入到 2D 分类）"""
     # 真实参数（对照你提供的样本）
