@@ -661,7 +661,6 @@ def build_global_styles(theme: dict, is_dark: bool, app_bg: str) -> str:
     header[data-testid="stHeader"] [data-testid="stToolbar"] {{ display: none !important; }}
     .stDeployButton {{ display: none !important; }}
     div[data-testid="stStatusWidget"] {{ display: none !important; }}
-    [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
 
     /* Desk Pet — interactive companion */
     .sp-pet {{

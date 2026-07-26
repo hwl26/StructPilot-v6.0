@@ -654,7 +654,9 @@ def handle_local_flow_command(text: str, response_profile: str = "teaching") -> 
 # --------------------------------------------------------------------------- #
 # Page config & theme
 # --------------------------------------------------------------------------- #
-st.set_page_config(page_title=APP_DISPLAY_NAME, page_icon="🔬", layout="wide", initial_sidebar_state="collapsed")
+# Keep the workflow and account controls discoverable on first visit. Streamlit
+# still provides its native collapse/expand control after the sidebar renders.
+st.set_page_config(page_title=APP_DISPLAY_NAME, page_icon="🔬", layout="wide", initial_sidebar_state="expanded")
 
 # ✨ 服务端 session 恢复（URL params）
 from utils.server_session import load_server_session, cleanup_expired_sessions
