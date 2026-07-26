@@ -234,10 +234,10 @@ def render_beginner_view(
         use_workflow = (software.lower() == "cryosparc" and "2d" in task.lower())
 
         if use_workflow:
-            # 🎯 使用新的Workflow配置界面（左右分栏 + 自动计算）
+            # Uses the real CryoSPARC template editor; all values remain editable.
             st.info(
-                "💡 **智能参数配置**：根据官方workflow模板，自动生成参数卡片。\n\n"
-                "蛋白直径相关参数会自动计算，无需手动填写。"
+                "💡 **Workflow 参数配置**：基于可导入的 cryoSPARC 2D 分类模板。\n\n"
+                "所有参数均可手动修改；系统只提供建议值，不会锁定任何数值。"
             )
 
             from components.cryosparc_workflow_config import render_workflow_config
@@ -276,12 +276,14 @@ def render_beginner_view(
                 recommended_params = st.session_state["recommended_params"]
                 ai_reasons = st.session_state["ai_reasons"]
 
-            # 渲染参数配置界面
+            # 渲染参数配置界面（左窄参数栏 + 右侧流程图）
             confirmed_params = render_parameter_section(
                 recommended_params=recommended_params,
                 user_profile=user_profile,
                 current_values=st.session_state.get("confirmed_params", {}),
-                ai_reasons=ai_reasons
+                ai_reasons=ai_reasons,
+                workflow=st.session_state.get("recommended_workflow", {}),
+                split_layout=True,
             )
 
             # 保存到 session_state 和 graph state
@@ -310,6 +312,34 @@ def render_beginner_view(
     if wizard_active:
         from modes.beginner_wizard import render_beginner_wizard
         render_beginner_wizard(state, app)
+        return
+
+    # The template editor already contains the complete 2D topology. Export it
+    # directly so a legacy wizard cannot discard job connections or parameters.
+    editor_params = st.session_state.get("confirmed_params", {})
+    if isinstance(editor_params, dict) and isinstance(editor_params.get("_workflow_template"), dict):
+        from utils.cryosparc_workflow import generate_cryosparc_workflow, workflow_to_json_str
+
+        workflow_json = generate_cryosparc_workflow(
+            workflow={"steps": []},
+            params=editor_params,
+            workflow_name="StructPilot_2D_Classification",
+            software="cryosparc",
+        )
+        st.markdown("## 🎯 cryoSPARC Workflow 已就绪")
+        st.caption("导出的文件保留模板中的全部 Job、参数和数据连接，可直接在 cryoSPARC 的 Import Workflow 中导入。")
+        st.download_button(
+            "下载可导入的 workflow.json",
+            data=workflow_to_json_str(workflow_json, indent=2),
+            file_name="structpilot_2d_classification.json",
+            mime="application/json",
+            type="primary",
+            use_container_width=True,
+            key="download_template_workflow",
+        )
+        if st.button("进入处理指导", use_container_width=True, key="start_template_guidance"):
+            st.session_state["wizard_completed"] = True
+            st.rerun()
         return
 
     # 分支2：向导未完成，显示入口
@@ -490,31 +520,3 @@ def render_beginner_view(
 
     # 智能滚动锚点：供 inject_smart_scroll() 定位聊天底部
     st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
-    # The template editor already contains the complete 2D topology. Export it
-    # directly so a legacy wizard cannot discard job connections or parameters.
-    editor_params = st.session_state.get("confirmed_params", {})
-    if isinstance(editor_params, dict) and isinstance(editor_params.get("_workflow_template"), dict):
-        from utils.cryosparc_workflow import generate_cryosparc_workflow, workflow_to_json_str
-
-        workflow_json = generate_cryosparc_workflow(
-            workflow={"steps": []},
-            params=editor_params,
-            workflow_name="StructPilot_2D_Classification",
-            software="cryosparc",
-        )
-        st.markdown("## ?? cryoSPARC Workflow ???")
-        st.caption("????????????? Job????????????? cryoSPARC ? Import Workflow ????")
-        st.download_button(
-            "?????? workflow.json",
-            data=workflow_to_json_str(workflow_json, indent=2),
-            file_name="structpilot_2d_classification.json",
-            mime="application/json",
-            type="primary",
-            use_container_width=True,
-            key="download_template_workflow",
-        )
-        if st.button("??????", use_container_width=True, key="start_template_guidance"):
-            st.session_state["wizard_completed"] = True
-            st.rerun()
-        return
-
