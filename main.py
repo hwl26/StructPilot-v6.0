@@ -766,7 +766,9 @@ if "app" not in st.session_state or not _supports_current_app_api(st.session_sta
     # Session state can outlive a source-code hot reload. Clear only the app
     # resource here so the configured LLM singleton remains available.
     get_cached_app.clear()
-    st.session_state.app = get_cached_app(APP_API_VERSION)
+    # 显示加载进度（首次启动时）
+    with st.spinner("🚀 正在初始化应用（首次启动需要20-30秒）..."):
+        st.session_state.app = get_cached_app(APP_API_VERSION)
 app: StructPilotApp = st.session_state.app
 
 # Ensure LLM agent is the cached singleton (config may have been updated)

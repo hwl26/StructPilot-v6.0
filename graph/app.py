@@ -234,7 +234,15 @@ class StructPilotApp:
         ).SmartQAEngine(
             llm=self.llm, retriever=self.retriever, navigator=self.navigator
         )
-        self.graph = self._build_graph()
+        # 延迟构建graph：只在首次调用时编译（减少启动时间）
+        self._graph = None
+
+    @property
+    def graph(self):
+        """延迟构建LangGraph（首次调用时编译）"""
+        if self._graph is None:
+            self._graph = self._build_graph()
+        return self._graph
 
     def _build_graph(self):
         graph = StateGraph(PipelineState)
