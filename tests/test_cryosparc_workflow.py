@@ -24,6 +24,9 @@ from components.cryosparc_workflow_config import (
     _value_key,
     _workflow_validation_errors,
     _workflow_validation_warnings,
+    _workflow_connector_markup,
+    _workflow_lanes,
+    _job_levels,
 )
 
 
@@ -60,6 +63,31 @@ def test_workflow_parameters_are_partitioned_by_experiment_dependency():
     assert [key for key, _ in recommended] == [
         "compute_num_gpus", "box_size_pix", "bin_size_pix"
     ]
+
+
+def test_workflow_visual_layout_keeps_branches_apart_and_draws_merges():
+    template_path = Path(__file__).resolve().parent.parent / "knowledge_base" / "workflows" / "2d_classification.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    jobs = template["jobs"]
+    levels = _job_levels(jobs)
+    lane_count, lanes = _workflow_lanes(jobs, levels)
+
+    assert lane_count >= 3
+    assert lanes["J3"] != lanes["J4"]
+    assert lanes["J1"] == lane_count // 2
+    split_markup = _workflow_connector_markup(
+        jobs, levels, lanes, lane_count, levels["J2"]
+    )
+    merge_markup = _workflow_connector_markup(
+        jobs, levels, lanes, lane_count, levels["J4"]
+    )
+    carry_markup = _workflow_connector_markup(
+        jobs, levels, lanes, lane_count, levels["J7"]
+    )
+    assert split_markup.count("<path") == 2
+    assert merge_markup.count("<path") == 2
+    assert 'class="cswf-edge--carry"' in carry_markup
+    assert ">J3</text>" in carry_markup
 
 
 def test_linked_parameters_use_calibrated_formula_and_sixteen_pixel_alignment():

@@ -8,6 +8,7 @@ copy of the template's job parameters; exporting later preserves the original
 from __future__ import annotations
 
 import copy
+import html
 import json
 import math
 from pathlib import Path
@@ -67,6 +68,19 @@ JOB_LABELS = {
     "select_2D": "Select 2D Classes",
 }
 
+JOB_PHASE_LABELS = {
+    "import_movies": "IMPORT",
+    "import_micrographs": "IMPORT",
+    "patch_motion_correction_multi": "PREPROCESS",
+    "patch_ctf_estimation_multi": "PREPROCESS",
+    "curate_exposures_v2": "CURATE",
+    "blob_picker_gpu": "PICK",
+    "template_picker_gpu": "PICK",
+    "extract_micrographs_multi": "EXTRACT",
+    "class_2D_new": "CLASSIFY",
+    "select_2D": "SELECT",
+}
+
 _ACTIVE_JOB_KEY = "cswf_active_job"
 _INITIALIZED_KEY = "cswf_initialized_template"
 _PENDING_ACTION_KEY = "cswf_pending_action"
@@ -124,6 +138,18 @@ def _template_signature(
 
 def _job_label(job_id: str, job: Dict[str, Any]) -> str:
     return JOB_LABELS.get(job.get("jobType", ""), job.get("jobType", job_id))
+
+
+def _job_sources(job: Dict[str, Any], jobs: Dict[str, Dict[str, Any]]) -> list[str]:
+    """Return unique upstream Job IDs in template order."""
+    sources: list[str] = []
+    for group in job.get("groups", []):
+        if not group or not isinstance(group[0], str) or "." not in group[0]:
+            continue
+        source = group[0].split(".", 1)[0]
+        if source in jobs and source not in sources:
+            sources.append(source)
+    return sources
 
 
 def _iter_parameters(workflow_data: Dict[str, Any]) -> Iterable[tuple[str, str, Dict[str, Any]]]:
@@ -495,20 +521,112 @@ def _job_levels(jobs: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
     return levels
 
 
+def _workflow_lanes(
+    jobs: Dict[str, Dict[str, Any]], levels: Dict[str, int]
+) -> tuple[int, Dict[str, int]]:
+    """Place each level on stable lanes, keeping single Jobs centred."""
+    by_level: Dict[int, list[str]] = {}
+    for job_id in jobs:
+        by_level.setdefault(levels.get(job_id, 0), []).append(job_id)
+    lane_count = max(3, max((len(row) for row in by_level.values()), default=1))
+    lanes: Dict[str, int] = {}
+    for row in by_level.values():
+        if len(row) == 1:
+            positions = [lane_count // 2]
+        elif len(row) == 2:
+            positions = [0, lane_count - 1]
+        else:
+            positions = [
+                round(index * (lane_count - 1) / (len(row) - 1))
+                for index in range(len(row))
+            ]
+        lanes.update(zip(row, positions))
+    return lane_count, lanes
+
+
+def _workflow_connector_markup(
+    jobs: Dict[str, Dict[str, Any]],
+    levels: Dict[str, int],
+    lanes: Dict[str, int],
+    lane_count: int,
+    level: int,
+) -> str:
+    """Build the compact SVG segment between two adjacent workflow rows."""
+    paths: list[str] = []
+    carry_labels: list[str] = []
+    targets: set[float] = set()
+    for target_id, job in jobs.items():
+        if levels.get(target_id) != level + 1:
+            continue
+        target_x = (lanes[target_id] + 0.5) * 100 / lane_count
+        for source_id in _job_sources(job, jobs):
+            source_level = levels.get(source_id)
+            if source_level is None or source_level > level:
+                continue
+            if source_level == level:
+                source_x = (lanes[source_id] + 0.5) * 100 / lane_count
+                paths.append(
+                    f'<path d="M {source_x:.3f} 1 C {source_x:.3f} 10, '
+                    f'{target_x:.3f} 15, {target_x:.3f} 25" />'
+                )
+            else:
+                label_y = 9 + len(carry_labels) * 6
+                paths.append(
+                    f'<path class="cswf-edge--carry" d="M 8 {label_y:.1f} '
+                    f'C 24 {label_y:.1f}, {target_x:.3f} 15, {target_x:.3f} 25" />'
+                )
+                carry_labels.append(
+                    f'<text x="1.2" y="{label_y + 1.4:.1f}">{html.escape(source_id)}</text>'
+                )
+            targets.add(target_x)
+    if not paths:
+        return '<div class="cswf-edge-row cswf-edge-row--empty"></div>'
+    dots = "".join(
+        f'<circle cx="{target_x:.3f}" cy="25" r="2.2" />'
+        for target_x in sorted(targets)
+    )
+    return (
+        '<div class="cswf-edge-row" aria-hidden="true">'
+        '<svg viewBox="0 0 100 27" preserveAspectRatio="none">'
+        + "".join(paths)
+        + dots
+        + "".join(carry_labels)
+        + "</svg></div>"
+    )
+
+
 def _render_interactive_workflow(workflow_data: Dict[str, Any], active_job: str) -> None:
     jobs = workflow_data.get("jobs", {})
     levels = _job_levels(jobs)
     max_level = max(levels.values(), default=0)
+    lane_count, lanes = _workflow_lanes(jobs, levels)
+    connection_count = sum(len(_job_sources(job, jobs)) for job in jobs.values())
 
-    st.markdown("#### Workflow")
-    st.caption("点击任一节点，即可打开左侧对应的参数卡。蓝色节点为当前编辑位置。")
-    with st.container(border=True):
+    st.markdown(
+        f"""
+        <div class="cswf-canvas-title">
+          <div>
+            <span class="cswf-canvas-kicker">PROCESS MAP</span>
+            <h4>Workflow</h4>
+          </div>
+          <div class="cswf-canvas-summary">{len(jobs)} Jobs&nbsp;&nbsp;·&nbsp;&nbsp;{connection_count} Connections</div>
+        </div>
+        <div class="cswf-canvas-legend">
+          <span><i class="cswf-legend-dot cswf-legend-dot--active"></i>当前编辑</span>
+          <span><i class="cswf-legend-dot"></i>可编辑节点</span>
+          <span><i class="cswf-legend-line"></i>数据流</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(border=True, key="cswf_workflow_canvas"):
         for level in range(max_level + 1):
             current = [job_id for job_id in jobs if levels.get(job_id) == level]
             if not current:
                 continue
-            columns = st.columns(len(current))
-            for col, job_id in zip(columns, current):
+            columns = st.columns(lane_count, gap="small")
+            for job_id in current:
+                col = columns[lanes[job_id]]
                 job = jobs[job_id]
                 with col:
                     title = _job_label(job_id, job)
@@ -521,14 +639,23 @@ def _render_interactive_workflow(workflow_data: Dict[str, Any], active_job: str)
                     ):
                         st.session_state[_ACTIVE_JOB_KEY] = job_id
                         st.rerun()
-                    sources = []
-                    for group in job.get("groups", []):
-                        if group and isinstance(group[0], str) and "." in group[0]:
-                            sources.append(group[0].split(".", 1)[0])
-                    if sources:
-                        st.caption("来自 " + " / ".join(sources))
+                    sources = _job_sources(job, jobs)
+                    phase = JOB_PHASE_LABELS.get(job.get("jobType", ""), "JOB")
+                    parameter_count = len(job.get("parameters", {}))
+                    parameter_label = "PARAM" if parameter_count == 1 else "PARAMS"
+                    source_text = " + ".join(sources) if sources else "START"
+                    st.markdown(
+                        '<div class="cswf-node-meta">'
+                        f'<span>{html.escape(phase)} · {parameter_count} {parameter_label}</span>'
+                        f'<span>IN&nbsp; {html.escape(source_text)}</span>'
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
             if level < max_level:
-                st.markdown("<div class='cswf-connector'>↓</div>", unsafe_allow_html=True)
+                st.markdown(
+                    _workflow_connector_markup(jobs, levels, lanes, lane_count, level),
+                    unsafe_allow_html=True,
+                )
 
 
 def _canonical_parameters(values: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -705,10 +832,95 @@ def render_workflow_config(
         <style>
         .cswf-head { margin: 0.2rem 0 0.45rem; }
         .cswf-head h2 { margin: 0; font-size: 1.45rem !important; }
-        .cswf-panel { border: 1px solid #d8e1ea; background: #ffffff; padding: 0.7rem; }
         .cswf-phase { color: #475569; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.2rem; }
-        .cswf-node-caption { color: #64748b; font-size: 0.78rem; }
-        .cswf-connector { text-align: center; color: #94a3b8; line-height: 1.1; font-size: 1.15rem; }
+        .cswf-canvas-title {
+          display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+          margin: 0.05rem 0 0.55rem;
+        }
+        .cswf-canvas-title h4 { margin: 0.05rem 0 0 !important; font-size: 1.05rem !important; }
+        .cswf-canvas-kicker {
+          color: #2879b9; font-size: 0.63rem; font-weight: 800; letter-spacing: 0.12em;
+        }
+        .cswf-canvas-summary { color: #64748b; font-size: 0.7rem; white-space: nowrap; }
+        .cswf-canvas-legend {
+          display: flex; align-items: center; gap: 1rem; margin: -0.1rem 0 0.55rem;
+          color: #64748b; font-size: 0.7rem;
+        }
+        .cswf-canvas-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+        .cswf-legend-dot { width: 0.46rem; height: 0.46rem; border-radius: 50%; background: #94a3b8; }
+        .cswf-legend-dot--active { background: #1683d8; box-shadow: 0 0 0 3px #e2f1fc; }
+        .cswf-legend-line { width: 1.15rem; height: 1px; background: #a8bacb; }
+        div.st-key-cswf_workflow_canvas {
+          border-color: #d7e0e8 !important; background: #f7f9fb;
+          padding: 0.9rem 1rem 0.75rem !important;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+        }
+        div[class*="st-key-cswf_node_"] { margin-bottom: 0 !important; }
+        div[class*="st-key-cswf_node_"] button {
+          min-height: 3.15rem; justify-content: flex-start; text-align: left;
+          padding: 0.48rem 0.62rem; border-radius: 6px;
+          border: 1px solid #cfd9e3; background: #ffffff; color: #26374a;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+        }
+        div[class*="st-key-cswf_node_"] button::before {
+          content: ""; flex: 0 0 auto; width: 0.42rem; height: 0.42rem;
+          border-radius: 50%; background: #90a2b4; margin-right: 0.08rem;
+        }
+        div[class*="st-key-cswf_node_"] button:hover {
+          border-color: #70a9d5; background: #fbfdff;
+          box-shadow: 0 3px 9px rgba(43, 104, 153, 0.1);
+        }
+        div[class*="st-key-cswf_node_"] button[data-testid="stBaseButton-primary"] {
+          border-color: #1683d8; background: #eaf4fb; color: #0b5f9f;
+          box-shadow: inset 3px 0 0 #1683d8, 0 2px 8px rgba(22, 131, 216, 0.13);
+        }
+        div[class*="st-key-cswf_node_"] button[data-testid="stBaseButton-primary"]::before {
+          background: #1683d8; box-shadow: 0 0 0 3px rgba(22, 131, 216, 0.13);
+        }
+        div[class*="st-key-cswf_node_"] button p {
+          font-size: 0.72rem !important; font-weight: 680; line-height: 1.18;
+          white-space: normal; letter-spacing: -0.01em;
+        }
+        .cswf-node-meta {
+          display: flex; align-items: center; justify-content: space-between; gap: 0.35rem;
+          min-height: 1.05rem; padding: 0.2rem 0.22rem 0;
+          color: #738497; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 0.56rem; line-height: 1.1; letter-spacing: 0.025em; white-space: nowrap;
+        }
+        .cswf-edge-row { height: 1.5rem; margin: -0.05rem 0; overflow: visible; }
+        .cswf-edge-row svg { display: block; width: 100%; height: 100%; overflow: visible; }
+        .cswf-edge-row path {
+          fill: none; stroke: #9db1c3; stroke-width: 0.58; vector-effect: non-scaling-stroke;
+        }
+        .cswf-edge-row path.cswf-edge--carry {
+          stroke: #6f91ad; stroke-dasharray: 3 2;
+        }
+        .cswf-edge-row circle { fill: #6f8ca5; }
+        .cswf-edge-row text {
+          fill: #58758e; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 4px; font-weight: 700; letter-spacing: 0.04em;
+        }
+        .cswf-edge-row--empty { height: 0.8rem; }
+        div[class*="st-key-cswf_card_selector_"] button {
+          min-height: 2.25rem; border-radius: 5px; padding: 0.25rem 0.45rem;
+          border-color: #d5dee7; color: #44576a; background: #ffffff;
+        }
+        div[class*="st-key-cswf_card_selector_"] button p {
+          font-size: 0.72rem !important; font-weight: 650;
+        }
+        div[class*="st-key-cswf_card_selector_"] button[data-testid="stBaseButton-primary"] {
+          border-color: #1683d8; color: #0b5f9f; background: #eaf4fb;
+          box-shadow: inset 3px 0 0 #1683d8;
+        }
+        @media (max-width: 900px) {
+          .cswf-canvas-summary { display: none; }
+          .cswf-canvas-legend { gap: 0.6rem; flex-wrap: wrap; }
+          div.st-key-cswf_workflow_canvas { padding: 0.7rem 0.6rem 0.55rem !important; }
+          div[class*="st-key-cswf_node_"] button { min-height: 2.9rem; padding: 0.38rem 0.42rem; }
+          div[class*="st-key-cswf_node_"] button p { font-size: 0.64rem !important; }
+          .cswf-node-meta { font-size: 0.5rem; }
+        }
         </style>
         <div class='cswf-head'><h2>🎯 cryoSPARC Workflow 参数填写</h2></div>
         """,
