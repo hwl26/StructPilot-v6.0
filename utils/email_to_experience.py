@@ -7,6 +7,8 @@ import threading
 import time
 from pathlib import Path
 from email.header import decode_header
+import uuid
+from utils.atomic_io import atomic_update_json, atomic_write_json
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _EMAIL_CONFIG_PATH = BASE_DIR / "runtime" / "config" / "email_bot.json"
@@ -38,7 +40,7 @@ def save_email_config(host: str, port: int, username: str, password: str, enable
             "enabled": enabled,
             "check_interval": 300,
         }
-        _EMAIL_CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_EMAIL_CONFIG_PATH, cfg)
         return True
     except Exception:
         return False
@@ -98,16 +100,11 @@ def process_email_experiences(cfg: dict) -> int:
     emails = fetch_new_emails(cfg)
     count = 0
     for em in emails:
-        try:
-            data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            data = {"entries": [], "meta": {}}
-
         import datetime
         import re
         title = re.sub(r"#经验\s*|\[经验\]\s*", "", em["subject"]).strip()
         new_entry = {
-            "id": f"lab_email_{len(data['entries'])+1:03d}",
+            "id": f"lab_email_{uuid.uuid4().hex[:12]}",
             "category": "邮件记录",
             "title": title,
             "source": "email",
@@ -121,8 +118,11 @@ def process_email_experiences(cfg: dict) -> int:
             "tags": [],
             "images": [],
         }
-        data["entries"].append(new_entry)
-        _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        def mutate(data):
+            data = data if isinstance(data, dict) else {"entries": [], "meta": {}}
+            data.setdefault("entries", []).append(new_entry)
+            return data
+        atomic_update_json(_LAB_EXP_PATH, {"entries": [], "meta": {}}, mutate)
         count += 1
     return count
 

@@ -43,7 +43,7 @@
   - `st.session_state.username`
   - `st.session_state.display_name`
   - `st.session_state.role`
-- ✅ 默认管理员账号（admin/admin123）
+- ✅ 管理员账号仅通过私有 Secrets 初始化
 - ✅ 强制首次修改密码
 
 ### 2.2 权限系统
@@ -325,7 +325,7 @@
 
 3. **管理员登录测试**
    - 用户名：admin
-   - 密码：admin123
+   - 密码：使用部署时在私有 Secrets 中设置的强密码
    - 验证所有 Tab 正常显示
 
 4. **核心功能测试**

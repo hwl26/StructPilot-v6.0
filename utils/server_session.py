@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+from utils.atomic_io import atomic_write_json
 
 SESSION_DIR = Path(__file__).parent.parent / "runtime" / "sessions"
 SESSION_EXPIRE_DAYS = 7
@@ -22,6 +23,8 @@ def _valid_session_id(session_id: str) -> bool:
 
 def save_server_session(session_id: str, data: Dict[str, Any]) -> bool:
     """保存session数据到服务端文件"""
+    if not _valid_session_id(session_id):
+        return False
     try:
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         session_file = SESSION_DIR / f"{session_id}.json"
@@ -30,7 +33,7 @@ def save_server_session(session_id: str, data: Dict[str, Any]) -> bool:
             "created_at": datetime.now().isoformat(),
             "expires_at": (datetime.now() + timedelta(days=SESSION_EXPIRE_DAYS)).isoformat()
         }
-        session_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(session_file, payload)
         return True
     except Exception:
         return False

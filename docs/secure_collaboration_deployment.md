@@ -169,7 +169,7 @@ pm2 startup  # 开机自启
 **本组成员（192.168.1.x）访问：**
 1. 浏览器输入：`http://192.168.1.100`
 2. 弹出 Nginx 认证窗口，输入密码：`admin_labA / LabA_2024@Secure`
-3. 进入 StructPilot 登录页面，输入内部账号：`admin / admin123`
+3. 进入 StructPilot 登录页面，使用通过私有 Secrets 初始化的内部管理员账号
 4. ✅ 成功访问
 
 **其他组成员（192.168.2.x）访问：**

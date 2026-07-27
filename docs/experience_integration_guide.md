@@ -44,7 +44,7 @@
 
 2. **以管理员身份登录**
    - 用户名：`admin`
-   - 密码：`admin123`
+   - 密码：部署时在私有 Secrets 中设置的强密码
 
 3. **贡献经验**
    - 进入「对话陪跑」Tab
@@ -134,7 +134,7 @@ python import_experiences.py
 
 ### **当前状态**
 - 图片已保存在 Claude 的 image cache
-- 路径：`C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\41-46.png`
+- 路径示例：`C:\path\to\image-cache\41-46.png`
 
 ### **处理方案**
 
@@ -144,8 +144,8 @@ python import_experiences.py
 mkdir -p runtime/images/experiences/
 
 # 复制图片
-cp C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\41.png runtime/images/experiences/
-cp C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\42.png runtime/images/experiences/
+cp C:\path\to\image-cache\41.png runtime/images/experiences/
+cp C:\path\to\image-cache\42.png runtime/images/experiences/
 # ... 依此类推 43-46.png
 ```
 

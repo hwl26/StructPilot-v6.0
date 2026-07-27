@@ -10,6 +10,7 @@ import json
 import os
 import re
 import threading
+import uuid
 from pathlib import Path
 import inspect
 
@@ -93,6 +94,7 @@ from utils.file_upload import (
     save_uploaded_images, save_pasted_image, save_uploaded_audio,
     get_image_metadata,
 )
+from utils.network_security import validate_service_base_url
 from utils.image_processing import (
     image_data_url, run_local_ocr, run_optional_vision_model, parse_bool_env,
 )
@@ -119,9 +121,36 @@ STATUS_LABELS = {
     "skipped": ("⏭️", "已跳过"),
 }
 
+PET_OPTIONS = {
+    "cat": "🐱 科研小猫",
+    "penguin": "🐧 冷冻企鹅",
+    "dog": "🐶 实验小狗",
+    "rabbit": "🐰 实验兔兔",
+    "robot": "🤖 科研助手",
+}
+
 
 def make_session_id() -> str:
-    return "session_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+    return "session_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f") + "_" + uuid.uuid4().hex[:8]
+
+
+def env_int(name: str, default: int, minimum: int) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def current_owner_id() -> str:
+    """Return a stable per-browser guest owner or the authenticated user owner."""
+    user = st.session_state.get("current_user") or {}
+    username = str(user.get("username") or "").strip()
+    role = str(user.get("role") or "guest")
+    if username and username != "guest" and role != "guest":
+        return f"user:{username}"
+    if "_guest_owner_id" not in st.session_state:
+        st.session_state._guest_owner_id = f"guest:{uuid.uuid4().hex}"
+    return st.session_state._guest_owner_id
 
 
 @st.cache_data(show_spinner=False)
@@ -1111,13 +1140,6 @@ def render_scroll_shortcuts() -> None:
                 }
                 return { top: main.scrollTop, max: Math.max(0, main.scrollHeight - main.clientHeight) };
             }
-            const inlineScroll = "event.preventDefault();event.stopPropagation();" +
-                "const m=document.querySelector('[data-testid=\\\"stMain\\\"]')||document.querySelector('section[data-testid=\\\"stMain\\\"]')||document.scrollingElement||document.documentElement||document.body;" +
-                "const d=this.getAttribute('data-sp-scroll');" +
-                "const t=d==='bottom'?Math.max(0,m.scrollHeight-m.clientHeight):0;" +
-                "if(m.scrollTo)m.scrollTo({top:t,behavior:'smooth'});else m.scrollTop=t;" +
-                "setTimeout(()=>{if(m.scrollTo)m.scrollTo({top:t,behavior:'auto'});else m.scrollTop=t;},220);" +
-                "return false;";
             win.StructPilotScrollTo = function(direction) {
                 scrollMain(direction, true);
                 setTimeout(function() { scrollMain(direction, false); }, 180);
@@ -1128,14 +1150,17 @@ def render_scroll_shortcuts() -> None:
             const bar = doc.createElement('div');
             bar.id = barId;
             bar.setAttribute('data-sp-version', '3');
-            bar.innerHTML = `
-                <button type="button" data-sp-scroll="top" aria-label="回到页面顶端" title="回到页面顶端">↑</button>
-                <button type="button" data-sp-scroll="bottom" aria-label="到页面底端" title="到页面底端">↓</button>
-            `;
-            bar.querySelectorAll('[data-sp-scroll]').forEach(function(button) {
-                button.setAttribute('onclick', inlineScroll);
-                button.setAttribute('onpointerdown', inlineScroll);
-            });
+            function makeScrollButton(direction, label, glyph) {
+                const button = doc.createElement('button');
+                button.type = 'button';
+                button.setAttribute('data-sp-scroll', direction);
+                button.setAttribute('aria-label', label);
+                button.title = label;
+                button.textContent = glyph;
+                return button;
+            }
+            bar.appendChild(makeScrollButton('top', '回到页面顶端', '↑'));
+            bar.appendChild(makeScrollButton('bottom', '到页面底端', '↓'));
             bar.addEventListener('pointerdown', function(event) {
                 const button = event.target.closest('[data-sp-scroll]');
                 if (!button) return;
@@ -1159,10 +1184,12 @@ def render_scroll_shortcuts() -> None:
 
 render_scroll_shortcuts()
 
-if "state" not in st.session_state:
-    latest_sid = app.memory.get_latest_session_id()
-    restored = app.memory.load_state(latest_sid) if latest_sid else None
-    st.session_state.state = restored or PipelineState(session_id=latest_sid or make_session_id())
+_owner_id = current_owner_id()
+_existing_state = st.session_state.get("state")
+if _existing_state is None or getattr(_existing_state, "owner_id", "") != _owner_id:
+    latest_sid = app.memory.get_latest_session_id(_owner_id)
+    restored = app.memory.load_state(latest_sid, _owner_id) if latest_sid else None
+    st.session_state.state = restored or PipelineState(session_id=make_session_id(), owner_id=_owner_id)
 
 state: PipelineState = st.session_state.state
 trim_chat_history(state)
@@ -1180,6 +1207,15 @@ def run_command(
 ) -> None:
     """Send text (and optional images) through the agent pipeline and persist."""
     image_refs = image_refs or []
+    text = str(text or "")
+    max_query_length = env_int("STRUCTPILOT_MAX_QUERY_LENGTH", 8000, 1000)
+    max_images = env_int("STRUCTPILOT_MAX_IMAGES_PER_REQUEST", 8, 1)
+    if len(text) > max_query_length:
+        st.error(f"问题过长（最多 {max_query_length} 个字符），请精简后重试。")
+        return
+    if len(image_refs) > max_images:
+        st.error(f"单次最多处理 {max_images} 张图片，请分批上传。")
+        return
     input_metadata = dict(input_metadata or {})
     response_profile = normalize_response_profile(
         response_profile or get_state("output_mode", "teaching")
@@ -1258,6 +1294,19 @@ def run_command(
         capture_state_safely(new_state)
         progress.update(label="回答已生成", state="complete", expanded=False)
         return
+
+    if bool(getattr(app.llm, "enabled", False)):
+        auth_user = st.session_state.get("current_user") or {}
+        is_guest = auth_user.get("role", "guest") == "guest"
+        allowed, quota_message = app.memory.consume_ai_quota(state.owner_id, is_guest=is_guest)
+        if not allowed:
+            progress.write(quota_message)
+            new_state = handle_local_flow_command(text, response_profile=response_profile)
+            st.session_state.state = new_state
+            capture_state_safely(new_state)
+            progress.update(label="已使用本地规则完成回答", state="complete", expanded=False)
+            st.warning(quota_message)
+            return
 
     image_context = describe_image_refs(image_refs)
     observation_context = format_image_observations(observations)
@@ -1432,9 +1481,7 @@ with st.sidebar:
                             st.session_state["show_change_password_dialog"] = True
                         st.rerun()
                     else:
-                        # 登录失败，记录失败次数
-                        record_failed_attempt(_login_user, _failed_attempts)
-                        st.session_state["_login_failed_attempts"] = _failed_attempts
+                        # authenticate() already records this failure atomically.
                         st.error("用户名或密码错误")
         else:
             # 已登录
@@ -1627,7 +1674,7 @@ with st.sidebar:
     st.text_input("新会话名称", key="new_session_name", placeholder="例如：膜蛋白样品A")
     if st.button("＋ 新建会话", use_container_width=True, type="secondary"):
         new_id = make_session_id()
-        new_state = PipelineState(session_id=new_id)
+        new_state = PipelineState(session_id=new_id, owner_id=state.owner_id)
         setattr(new_state, "session_name", st.session_state.get("new_session_name", "").strip() or new_id)
         capture_state_safely(new_state)
         st.session_state.state = new_state
@@ -1635,7 +1682,7 @@ with st.sidebar:
         st.rerun()
 
     # 历史会话列表（可点击切换，与检查点列表交互一致）
-    sessions = {item["session_id"]: item for item in app.memory.list_sessions()}
+    sessions = {item["session_id"]: item for item in app.memory.list_sessions(state.owner_id)}
     if sessions:
         with st.expander(f"历史会话（{len(sessions)}）", expanded=False):
             for sid, meta in sessions.items():
@@ -1651,7 +1698,7 @@ with st.sidebar:
                     use_container_width=True,
                     type="primary" if is_current else "secondary",
                 ):
-                    restored = app.memory.load_state(sid)
+                    restored = app.memory.load_state(sid, state.owner_id)
                     if restored is not None:
                         st.session_state.state = restored
                         st.session_state.last_feedback = "已恢复会话"
@@ -1662,7 +1709,7 @@ with st.sidebar:
         rename_value = st.text_input("重命名", value=getattr(state, "session_name", state.session_id), key="rename_session_input")
         if st.button("保存名称", use_container_width=True):
             setattr(state, "session_name", rename_value.strip() or state.session_id)
-            app.memory.rename_session(state.session_id, getattr(state, "session_name", state.session_id))
+            app.memory.rename_session(state.session_id, getattr(state, "session_name", state.session_id), state.owner_id)
             capture_state_safely(state)
             st.session_state.last_feedback = "已保存名称"
             st.rerun()
@@ -1670,10 +1717,10 @@ with st.sidebar:
         st.caption(f"当前会话：{state.session_id}")
         confirm_delete = st.checkbox("确认删除当前会话（不可恢复）", key="confirm_delete_session")
         if st.button("删除当前会话", use_container_width=True, disabled=not confirm_delete):
-            app.memory.delete_session(state.session_id)
-            latest = app.memory.get_latest_session_id()
-            restored = app.memory.load_state(latest) if latest else None
-            st.session_state.state = restored or PipelineState(session_id=make_session_id())
+            app.memory.delete_session(state.session_id, state.owner_id)
+            latest = app.memory.get_latest_session_id(state.owner_id)
+            restored = app.memory.load_state(latest, state.owner_id) if latest else None
+            st.session_state.state = restored or PipelineState(session_id=make_session_id(), owner_id=state.owner_id)
             st.session_state.last_feedback = "已删除会话"
             st.rerun()
 
@@ -2763,26 +2810,28 @@ with tab_chat:
                         var injectedText = {escaped};
                         function tryInject() {{
                             attempts++;
-                            var chatArea = document.querySelector('[data-testid="stChatInputTextArea"]');
+                            var parentWindow = window.parent;
+                            var chatArea = parentWindow.document.querySelector('[data-testid="stChatInputTextArea"]');
                             if (!chatArea) {{
                                 if (attempts < maxAttempts) setTimeout(tryInject, 200);
                                 return;
                             }}
-                            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                            var nativeSetter = Object.getOwnPropertyDescriptor(parentWindow.HTMLTextAreaElement.prototype, 'value').set;
                             var currentVal = chatArea.value || '';
                             var newVal = currentVal ? (currentVal + (currentVal.endsWith(' ') ? '' : ' ') + injectedText) : injectedText;
                             nativeSetter.call(chatArea, newVal);
-                            chatArea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            chatArea.dispatchEvent(new parentWindow.Event('input', {{ bubbles: true }}));
                             chatArea.focus();
                             chatArea.setSelectionRange(newVal.length, newVal.length);
                         }}
                         setTimeout(tryInject, 300);
                     }})();
                     """
-                    js_b64 = base64.b64encode(js_code.encode('utf-8')).decode('ascii')
-                    st.markdown(
-                        f'<img src="data:," style="display:none!important;width:0!important;height:0!important;" onerror="eval(atob(\'{js_b64}\'))">',
-                        unsafe_allow_html=True,
+                    # Execute a fixed script in an isolated component. The only dynamic
+                    # value is JSON-encoded data; no string-to-code evaluation is used.
+                    components.html(
+                        "<script>" + js_code + "</script>",
+                        height=0,
                     )
 
                 # ---- 截图粘贴（紧凑单行） ----
@@ -3001,8 +3050,8 @@ if tab_community is not None:
 
                 _ww_webhook = st.text_input(
                     "Webhook URL",
-                    value=_ww_cfg.get("webhook_url", ""),
-                    placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+                    value="",
+                    placeholder="已配置，留空保持不变" if _ww_cfg.get("webhook_url") else "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
                     key="ww_webhook_input"
                 )
                 _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle")
@@ -3010,17 +3059,19 @@ if tab_community is not None:
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn"):
-                        if _ww_save(_ww_webhook, _ww_enabled):
+                        _ww_value = _ww_webhook.strip() or _ww_cfg.get("webhook_url", "")
+                        if _ww_save(_ww_value, _ww_enabled):
                             st.success("✅ 配置已保存")
                         else:
                             st.error("保存失败")
 
                 with col2:
                     if st.button("🧪 测试推送", use_container_width=True, key="ww_test_btn"):
-                        if not _ww_webhook:
+                        _ww_value = _ww_webhook.strip() or _ww_cfg.get("webhook_url", "")
+                        if not _ww_value:
                             st.error("请先填写 Webhook URL")
                         else:
-                            ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
+                            ok = _ww_send(_ww_value, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
                             if ok:
                                 st.success("✅ 测试成功，企业微信群应收到消息")
                             else:
@@ -3174,17 +3225,12 @@ with tab_settings:
 
         with col_pet2:
             if st_pet_simple:
-                pet_type_options = {
-                    "penguin": "🐧 冷冻企鹅",
-                    "cat": "🐱 科研小猫",
-                    "dog": "🐶 实验小狗",
-                }
                 current_pet = st.session_state.get("pet_type", "penguin")
                 sel_pet_simple = st.selectbox(
                     "桌宠类型",
-                    options=list(pet_type_options.keys()),
-                    format_func=lambda x: pet_type_options[x],
-                    index=list(pet_type_options.keys()).index(current_pet) if current_pet in pet_type_options else 0,
+                    options=list(PET_OPTIONS.keys()),
+                    format_func=lambda x: PET_OPTIONS[x],
+                    index=list(PET_OPTIONS.keys()).index(current_pet) if current_pet in PET_OPTIONS else 0,
                     key="pet_type_simple",
                 )
             else:
@@ -3333,7 +3379,10 @@ with tab_settings:
             llm_timeout = st.number_input("Timeout 秒", min_value=5, max_value=180, value=int(cfg.get("timeout", app.llm.timeout or 30)), step=5)
         with fcol2:
             llm_base_url = st.text_input("Base URL", value=preset.get("base_url") or cfg.get("base_url", app.llm.base_url or ""))
-            llm_api_key = st.text_input("API Key", value=cfg.get("api_key", app.llm.api_key or ""), type="password")
+            llm_api_key = st.text_input(
+                "API Key", value="", type="password",
+                placeholder="已配置，留空保持不变" if (cfg.get("api_key") or app.llm.api_key) else "请输入 API Key",
+            )
         if service_name == "OpenAI":
             llm_provider = "openai_compatible"
         else:
@@ -3341,7 +3390,12 @@ with tab_settings:
         lc1, lc2 = st.columns(2)
         with lc1:
             if st.button("保存 LLM 配置", use_container_width=True):
-                app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
+                url_ok, url_error = validate_service_base_url(llm_base_url, allow_local=service_name == "Ollama 本地模型")
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
+                saved_key = llm_api_key.strip() or cfg.get("api_key") or app.llm.api_key
+                app.llm.save_config(provider=llm_provider, api_key=saved_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
                 # Performance: clear cached app/LLM so next rerun picks up new config
                 clear_app_cache()
                 set_llm_mode(detect_llm_mode(bool(app.llm.enabled)))
@@ -3349,7 +3403,12 @@ with tab_settings:
                 st.rerun()
         with lc2:
             if st.button("测试 LLM 连接", use_container_width=True):
-                app.llm.save_config(provider=llm_provider, api_key=llm_api_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
+                url_ok, url_error = validate_service_base_url(llm_base_url, allow_local=service_name == "Ollama 本地模型")
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
+                saved_key = llm_api_key.strip() or cfg.get("api_key") or app.llm.api_key
+                app.llm.save_config(provider=llm_provider, api_key=saved_key, model=llm_model, base_url=llm_base_url, timeout=float(llm_timeout))
                 result = explain_connection_result(app.llm.test_connection(), "LLM", llm_base_url)
                 if "成功" in result or "ok" in result.lower():
                     st.success(result)
@@ -3367,23 +3426,33 @@ with tab_settings:
             emb_base_url = st.text_input("Embedding Base URL", value=emb_cfg.get("embedding_base_url", ""),
                                          placeholder="留空复用主 LLM Base URL")
         with ec2:
-            emb_api_key = st.text_input("Embedding API Key", value=emb_cfg.get("embedding_api_key", ""),
-                                        type="password", placeholder="留空复用主 LLM API Key")
+            emb_api_key = st.text_input(
+                "Embedding API Key", value="", type="password",
+                placeholder="已配置，留空保持不变" if emb_cfg.get("embedding_api_key") else "留空复用主 LLM API Key",
+            )
             emb_status = "已启用" if app.llm.embedding_enabled else "未启用"
             st.text_input("Embedding 状态", value=emb_status, disabled=True)
         eb1, eb2 = st.columns(2)
         with eb1:
             if st.button("保存 Embedding 配置", use_container_width=True):
+                url_ok, url_error = validate_service_base_url(emb_base_url or llm_base_url, allow_local=(emb_base_url or llm_base_url).startswith(("http://localhost", "http://127.0.0.1")))
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
                 app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
-                                              embedding_api_key=emb_api_key)
+                                              embedding_api_key=emb_api_key.strip() or emb_cfg.get("embedding_api_key", ""))
                 # Performance: clear RAG cache so new embeddings take effect
                 clear_app_cache()
                 st.success("Embedding 配置已保存")
                 st.rerun()
         with eb2:
             if st.button("测试 Embedding 连接", use_container_width=True):
+                url_ok, url_error = validate_service_base_url(emb_base_url or llm_base_url, allow_local=(emb_base_url or llm_base_url).startswith(("http://localhost", "http://127.0.0.1")))
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
                 app.llm.save_embedding_config(embedding_model=emb_model, embedding_base_url=emb_base_url,
-                                              embedding_api_key=emb_api_key)
+                                              embedding_api_key=emb_api_key.strip() or emb_cfg.get("embedding_api_key", ""))
                 app.llm.reload()
                 if not emb_model.strip():
                     result = "向量检索未启用：请先填写 Embedding 模型。"
@@ -3442,19 +3511,23 @@ with tab_settings:
         with ac2:
             audio_api_key = st.text_input(
                 "Audio API Key",
-                value=audio_cfg.get("audio_api_key", ""),
+                value="",
                 type="password",
-                placeholder="留空复用主 LLM API Key",
+                placeholder="已配置，留空保持不变" if audio_cfg.get("audio_api_key") else "留空复用主 LLM API Key",
             )
             st.text_input("语音状态", value=app.llm.audio_status_text(), disabled=True)
         ab1, ab2 = st.columns(2)
         with ab1:
             if st.button("保存语音转写配置", use_container_width=True):
+                url_ok, url_error = validate_service_base_url(audio_base_url or llm_base_url, allow_local=(audio_base_url or llm_base_url).startswith(("http://localhost", "http://127.0.0.1")))
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
                 normalized_audio_model = app.llm.normalize_audio_model(audio_model)
                 app.llm.save_audio_config(
                     audio_model=normalized_audio_model,
                     audio_base_url=audio_base_url,
-                    audio_api_key=audio_api_key,
+                    audio_api_key=audio_api_key.strip() or audio_cfg.get("audio_api_key", ""),
                 )
                 if normalized_audio_model != audio_model.strip():
                     st.success(f"语音转写配置已保存，模型名已自动纠正为：{normalized_audio_model}")
@@ -3462,11 +3535,15 @@ with tab_settings:
                     st.success("语音转写配置已保存")
         with ab2:
             if st.button("测试语音连接", use_container_width=True):
+                url_ok, url_error = validate_service_base_url(audio_base_url or llm_base_url, allow_local=(audio_base_url or llm_base_url).startswith(("http://localhost", "http://127.0.0.1")))
+                if not url_ok:
+                    st.error(url_error)
+                    st.stop()
                 normalized_audio_model = app.llm.normalize_audio_model(audio_model) or app.llm.audio_model
                 app.llm.save_audio_config(
                     audio_model=normalized_audio_model,
                     audio_base_url=audio_base_url,
-                    audio_api_key=audio_api_key,
+                    audio_api_key=audio_api_key.strip() or audio_cfg.get("audio_api_key", ""),
                 )
                 app.llm.reload()
                 if not normalized_audio_model.strip():
@@ -3488,12 +3565,11 @@ with tab_settings:
                            value=st.session_state.get("pet_enabled", True),
                            key="pet_enabled",
                            help="在右下角显示一只可爱的科研伙伴，摸头、摸身体、拽尾巴有不同反应，还可以拖动哦～")
-        _pet_options = {"cat": "科研小猫", "penguin": "冷冻企鹅", "dog": "实验小狗", "rabbit": "实验兔兔", "robot": "科研助手"}
         # 确保 session_state 中的 pet_type 合法（防止旧配置或异常值导致空白选项）
-        if st.session_state.get("pet_type", "penguin") not in _pet_options:
+        if st.session_state.get("pet_type", "penguin") not in PET_OPTIONS:
             st.session_state.pet_type = "penguin"
-        st_pet_type = st.selectbox("选择伙伴", options=list(_pet_options.keys()),
-                                    format_func=lambda x: _pet_options.get(x, x),
+        st_pet_type = st.selectbox("选择伙伴", options=list(PET_OPTIONS.keys()),
+                                    format_func=lambda x: PET_OPTIONS.get(x, x),
                                     key="pet_type",
                                     disabled=not st.session_state.get("pet_enabled", True),
                                     help="冷冻企鹅最配冷冻电镜哦！")
@@ -3546,7 +3622,7 @@ with tab_settings:
             _final_pet_enabled = bool(st.session_state.get("pet_enabled", True))
             _final_pet_type = st.session_state.get("pet_type", "penguin")
             _final_pet_size = int(st.session_state.get("pet_size", 64))
-            if _final_pet_type not in _pet_options:
+            if _final_pet_type not in PET_OPTIONS:
                 st.session_state.pet_type = "penguin"
                 _final_pet_type = "penguin"
             save_ui_settings(ui_theme=st_theme, history_limit=int(st_hist),
@@ -4144,8 +4220,11 @@ with tab_settings:
         _tg_cfg = _tg_load()
 
         with st.expander("⚙️ Bot 配置", expanded=not _tg_cfg.get("token")):
-            _tg_token = st.text_input("Bot Token", value=_tg_cfg.get("token", ""), type="password",
-                                      help="在 @BotFather 创建 Bot 后获取", key="tg_token_input")
+            _tg_token = st.text_input(
+                "Bot Token", value="", type="password",
+                placeholder="已配置，留空保持不变" if _tg_cfg.get("token") else "在 @BotFather 创建 Bot 后获取",
+                help="在 @BotFather 创建 Bot 后获取", key="tg_token_input",
+            )
             _tg_chat_ids = st.text_input(
                 "允许的 Chat ID（逗号分隔，空=所有人）",
                 value=",".join(str(c) for c in _tg_cfg.get("allowed_chat_ids", [])),
@@ -4156,10 +4235,11 @@ with tab_settings:
 
             if st.button("💾 保存 Bot 配置", use_container_width=True, key="tg_save_btn"):
                 _tg_ids = [c.strip() for c in _tg_chat_ids.split(",") if c.strip()]
-                if _tg_save(_tg_token, _tg_ids, _tg_enabled):
+                _tg_value = _tg_token.strip() or _tg_cfg.get("token", "")
+                if _tg_save(_tg_value, _tg_ids, _tg_enabled):
                     st.success("✅ 配置已保存")
-                    if _tg_enabled and _tg_token:
-                        _tg_start(_tg_token, _tg_ids)
+                    if _tg_enabled and _tg_value:
+                        _tg_start(_tg_value, _tg_ids)
                         st.info("🤖 Bot 已启动，发 /start 给你的 Bot 查看使用方法")
                 else:
                     st.error("保存失败")
@@ -4191,8 +4271,8 @@ with tab_settings:
             )
             _ww_webhook = st.text_input(
                 "Webhook URL",
-                value=_ww_cfg.get("webhook_url", ""),
-                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
+                value="",
+                placeholder="已配置，留空保持不变" if _ww_cfg.get("webhook_url") else "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...",
                 key="ww_webhook_input_settings"
             )
             _ww_enabled = st.toggle("启用自动推送", value=_ww_cfg.get("enabled", False), key="ww_enabled_toggle_settings")
@@ -4200,14 +4280,16 @@ with tab_settings:
             col_save, col_test = st.columns(2)
             with col_save:
                 if st.button("💾 保存配置", use_container_width=True, key="ww_save_btn_settings"):
-                    if _ww_save(_ww_webhook, _ww_enabled):
+                    _ww_value = _ww_webhook.strip() or _ww_cfg.get("webhook_url", "")
+                    if _ww_save(_ww_value, _ww_enabled):
                         st.success("✅ 配置已保存")
                     else:
                         st.error("保存失败")
             with col_test:
                 if st.button("🧪 测试连接", use_container_width=True, key="ww_test_btn_settings"):
-                    if _ww_webhook.strip():
-                        ok = _ww_send(_ww_webhook, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
+                    _ww_value = _ww_webhook.strip() or _ww_cfg.get("webhook_url", "")
+                    if _ww_value:
+                        ok = _ww_send(_ww_value, "✅ **StructPilot 企业微信机器人测试**\n\n测试消息发送成功！")
                         if ok:
                             st.success("✅ 测试成功，企业微信群应收到消息")
                         else:
@@ -4633,7 +4715,7 @@ if _pet_enabled_check:
                     )
                 elif _action_type == "switch_pet":
                     _new_pet = _pet_action.get("pet_type", "penguin")
-                    if _new_pet in _pet_options:
+                    if _new_pet in PET_OPTIONS:
                         st.session_state["_pending_pet_type"] = _new_pet
                     st.session_state["_pending_clear_pet_action"] = True
                     st.rerun()

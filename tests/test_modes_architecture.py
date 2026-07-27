@@ -30,10 +30,8 @@ def test_file_structure():
         if not Path(f).exists():
             missing.append(f)
     if missing:
-        print(f"  [FAIL] Missing files: {missing}")
-        return False
+        raise AssertionError(f"Missing files: {missing}")
     print("  [PASS] File structure complete")
-    return True
 
 def test_json_validity():
     """Test JSON file validity."""
@@ -48,10 +46,8 @@ def test_json_validity():
             data = json.loads(Path(f).read_text(encoding="utf-8"))
             print(f"  [PASS] {f}")
         except Exception as exc:
-            print(f"  [FAIL] {f}: {exc}")
-            return False
+            raise AssertionError(f"Invalid JSON {f}: {exc}") from exc
     print("  [PASS] All JSON files valid")
-    return True
 
 def test_imports():
     """Test module imports."""
@@ -61,10 +57,8 @@ def test_imports():
         from modes import render_beginner_view, render_teaching_view, render_expert_view
         from components import evaluate_qa, render_qa_card
         print("  [PASS] Modules imported successfully")
-        return True
     except Exception as exc:
-        print(f"  [FAIL] Import error: {exc}")
-        return False
+        raise AssertionError(f"Import error: {exc}") from exc
 
 def test_knowledge_content():
     """Test knowledge base content."""
@@ -88,15 +82,11 @@ def test_knowledge_content():
     pending = sum(1 for e in entries if e.get("status") == "pending")
     print(f"  · Lab experiences: {len(entries)} entries ({approved} approved, {pending} pending)")
 
-    if len(card_steps) < 4:
-        print("  [WARN] Less than 4 teaching card steps")
-    if total_questions < 9:
-        print("  [WARN] Less than 9 quiz questions")
-    if len(entries) < 3:
-        print("  [WARN] Less than 3 lab experience entries")
+    assert len(card_steps) >= 4
+    assert total_questions >= 9
+    assert len(entries) >= 3
 
     print("  [PASS] Knowledge base content checked")
-    return True
 
 def test_main_py_injection():
     """Test main.py injection points."""
@@ -118,11 +108,9 @@ def test_main_py_injection():
             missing.append(name)
 
     if missing:
-        print(f"  [FAIL] Missing injection points: {missing}")
-        return False
+        raise AssertionError(f"Missing injection points: {missing}")
 
     print("  [PASS] All injection points found")
-    return True
 
 def main():
     print("=" * 60)
@@ -140,7 +128,8 @@ def main():
     results = []
     for test in tests:
         try:
-            results.append(test())
+            test()
+            results.append(True)
         except Exception as exc:
             print(f"\n[ERROR] Test exception: {exc}")
             results.append(False)

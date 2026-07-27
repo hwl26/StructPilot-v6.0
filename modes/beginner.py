@@ -151,7 +151,11 @@ def render_beginner_view(
                 st.session_state.recommended_workflow = {}
                 st.session_state.onboarding_step = 1
                 st.session_state["_onboarding_mode"] = "v3"
-                for key in ["wizard_active", "wizard_completed", "_bg_task_done", "_bg_qa_visible"]:
+                for key in [
+                    "wizard_active", "wizard_completed", "_bg_task_done", "_bg_qa_visible",
+                    "confirmed_params", "params_confirmed", "recommended_params", "ai_reasons",
+                    "_edited_params", "_questionnaire_mode",
+                ]:
                     st.session_state.pop(key, None)
                 st.rerun()
         return
@@ -227,11 +231,15 @@ def render_beginner_view(
 
         # 获取用户信息
         user_profile = st.session_state.get("user_profile", {})
-        software = user_profile.get("software", "cryosparc")
+        software = user_profile.get("software") or getattr(state, "software", "cryosparc")
 
         # 判断是否使用workflow配置界面（仅cryoSPARC + 2D分类）
-        task = user_profile.get("task", "")
-        use_workflow = (software.lower() == "cryosparc" and "2d" in task.lower())
+        task = user_profile.get("task") or user_profile.get("goal", "")
+        task_text = str(task).lower()
+        use_workflow = (
+            str(software).lower() == "cryosparc"
+            and ("2d" in task_text or "2d分类" in task_text)
+        )
 
         if use_workflow:
             # Uses the real CryoSPARC template editor; all values remain editable.
@@ -244,7 +252,10 @@ def render_beginner_view(
             workflow_path = BASE_DIR / "knowledge_base" / "workflows" / "2d_classification.json"
 
             if workflow_path.exists():
-                confirmed_params = render_workflow_config(workflow_path)
+                confirmed_params = render_workflow_config(
+                    workflow_path,
+                    initial_params=st.session_state.get("confirmed_params", {}),
+                )
 
                 if confirmed_params:
                     st.session_state["confirmed_params"] = confirmed_params

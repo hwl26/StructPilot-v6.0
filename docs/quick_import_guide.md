@@ -37,7 +37,7 @@ streamlit run main.py
 
 ### **第3步：查看经验库**
 
-1. 以管理员身份登录（admin / admin123）
+1. 使用通过私有 Secrets 初始化的管理员账号登录
 2. 进入「设置」Tab
 3. 向下滚动到「📚 实验室共同知识库」
 4. 查看新导入的 6 条经验
@@ -127,7 +127,7 @@ AI：根据实验室共享经验，CTF Fit Resolution 分布是判断数据质�
 ### **方案A：使用导入脚本（自动）**
 脚本会自动复制图片从：
 ```
-C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\
+C:\path\to\image-cache\
 ```
 到：
 ```
@@ -140,8 +140,8 @@ runtime/images/experiences/
 mkdir runtime\images\experiences
 
 # 复制图片
-copy "C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\41.png" runtime\images\experiences\
-copy "C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507\42.png" runtime\images\experiences\
+copy "C:\path\to\image-cache\41.png" runtime\images\experiences\
+copy "C:\path\to\image-cache\42.png" runtime\images\experiences\
 # ... 依此类推 43-46.png
 ```
 

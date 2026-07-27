@@ -385,4 +385,6 @@ def render_parameter_section(
             if wf.get("reason"):
                 st.caption(wf["reason"])
 
-    return result_params if confirmed else None
+    # Preserve edited onboarding/workflow parameters that are not rendered by
+    # this compact panel (for example mask_diameter or num_classes_2d).
+    return {**current_values, **result_params} if confirmed else None

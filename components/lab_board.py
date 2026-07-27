@@ -5,11 +5,13 @@
 """
 import json
 import uuid
+import functools
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 from utils.security import sanitize_html
+from utils.atomic_io import atomic_write_json, path_lock
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _POSTS_PATH = BASE_DIR / "runtime" / "lab_board" / "posts.json"
@@ -30,12 +32,21 @@ def load_posts() -> list[dict]:
 def _save_posts(posts: list[dict]) -> bool:
     try:
         _POSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _POSTS_PATH.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_POSTS_PATH, posts)
         return True
     except Exception:
         return False
 
 
+def _locked_mutation(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with path_lock(_POSTS_PATH):
+            return func(*args, **kwargs)
+    return wrapper
+
+
+@_locked_mutation
 def save_post(title: str, content: str, author: str, category: str, images: list | None = None) -> bool:
     """新建帖子并保存。"""
     posts = load_posts()
@@ -53,6 +64,7 @@ def save_post(title: str, content: str, author: str, category: str, images: list
     return _save_posts(posts)
 
 
+@_locked_mutation
 def add_reply(post_id: str, author: str, content: str) -> bool:
     """为指定帖子添加回复。"""
     posts = load_posts()

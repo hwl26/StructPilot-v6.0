@@ -10,6 +10,12 @@ from typing import Any, Dict
 import streamlit as st
 
 
+def _confirmed_params_from_workflow(workflow: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy the user's edited onboarding values into the formal parameter state."""
+    params = workflow.get("params", {}) if isinstance(workflow, dict) else {}
+    return dict(params) if isinstance(params, dict) else {}
+
+
 def _init_onboarding_state() -> None:
     """初始化问答状态。"""
     if "onboarding_completed" not in st.session_state:
@@ -546,6 +552,8 @@ def render_onboarding_dialog() -> bool:
 
         with col_confirm:
             if st.button("✅ 确认并开始", use_container_width=True, type="primary"):
+                st.session_state["confirmed_params"] = _confirmed_params_from_workflow(workflow)
+                st.session_state["params_confirmed"] = False
                 st.session_state.onboarding_completed = True
                 st.session_state.pop("_edited_params", None)  # 清理临时状态
                 st.rerun()

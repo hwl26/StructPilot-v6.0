@@ -63,17 +63,19 @@ git push -u origin main
 3. 点击 "Advanced settings"，配置环境变量：
 
 ```
-STRUCTPILOT_LLM_PROVIDER = openai_compatible
-STRUCTPILOT_LLM_API_KEY = 你的API密钥
-STRUCTPILOT_LLM_MODEL = Qwen/Qwen3-VL-32B-Instruct
-STRUCTPILOT_LLM_BASE_URL = https://api.siliconflow.cn/v1
+STRUCTPILOT_LLM_PROVIDER = "openai_compatible"
+STRUCTPILOT_LLM_API_KEY = "你的API密钥"
+STRUCTPILOT_LLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
+STRUCTPILOT_LLM_BASE_URL = "https://api.siliconflow.cn/v1"
 
-STRUCTPILOT_EMBEDDING_MODEL = BAAI/bge-m3
-STRUCTPILOT_EMBEDDING_API_KEY = 你的Embedding密钥
+STRUCTPILOT_EMBEDDING_MODEL = "BAAI/bge-m3"
+STRUCTPILOT_EMBEDDING_API_KEY = "你的Embedding密钥"
 
-STRUCTPILOT_AUDIO_MODEL = FunAudioLLM/SenseVoiceSmall
-STRUCTPILOT_AUDIO_API_KEY = 你的Audio密钥
+STRUCTPILOT_AUDIO_MODEL = "FunAudioLLM/SenseVoiceSmall"
+STRUCTPILOT_AUDIO_API_KEY = "你的Audio密钥"
 ```
+
+这些真实密钥只应保存在 Streamlit Cloud 的 Secrets 中，不得写入仓库、截图、日志或前端代码。
 
 4. 点击 "Deploy"
 

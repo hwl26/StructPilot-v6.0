@@ -10,6 +10,8 @@
 import json
 import os
 from pathlib import Path
+import uuid
+from utils.atomic_io import atomic_update_json, atomic_write_json
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _TGBOT_CONFIG_PATH = BASE_DIR / "runtime" / "config" / "telegram_bot.json"
@@ -27,7 +29,7 @@ def save_bot_config(token: str, allowed_chat_ids: list, enabled: bool) -> bool:
     try:
         _TGBOT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         cfg = {"token": token, "allowed_chat_ids": allowed_chat_ids, "enabled": enabled}
-        _TGBOT_CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_TGBOT_CONFIG_PATH, cfg)
         return True
     except Exception:
         return False
@@ -74,14 +76,9 @@ def save_experience_from_telegram(text: str, author: str, step_hint: str = "") -
         if not exp["title"] or not exp["solution"]:
             return False
 
-        try:
-            data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            data = {"entries": [], "meta": {}}
-
         import datetime
         new_entry = {
-            "id": f"lab_tg_{len(data['entries'])+1:03d}",
+            "id": f"lab_tg_{uuid.uuid4().hex[:12]}",
             "category": "Telegram记录",
             "title": exp["title"],
             "source": "telegram",
@@ -95,8 +92,11 @@ def save_experience_from_telegram(text: str, author: str, step_hint: str = "") -
             "tags": exp["tags"],
             "images": [],
         }
-        data["entries"].append(new_entry)
-        _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        def mutate(data):
+            data = data if isinstance(data, dict) else {"entries": [], "meta": {}}
+            data.setdefault("entries", []).append(new_entry)
+            return data
+        atomic_update_json(_LAB_EXP_PATH, {"entries": [], "meta": {}}, mutate)
         return True
     except Exception:
         return False

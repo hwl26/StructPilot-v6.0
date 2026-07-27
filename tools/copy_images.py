@@ -6,6 +6,7 @@
 
 import sys
 import shutil
+import os
 from pathlib import Path
 
 # 设置输出编码为 UTF-8
@@ -17,8 +18,12 @@ if sys.platform == "win32":
 def copy_experience_images():
     """复制经验库配图"""
 
-    # 源目录（Claude image cache）
-    cache_dir = Path(r"C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507")
+    # 源目录由调用者显式提供，避免把开发者本机路径写入公开仓库。
+    source_dir = os.getenv("STRUCTPILOT_EXPERIENCE_IMAGE_SOURCE", "").strip()
+    if not source_dir:
+        print("请先设置 STRUCTPILOT_EXPERIENCE_IMAGE_SOURCE 为图片源目录。")
+        return False
+    cache_dir = Path(source_dir).expanduser().resolve()
 
     # 目标目录
     target_dir = Path(__file__).parent.parent / "runtime" / "images" / "experiences"

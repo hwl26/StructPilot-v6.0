@@ -12,7 +12,7 @@ import sqlite3
 import stat
 import tempfile
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -75,20 +75,30 @@ class MemoryAgent:
             pass
 
     @contextmanager
-    def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+    def _connect(self, *, immediate: bool = False):
+        conn = sqlite3.connect(self.db_path, timeout=15.0)
         try:
+            conn.execute("PRAGMA busy_timeout=15000")
+            conn.execute("PRAGMA foreign_keys=ON")
+            if immediate:
+                conn.execute("BEGIN IMMEDIATE")
             yield conn
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
     def _init_db(self) -> None:
         with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL DEFAULT 'local:default',
                     session_name TEXT,
                     created_at TEXT,
                     last_updated TEXT,
@@ -111,10 +121,14 @@ class MemoryAgent:
             existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()]
             if "session_name" not in existing_cols:
                 conn.execute("ALTER TABLE sessions ADD COLUMN session_name TEXT")
+            if "owner_id" not in existing_cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'local:default'")
             if "session_summary" not in existing_cols:
                 conn.execute("ALTER TABLE sessions ADD COLUMN session_summary TEXT")
+            conn.execute("UPDATE sessions SET owner_id='local:default' WHERE owner_id IS NULL OR owner_id='' ")
             # Add index for sessions table (used for sorting by last_updated)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_last_updated ON sessions(last_updated)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_owner_updated ON sessions(owner_id, last_updated)")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS messages (
@@ -174,6 +188,18 @@ class MemoryAgent:
             # Add indexes for checkpoint_records table
             conn.execute("CREATE INDEX IF NOT EXISTS idx_checkpoint_records_session_id ON checkpoint_records(session_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_checkpoint_records_status ON checkpoint_records(status)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ai_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_id TEXT NOT NULL,
+                    is_guest INTEGER NOT NULL,
+                    used_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_usage_owner_time ON ai_usage(owner_id, used_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_usage_guest_time ON ai_usage(is_guest, used_at)")
 
     def ingest_user_message(self, state: PipelineState, user_text: str) -> None:
         state.user_input = user_text
@@ -192,8 +218,11 @@ class MemoryAgent:
         return getattr(state, "session_name", "") or state.session_id
 
     def _serialize_state(self, state: PipelineState) -> Dict[str, Any]:
+        if not state.owner_id:
+            raise ValueError("会话缺少 owner_id，拒绝保存")
         return {
             "session_id": state.session_id,
+            "owner_id": state.owner_id,
             "session_name": self._get_session_name(state),
             "created_at": state.created_at,
             "last_updated": state.last_updated,
@@ -215,16 +244,23 @@ class MemoryAgent:
 
     def save_state(self, state: PipelineState) -> Dict[str, Any]:
         snapshot = self._serialize_state(state)
-        with self._connect() as conn:
+        with self._connect(immediate=True) as conn:
+            existing = conn.execute(
+                "SELECT owner_id FROM sessions WHERE session_id=?",
+                (state.session_id,),
+            ).fetchone()
+            if existing and existing[0] != state.owner_id:
+                raise PermissionError("会话 ID 已属于其他所有者，拒绝覆盖")
             conn.execute(
                 """
                 INSERT INTO sessions (
-                    session_id, session_name, created_at, last_updated, software, current_cp_id,
+                    session_id, owner_id, session_name, created_at, last_updated, software, current_cp_id,
                     current_cp_name, session_started, completed_json, failed_json,
                     skipped_json, params_json, last_qc_result_json,
                     session_summary, requires_human_approval, in_fault_mode, error, error_node
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
+                    owner_id=excluded.owner_id,
                     session_name=excluded.session_name,
                     created_at=excluded.created_at,
                     last_updated=excluded.last_updated,
@@ -244,7 +280,7 @@ class MemoryAgent:
                     error_node=excluded.error_node
                 """,
                 (
-                    snapshot["session_id"], snapshot["session_name"], snapshot["created_at"], snapshot["last_updated"],
+                    snapshot["session_id"], snapshot["owner_id"], snapshot["session_name"], snapshot["created_at"], snapshot["last_updated"],
                     snapshot["software"], snapshot["current_cp_id"], snapshot["current_cp_name"],
                     snapshot["session_started"], snapshot["completed_json"], snapshot["failed_json"],
                     snapshot["skipped_json"], snapshot["params_json"], snapshot["last_qc_result_json"],
@@ -305,10 +341,14 @@ class MemoryAgent:
     def capture_state(self, state: PipelineState) -> Dict[str, Any]:
         return self.save_state(state)
 
-    def list_sessions(self) -> List[Dict[str, Any]]:
+    def list_sessions(self, owner_id: str) -> List[Dict[str, Any]]:
+        if not owner_id:
+            return []
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT session_id, session_name, last_updated, current_cp_id, current_cp_name FROM sessions ORDER BY last_updated DESC"
+                "SELECT session_id, session_name, last_updated, current_cp_id, current_cp_name "
+                "FROM sessions WHERE owner_id=? ORDER BY last_updated DESC",
+                (owner_id,),
             ).fetchall()
         return [
             {
@@ -321,32 +361,48 @@ class MemoryAgent:
             for r in rows
         ]
 
-    def rename_session(self, session_id: str, session_name: str) -> None:
+    def rename_session(self, session_id: str, session_name: str, owner_id: str) -> bool:
         clean_name = session_name.strip() or session_id
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE sessions SET session_name=?, last_updated=? WHERE session_id=?",
-                (clean_name, datetime.now().isoformat(), session_id),
+            cursor = conn.execute(
+                "UPDATE sessions SET session_name=?, last_updated=? WHERE session_id=? AND owner_id=?",
+                (clean_name, datetime.now().isoformat(), session_id, owner_id),
             )
+        return cursor.rowcount == 1
 
-    def delete_session(self, session_id: str) -> None:
+    def delete_session(self, session_id: str, owner_id: str) -> bool:
         """Permanently remove a session and all of its messages/images/checkpoints."""
-        with self._connect() as conn:
+        with self._connect(immediate=True) as conn:
+            owned = conn.execute(
+                "SELECT 1 FROM sessions WHERE session_id=? AND owner_id=?",
+                (session_id, owner_id),
+            ).fetchone()
+            if not owned:
+                return False
             conn.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
             conn.execute("DELETE FROM message_images WHERE session_id=?", (session_id,))
             conn.execute("DELETE FROM checkpoint_records WHERE session_id=?", (session_id,))
-            conn.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
+            conn.execute("DELETE FROM sessions WHERE session_id=? AND owner_id=?", (session_id, owner_id))
+        return True
 
-    def get_latest_session_id(self) -> Optional[str]:
-        sessions = self.list_sessions()
+    def get_latest_session_id(self, owner_id: str) -> Optional[str]:
+        sessions = self.list_sessions(owner_id)
         return sessions[0]["session_id"] if sessions else None
 
-    def load_state(self, session_id: str) -> Optional[PipelineState]:
+    def load_state(self, session_id: str, owner_id: str) -> Optional[PipelineState]:
+        if not owner_id:
+            return None
         with self._connect() as conn:
-            row = conn.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM sessions WHERE session_id=? AND owner_id=?",
+                (session_id, owner_id),
+            ).fetchone()
             if not row:
                 return None
-            cols = [d[0] for d in conn.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).description]
+            cols = [d[0] for d in conn.execute(
+                "SELECT * FROM sessions WHERE session_id=? AND owner_id=?",
+                (session_id, owner_id),
+            ).description]
             data = dict(zip(cols, row))
             msg_rows = conn.execute(
                 "SELECT id, role, content, timestamp, action_tag, metadata_json FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -368,6 +424,7 @@ class MemoryAgent:
 
         state = PipelineState(
             session_id=data.get("session_id", session_id),
+            owner_id=data.get("owner_id") or owner_id,
             created_at=data.get("created_at", ""),
             last_updated=data.get("last_updated", ""),
             software=data.get("software", "relion"),
@@ -424,6 +481,54 @@ class MemoryAgent:
                 notes=rec_data.get("notes", ""),
             )
         return state
+
+    @staticmethod
+    def _env_limit(name: str, default: int, minimum: int = 1) -> int:
+        try:
+            return max(minimum, int(os.getenv(name, str(default))))
+        except (TypeError, ValueError):
+            return default
+
+    def consume_ai_quota(self, owner_id: str, *, is_guest: bool) -> tuple[bool, str]:
+        """Atomically reserve one AI request and return a user-facing denial reason."""
+        if not owner_id:
+            return False, "当前会话身份无效，请刷新页面后重试。"
+        if not is_guest:
+            return True, ""
+
+        hourly = self._env_limit("STRUCTPILOT_GUEST_AI_HOURLY_LIMIT", 20)
+        daily = self._env_limit("STRUCTPILOT_GUEST_AI_DAILY_LIMIT", 100)
+        global_daily = self._env_limit("STRUCTPILOT_GLOBAL_GUEST_AI_DAILY_LIMIT", 1000)
+        now = datetime.now(timezone.utc)
+        hour_cutoff = (now - timedelta(hours=1)).isoformat()
+        day_cutoff = (now - timedelta(days=1)).isoformat()
+        cleanup_cutoff = (now - timedelta(days=2)).isoformat()
+
+        with self._connect(immediate=True) as conn:
+            conn.execute("DELETE FROM ai_usage WHERE used_at < ?", (cleanup_cutoff,))
+            hour_count = conn.execute(
+                "SELECT COUNT(*) FROM ai_usage WHERE owner_id=? AND used_at>=?",
+                (owner_id, hour_cutoff),
+            ).fetchone()[0]
+            day_count = conn.execute(
+                "SELECT COUNT(*) FROM ai_usage WHERE owner_id=? AND used_at>=?",
+                (owner_id, day_cutoff),
+            ).fetchone()[0]
+            global_count = conn.execute(
+                "SELECT COUNT(*) FROM ai_usage WHERE is_guest=1 AND used_at>=?",
+                (day_cutoff,),
+            ).fetchone()[0]
+            if hour_count >= hourly:
+                return False, f"访客 AI 每小时限额为 {hourly} 次，当前回答已切换为本地规则。"
+            if day_count >= daily:
+                return False, f"访客 AI 每日限额为 {daily} 次，当前回答已切换为本地规则。"
+            if global_count >= global_daily:
+                return False, "今日公共 AI 额度已用完，当前回答已切换为本地规则。"
+            conn.execute(
+                "INSERT INTO ai_usage(owner_id, is_guest, used_at) VALUES (?, 1, ?)",
+                (owner_id, now.isoformat()),
+            )
+        return True, ""
 
     def recent_summary(self, state: PipelineState) -> str:
         return f"会话 {state.session_id or 'unknown'}，已完成 {len(state.completed)} 个检查站，当前阶段 {state.current_cp_id}。"

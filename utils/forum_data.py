@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 import uuid
+import functools
+from utils.atomic_io import atomic_write_json, path_lock
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FORUM_DIR = BASE_DIR / "runtime" / "forum"
@@ -108,16 +110,22 @@ def save_forum_data(data: Dict) -> bool:
     """保存论坛数据"""
     ensure_forum_dir()
     try:
-        FORUM_DATA_PATH.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
+        atomic_write_json(FORUM_DATA_PATH, data)
         return True
     except Exception as e:
         print(f"Error saving forum data: {e}")
         return False
 
 
+def _locked_mutation(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with path_lock(FORUM_DATA_PATH):
+            return func(*args, **kwargs)
+    return wrapper
+
+
+@_locked_mutation
 def create_question(
     author: str,
     author_display: str,
@@ -165,6 +173,7 @@ def create_question(
     return question["id"]
 
 
+@_locked_mutation
 def create_answer(
     question_id: str,
     author: str,
@@ -206,6 +215,7 @@ def create_answer(
     return answer["id"]
 
 
+@_locked_mutation
 def create_comment(
     parent_id: str,
     parent_type: str,
@@ -238,6 +248,7 @@ def create_comment(
     return comment["id"]
 
 
+@_locked_mutation
 def upvote(user: str, target_id: str, target_type: str) -> bool:
     """点赞
 
@@ -298,6 +309,7 @@ def upvote(user: str, target_id: str, target_type: str) -> bool:
         return True  # 点赞成功
 
 
+@_locked_mutation
 def accept_answer(question_id: str, answer_id: str, author: str) -> bool:
     """采纳最佳答案（仅提问者可操作）"""
     data = load_forum_data()
@@ -326,6 +338,7 @@ def accept_answer(question_id: str, answer_id: str, author: str) -> bool:
     return True
 
 
+@_locked_mutation
 def increment_views(question_id: str):
     """增加问题浏览量"""
     data = load_forum_data()

@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
+from utils.atomic_io import atomic_update_json, atomic_write_json
 
 _FAILED_ATTEMPTS_FILE = Path(__file__).parent.parent / "runtime" / "failed_attempts.json"
 
@@ -29,7 +30,7 @@ def _load_attempts() -> dict:
 def _save_attempts(data: dict) -> None:
     try:
         _FAILED_ATTEMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _FAILED_ATTEMPTS_FILE.write_text(json.dumps(data), encoding="utf-8")
+        atomic_write_json(_FAILED_ATTEMPTS_FILE, data)
     except Exception:
         pass
 
@@ -114,22 +115,23 @@ def check_failed_attempts(username: str, failed_attempts: dict = None) -> Tuple[
 
 def record_failed_attempt(username: str, failed_attempts: dict = None) -> None:
     """记录登录失败。使用持久化文件存储，failed_attempts 参数保留向后兼容但忽略。"""
-    data = _load_attempts()
-
-    if username not in data:
-        data[username] = {"count": 0, "last_attempt": None}
-
-    data[username]["count"] += 1
-    data[username]["last_attempt"] = datetime.now().isoformat()
-    _save_attempts(data)
+    def mutate(data):
+        data = data if isinstance(data, dict) else {}
+        if username not in data:
+            data[username] = {"count": 0, "last_attempt": None}
+        data[username]["count"] += 1
+        data[username]["last_attempt"] = datetime.now().isoformat()
+        return data
+    atomic_update_json(_FAILED_ATTEMPTS_FILE, {}, mutate)
 
 
 def reset_failed_attempts(username: str, failed_attempts: dict = None) -> None:
     """登录成功后重置失败计数。使用持久化文件存储，failed_attempts 参数保留向后兼容但忽略。"""
-    data = _load_attempts()
-    if username in data:
-        del data[username]
-        _save_attempts(data)
+    def mutate(data):
+        data = data if isinstance(data, dict) else {}
+        data.pop(username, None)
+        return data
+    atomic_update_json(_FAILED_ATTEMPTS_FILE, {}, mutate)
 
 
 def check_password_expiry(user: dict) -> Tuple[bool, str]:

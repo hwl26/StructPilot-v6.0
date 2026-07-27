@@ -287,8 +287,8 @@ class LLMAgent:
         data["api_key"] = _obfuscate(data.get("api_key") or "")
         data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
         data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        from utils.atomic_io import atomic_write_json
+        atomic_write_json(self.config_path, data)
         self.reload()
 
     def save_audio_config(
@@ -307,8 +307,8 @@ class LLMAgent:
         data["api_key"] = _obfuscate(data.get("api_key") or "")
         data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
         data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        from utils.atomic_io import atomic_write_json
+        atomic_write_json(self.config_path, data)
         self.reload()
 
     def save_embedding_config(
@@ -327,16 +327,13 @@ class LLMAgent:
         data["api_key"] = _obfuscate(data.get("api_key") or "")
         data["embedding_api_key"] = _obfuscate(data.get("embedding_api_key") or "")
         data["audio_api_key"] = _obfuscate(data.get("audio_api_key") or "")
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        from utils.atomic_io import atomic_write_json
+        atomic_write_json(self.config_path, data)
         self.reload()
 
     def masked_api_key(self) -> str:
-        if not self.api_key:
-            return ""
-        if len(self.api_key) <= 8:
-            return "*" * len(self.api_key)
-        return self.api_key[:4] + "..." + self.api_key[-4:]
+        # Never expose key fragments to browser-rendered status text.
+        return "已配置" if self.api_key else "未配置"
 
     def extract_json(self, system_prompt: str, user_text: str,
                      temperature: float = 0.1) -> Optional[Dict[str, Any]]:
@@ -1070,7 +1067,7 @@ class LLMAgent:
 
     def status_text(self) -> str:
         if self.enabled:
-            return f"LLM 已启用：{self.provider} / {self.model} / {self.masked_api_key()}"
+            return f"LLM 已启用：{self.provider} / {self.model} / API Key 已配置"
         return "LLM 未启用：当前使用规则 + 知识库模式"
 
     def audio_status_text(self) -> str:

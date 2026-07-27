@@ -97,7 +97,7 @@ clear_session_from_storage()
 
 2. **测试登录流程**
    - 打开浏览器，访问 `http://localhost:8501`
-   - 使用默认管理员账号登录（用户名：`admin`，密码：`admin123`）
+   - 使用通过私有 Secrets 初始化的管理员账号登录
    - **预期结果**：登录成功后，浏览器地址栏应显示 `http://localhost:8501/?sid=<uuid>`
 
 3. **验证URL持久化**

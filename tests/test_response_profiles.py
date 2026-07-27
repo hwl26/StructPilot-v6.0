@@ -191,7 +191,7 @@ def test_memory_round_trip_keeps_multimodal_evidence():
             }],
         )
         memory.save_state(state)
-        restored = memory.load_state(state.session_id)
+        restored = memory.load_state(state.session_id, state.owner_id)
 
     assert restored is not None
     assert restored.messages[0].image_refs[0]["image_name"] == "ctf.png"

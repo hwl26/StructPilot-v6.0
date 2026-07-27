@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = Path(
-    r"C:\Users\17706\.codex\attachments\17d1bb21-af8d-47fa-9ae4-164fc74f25d9\pasted-text.txt"
-)
+_SOURCE_VALUE = os.getenv("STRUCTPILOT_LAB_EXPERIENCE_SOURCE", "").strip()
+SOURCE = Path(_SOURCE_VALUE).expanduser() if _SOURCE_VALUE else None
 TARGET = ROOT / "knowledge_base" / "lab_experience_kb.json"
 
 AUTHOR_ROLES = {
@@ -322,6 +322,10 @@ def build_summary_entry(source_text: str):
 
 
 def main():
+    if SOURCE is None:
+        raise ValueError(
+            "请先设置 STRUCTPILOT_LAB_EXPERIENCE_SOURCE 为待导入的经验原文路径。"
+        )
     source_text = SOURCE.read_text(encoding="utf-8")
     parsed = parse_source(source_text)
     if len(parsed) != 20:

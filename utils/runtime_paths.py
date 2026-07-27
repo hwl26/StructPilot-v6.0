@@ -98,7 +98,7 @@ def _read_json_cache(path: Path) -> dict | None:
 
 def _write_json_cache(path: Path, data: dict) -> None:
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        from utils.atomic_io import atomic_write_json
+        atomic_write_json(path, data)
     except Exception:
         pass

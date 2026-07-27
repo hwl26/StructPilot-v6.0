@@ -9,6 +9,7 @@
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -86,8 +87,12 @@ def import_experiences():
 def copy_images():
     """复制配图到项目目录"""
 
-    # 图片来源（Claude image cache）
-    cache_dir = Path(r"C:\Users\17706\.claude\image-cache\a6558aff-b50b-4474-aab4-ac8115bc8507")
+    # 图片来源必须由调用者显式提供，避免依赖或泄露开发者本机路径。
+    source_dir = os.getenv("STRUCTPILOT_EXPERIENCE_IMAGE_SOURCE", "").strip()
+    if not source_dir:
+        print("未设置 STRUCTPILOT_EXPERIENCE_IMAGE_SOURCE，跳过可选配图复制。")
+        return False
+    cache_dir = Path(source_dir).expanduser().resolve()
 
     # 目标目录
     images_dir = Path("runtime/images/experiences")
@@ -140,7 +145,7 @@ if __name__ == "__main__":
         print()
         print("下一步：")
         print("1. 启动 Web 应用：streamlit run main.py")
-        print("2. 登录管理员账号（admin / admin123）")
+        print("2. 如需管理功能，请使用通过私有 Secrets 初始化的管理员账号")
         print("3. 进入「设置」→「📚 实验室共同知识库」")
         print("4. 查看新导入的 6 条经验")
         print("=" * 60)

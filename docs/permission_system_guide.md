@@ -36,7 +36,7 @@ StructPilot 采用 **三级权限** 体系：
 
 ```
 用户名：admin
-密码：admin123
+密码：部署时在私有 Secrets 中设置的强密码
 ```
 
 **⚠️ 重要**：首次登录后，请立即在「⚙️ 设置 → 👥 成员管理 → 修改密码」中修改默认密码！
@@ -211,7 +211,7 @@ StructPilot 已为你创建账号：
 ## 八、常见问题
 
 **Q：忘记管理员密码怎么办？**
-A：删除 `runtime/config/users.json` 文件，重启后恢复默认账号（admin / admin123）
+A：删除 `runtime/config/users.json` 后，必须通过私有 Secrets 中的 `STRUCTPILOT_BOOTSTRAP_ADMIN_PASSWORD` 重新初始化管理员；系统不会创建默认弱口令。
 
 **Q：能同时有多个管理员吗？**
 A：可以，但需手动编辑 `users.json` 文件添加

@@ -4,6 +4,9 @@
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+.streamlit/secrets.toml
 
 # Python
 __pycache__/
@@ -44,6 +47,8 @@ memory/memory.sqlite3
 
 # Runtime data
 runtime/
+.pytest-tmp/
+tests/test_workflow_relion.json
 *.tmp
 *.temp
 

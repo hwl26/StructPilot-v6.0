@@ -11,6 +11,9 @@ import json
 import requests
 from pathlib import Path
 from typing import Optional
+import uuid
+from urllib.parse import urlparse
+from utils.atomic_io import atomic_update_json, atomic_write_json
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _WEWORK_CONFIG = BASE_DIR / "runtime" / "config" / "wework_bot.json"
@@ -30,7 +33,7 @@ def save_wework_config(webhook_url: str, enabled: bool) -> bool:
     try:
         _WEWORK_CONFIG.parent.mkdir(parents=True, exist_ok=True)
         cfg = {"webhook_url": webhook_url, "enabled": enabled}
-        _WEWORK_CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_WEWORK_CONFIG, cfg)
         return True
     except Exception:
         return False
@@ -52,6 +55,9 @@ def send_wework_message(webhook_url: str, content: str) -> bool:
         是否发送成功
     """
     try:
+        parsed = urlparse(webhook_url)
+        if parsed.scheme != "https" or (parsed.hostname or "").lower() != "qyapi.weixin.qq.com":
+            return False
         payload = {
             "msgtype": "markdown",
             "markdown": {
@@ -134,14 +140,9 @@ def save_experience_from_wework(text: str, author: str = "企业微信用户") -
         if not exp:
             return False
 
-        try:
-            data = json.loads(_LAB_EXP_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            data = {"entries": [], "meta": {}}
-
         import datetime
         new_entry = {
-            "id": f"lab_wework_{len(data['entries'])+1:03d}",
+            "id": f"lab_wework_{uuid.uuid4().hex[:12]}",
             "category": "企业微信记录",
             "title": exp["title"],
             "source": "wework",
@@ -155,8 +156,11 @@ def save_experience_from_wework(text: str, author: str = "企业微信用户") -
             "tags": exp["tags"],
             "images": [],
         }
-        data["entries"].append(new_entry)
-        _LAB_EXP_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        def mutate(data):
+            data = data if isinstance(data, dict) else {"entries": [], "meta": {}}
+            data.setdefault("entries", []).append(new_entry)
+            return data
+        atomic_update_json(_LAB_EXP_PATH, {"entries": [], "meta": {}}, mutate)
 
         # 发送确认消息
         cfg = load_wework_config()

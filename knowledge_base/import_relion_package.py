@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_PACKAGE_DIR = Path(
     os.environ.get(
         "RELION_KB_DIR",
-        r"C:\Users\17706\Documents\struct\relion_kb_task\output\structpilot_relion_kb_package_v0",
+        str(BASE_DIR / "knowledge_base" / "sources" / "relion_package"),
     )
 )
 INDEX_PATH = BASE_DIR / "knowledge_base" / "knowledge_index.json"

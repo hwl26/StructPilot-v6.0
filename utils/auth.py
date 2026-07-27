@@ -11,6 +11,7 @@ import os
 import secrets
 from pathlib import Path
 from typing import Literal
+from utils.atomic_io import atomic_write_json, path_lock
 
 try:
     import bcrypt
@@ -74,7 +75,7 @@ def load_users() -> dict:
                 "force_change_password": True,
             })
         _USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _USERS_PATH.write_text(json.dumps(default_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_USERS_PATH, default_data)
         return default_data
 
     return data
@@ -84,7 +85,7 @@ def save_users(data: dict) -> bool:
     """保存用户配置。"""
     try:
         _USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _USERS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(_USERS_PATH, data)
         return True
     except Exception:
         return False
@@ -114,7 +115,7 @@ def _verify_password(password: str, password_hash: str) -> bool:
         # 假设是 SHA256(password)
         import hashlib
         computed_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        return computed_hash == password_hash
+        return secrets.compare_digest(computed_hash, password_hash)
 
 
 def authenticate(username: str, password: str) -> dict | None:
@@ -147,9 +148,14 @@ def authenticate(username: str, password: str) -> dict | None:
                 "display_name": user.get("display_name", user["username"]),
                 "logged_in": True
             })
-            user["session_id"] = session_id
-
-            return user
+            return {
+                "username": user["username"],
+                "role": user.get("role", "member"),
+                "display_name": user.get("display_name", user["username"]),
+                "email": user.get("email", ""),
+                "force_change_password": bool(user.get("force_change_password", False)),
+                "session_id": session_id,
+            }
 
     record_failed_attempt(username, {})
     return None
@@ -197,27 +203,28 @@ def has_permission(user: dict, permission: str) -> bool:
 
 def add_user(username: str, password: str, role: RoleType, display_name: str, email: str = "") -> bool:
     """添加新用户。"""
-    data = load_users()
-    # 检查用户名是否已存在
-    if any(u["username"] == username for u in data["users"]):
-        return False
-    data["users"].append({
-        "username": username,
-        "password_hash": _hash_password(password),
-        "role": role,
-        "display_name": display_name,
-        "email": email
-    })
-    return save_users(data)
+    with path_lock(_USERS_PATH):
+        data = load_users()
+        if any(u["username"] == username for u in data["users"]):
+            return False
+        data["users"].append({
+            "username": username,
+            "password_hash": _hash_password(password),
+            "role": role,
+            "display_name": display_name,
+            "email": email
+        })
+        return save_users(data)
 
 
 def delete_user(username: str) -> bool:
     """删除用户。"""
     if username == "admin":
         return False  # 不允许删除管理员
-    data = load_users()
-    data["users"] = [u for u in data["users"] if u["username"] != username]
-    return save_users(data)
+    with path_lock(_USERS_PATH):
+        data = load_users()
+        data["users"] = [u for u in data["users"] if u["username"] != username]
+        return save_users(data)
 
 
 def change_password(username: str, new_password: str) -> tuple[bool, str]:
@@ -231,12 +238,13 @@ def change_password(username: str, new_password: str) -> tuple[bool, str]:
     is_valid, error_msg = validate_password_strength(new_password)
     if not is_valid:
         return False, error_msg
-    data = load_users()
-    for user in data["users"]:
-        if user["username"] == username:
-            user["password_hash"] = _hash_password(new_password)
-            user["force_change_password"] = False
-            return save_users(data), ""
+    with path_lock(_USERS_PATH):
+        data = load_users()
+        for user in data["users"]:
+            if user["username"] == username:
+                user["password_hash"] = _hash_password(new_password)
+                user["force_change_password"] = False
+                return save_users(data), ""
     return False, "用户不存在"
 
 
@@ -244,9 +252,10 @@ def change_role(username: str, new_role: RoleType) -> bool:
     """修改用户角色。"""
     if username == "admin":
         return False  # 不允许修改管理员角色
-    data = load_users()
-    for user in data["users"]:
-        if user["username"] == username:
-            user["role"] = new_role
-            return save_users(data)
+    with path_lock(_USERS_PATH):
+        data = load_users()
+        for user in data["users"]:
+            if user["username"] == username:
+                user["role"] = new_role
+                return save_users(data)
     return False

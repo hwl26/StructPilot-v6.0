@@ -29,7 +29,7 @@ echo    http://%SERVER_IP%:8501
 echo.
 echo 🔐 默认管理员账号：
 echo    用户名: admin
-echo    密码: admin123
+echo    管理员密码: 请使用私有 Secrets 中配置的强密码
 echo.
 echo 💡 局域网内的其他电脑可以通过上述地址访问
 echo    （确保防火墙允许 8501 端口）

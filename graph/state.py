@@ -82,6 +82,10 @@ class PipelineState:
 
     session_id: str = ""
 
+    # Explicit persistence owner. The Streamlit UI replaces this local
+    # compatibility value with either ``guest:<random>`` or ``user:<name>``.
+    owner_id: str = "local:default"
+
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -185,6 +189,8 @@ class PipelineState:
         return {
 
             "session_id": self.session_id,
+
+            "owner_id": self.owner_id,
 
             "software": self.software,
 

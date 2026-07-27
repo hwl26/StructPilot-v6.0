@@ -60,7 +60,7 @@ streamlit run main.py
 
 ### **查看步骤：**
 1. 打开浏览器 `http://localhost:8501`
-2. 登录管理员账号（admin / admin123）
+2. 使用通过私有 Secrets 初始化的管理员账号登录
 3. 进入「设置」Tab
 4. 滚动到「📚 实验室共同知识库」
 5. 点击任意经验条目的 expander

@@ -13,9 +13,23 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+from utils.atomic_io import atomic_update_json
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
+
+
+def _set_experience_status(exp_id: str, status: str, actor: str) -> None:
+    def mutate(data):
+        data = data if isinstance(data, dict) else {"entries": [], "meta": {}}
+        for entry in data.setdefault("entries", []):
+            if entry.get("id") == exp_id:
+                entry["status"] = status
+                entry[f"{status}_at"] = datetime.now().isoformat()
+                entry[f"{status}_by"] = actor
+                break
+        return data
+    atomic_update_json(_LAB_EXP_PATH, {"entries": [], "meta": {}}, mutate)
 
 
 def render_admin_panel():
@@ -245,18 +259,7 @@ def render_experience_review():
 
                 with col_approve:
                     if st.button("✅ 通过", key=f"admin_approve_{exp.get('id')}", use_container_width=True):
-                        # 修改状态为 approved
-                        for e in exp_data["entries"]:
-                            if e.get("id") == exp.get("id"):
-                                e["status"] = "approved"
-                                e["approved_at"] = datetime.now().isoformat()
-                                e["approved_by"] = st.session_state.get("username", "admin")
-                                break
-
-                        _LAB_EXP_PATH.write_text(
-                            json.dumps(exp_data, ensure_ascii=False, indent=2),
-                            encoding="utf-8"
-                        )
+                        _set_experience_status(exp.get("id", ""), "approved", st.session_state.get("username", "admin"))
 
                         # 企业微信推送通知（可选）
                         try:
@@ -278,18 +281,7 @@ def render_experience_review():
 
                 with col_reject:
                     if st.button("❌ 驳回", key=f"admin_reject_{exp.get('id')}", use_container_width=True):
-                        # 修改状态为 rejected
-                        for e in exp_data["entries"]:
-                            if e.get("id") == exp.get("id"):
-                                e["status"] = "rejected"
-                                e["rejected_at"] = datetime.now().isoformat()
-                                e["rejected_by"] = st.session_state.get("username", "admin")
-                                break
-
-                        _LAB_EXP_PATH.write_text(
-                            json.dumps(exp_data, ensure_ascii=False, indent=2),
-                            encoding="utf-8"
-                        )
+                        _set_experience_status(exp.get("id", ""), "rejected", st.session_state.get("username", "admin"))
 
                         st.success("❌ 已驳回")
                         st.rerun()
