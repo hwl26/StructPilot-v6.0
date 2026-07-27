@@ -87,7 +87,8 @@ def test_workflow_visual_layout_keeps_branches_apart_and_draws_merges():
     assert split_markup.count("<path") == 2
     assert merge_markup.count("<path") == 2
     assert 'class="cswf-edge--carry"' in carry_markup
-    assert ">J3</text>" in carry_markup
+    assert 'class="cswf-carry-label"' in carry_markup
+    assert ">J3</span>" in carry_markup
 
 
 def test_linked_parameters_use_calibrated_formula_and_sixteen_pixel_alignment():
@@ -328,6 +329,65 @@ def test_template_export_rejects_type_confusion_and_broken_topology():
         assert "references a missing source" in str(exc)
     else:
         raise AssertionError("broken workflow topology was accepted")
+
+
+def test_template_export_accepts_fractional_physical_measurements():
+    template_path = Path(__file__).resolve().parent.parent / "knowledge_base" / "workflows" / "2d_classification.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+
+    result = generate_cryosparc_workflow(
+        workflow={"steps": []},
+        params={
+            "_workflow_template": template,
+            "_workflow_values": {
+                "J4": {"diameter": 120.0, "diameter_max": 120.0},
+                "J6": {"class2D_window_inner_A": 133.3},
+            },
+        },
+        software="cryosparc",
+    )
+
+    assert result["jobs"]["J4"]["parameters"]["diameter"]["value"] == 120.0
+    assert result["jobs"]["J6"]["parameters"]["class2D_window_inner_A"]["value"] == 133.3
+
+
+def test_template_export_rejects_fractional_discrete_parameters():
+    template_path = Path(__file__).resolve().parent.parent / "knowledge_base" / "workflows" / "2d_classification.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+
+    try:
+        generate_cryosparc_workflow(
+            workflow={"steps": []},
+            params={
+                "_workflow_template": template,
+                "_workflow_values": {"J2": {"compute_num_gpus": 1.5}},
+            },
+            software="cryosparc",
+        )
+    except ValueError as exc:
+        assert "J2.compute_num_gpus must be an integer" in str(exc)
+    else:
+        raise AssertionError("fractional GPU count was accepted")
+
+
+def test_template_export_rejects_non_finite_numeric_parameters():
+    template_path = Path(__file__).resolve().parent.parent / "knowledge_base" / "workflows" / "2d_classification.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+
+    for invalid_value in (float("nan"), float("inf"), float("-inf")):
+        try:
+            generate_cryosparc_workflow(
+                workflow={"steps": []},
+                params={
+                    "_workflow_template": template,
+                    "_workflow_values": {"J4": {"diameter": invalid_value}},
+                },
+                software="cryosparc",
+            )
+        except ValueError as exc:
+            assert "J4.diameter must be finite" in str(exc)
+        else:
+            raise AssertionError("non-finite numeric parameter was accepted")
 
 
 def test_full_workflow(tmp_path):

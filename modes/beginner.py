@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,6 +20,7 @@ from utils.param_recommender import recommend_parameters
 BASE_DIR = Path(__file__).resolve().parent.parent
 _TEACHING_CARDS_PATH = BASE_DIR / "knowledge_base" / "teaching_cards.json"
 _LAB_EXP_PATH = BASE_DIR / "knowledge_base" / "lab_experience_kb.json"
+LOGGER = logging.getLogger(__name__)
 
 
 def _load_teaching_card(cp_id: str) -> dict:
@@ -331,12 +333,20 @@ def render_beginner_view(
     if isinstance(editor_params, dict) and isinstance(editor_params.get("_workflow_template"), dict):
         from utils.cryosparc_workflow import generate_cryosparc_workflow, workflow_to_json_str
 
-        workflow_json = generate_cryosparc_workflow(
-            workflow={"steps": []},
-            params=editor_params,
-            workflow_name="StructPilot_2D_Classification",
-            software="cryosparc",
-        )
+        try:
+            workflow_json = generate_cryosparc_workflow(
+                workflow={"steps": []},
+                params=editor_params,
+                workflow_name="StructPilot_2D_Classification",
+                software="cryosparc",
+            )
+        except (TypeError, ValueError) as exc:
+            LOGGER.exception("CryoSPARC workflow export validation failed")
+            st.error(f"Workflow 参数格式校验失败：{exc}")
+            if st.button("返回参数编辑", type="primary", key="return_to_workflow_editor"):
+                st.session_state["params_confirmed"] = False
+                st.rerun()
+            return
         st.markdown("## 🎯 cryoSPARC Workflow 已就绪")
         st.caption("导出的文件保留模板中的全部 Job、参数和数据连接，可直接在 cryoSPARC 的 Import Workflow 中导入。")
         st.download_button(

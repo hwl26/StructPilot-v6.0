@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,18 @@ from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _CHECKPOINTS_PATH = BASE_DIR / "knowledge_base" / "flows" / "pipeline_checkpoints.json"
+
+# These parameters are discrete by CryoSPARC contract. Other numeric fields
+# may legitimately be floats even when a template contains an integer-looking
+# example value, such as a particle diameter of 100 Angstrom.
+_INTEGER_PARAMETER_KEYS = {
+    "compute_num_gpus",
+    "max_num_hits",
+    "box_size_pix",
+    "bin_size_pix",
+    "class2D_K",
+    "class2D_num_full_iter_batch",
+}
 
 # CryoSPARC job_type 映射（扩展版，对照真实样本）
 _JOB_TYPE_MAP: dict[str, str] = {
@@ -98,14 +111,25 @@ def _validated_parameter_value(expected: Any, candidate: Any, field_name: str) -
         if not isinstance(candidate, bool):
             raise ValueError(f"{field_name} must be a boolean")
         return candidate
-    if isinstance(expected, int):
-        if not isinstance(candidate, int) or isinstance(candidate, bool):
-            raise ValueError(f"{field_name} must be an integer")
-        return candidate
-    if isinstance(expected, float):
+    if isinstance(expected, (int, float)):
+        param_key = field_name.rsplit(".", 1)[-1]
+        if (
+            isinstance(candidate, (int, float))
+            and not isinstance(candidate, bool)
+            and not math.isfinite(float(candidate))
+        ):
+            raise ValueError(f"{field_name} must be finite")
+        if param_key in _INTEGER_PARAMETER_KEYS:
+            if (
+                not isinstance(candidate, (int, float))
+                or isinstance(candidate, bool)
+                or (isinstance(candidate, float) and not candidate.is_integer())
+            ):
+                raise ValueError(f"{field_name} must be an integer")
+            return int(candidate)
         if not isinstance(candidate, (int, float)) or isinstance(candidate, bool):
             raise ValueError(f"{field_name} must be numeric")
-        return float(candidate)
+        return float(candidate) if isinstance(expected, float) else candidate
     if isinstance(expected, str):
         if not isinstance(candidate, str):
             raise ValueError(f"{field_name} must be text")

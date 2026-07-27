@@ -576,7 +576,8 @@ def _workflow_connector_markup(
                     f'C 24 {label_y:.1f}, {target_x:.3f} 15, {target_x:.3f} 25" />'
                 )
                 carry_labels.append(
-                    f'<text x="1.2" y="{label_y + 1.4:.1f}">{html.escape(source_id)}</text>'
+                    f'<span class="cswf-carry-label" style="top:{max(label_y - 3, 0):.1f}px">'
+                    f'{html.escape(source_id)}</span>'
                 )
             targets.add(target_x)
     if not paths:
@@ -590,8 +591,9 @@ def _workflow_connector_markup(
         '<svg viewBox="0 0 100 27" preserveAspectRatio="none">'
         + "".join(paths)
         + dots
+        + "</svg>"
         + "".join(carry_labels)
-        + "</svg></div>"
+        + "</div>"
     )
 
 
@@ -620,42 +622,51 @@ def _render_interactive_workflow(workflow_data: Dict[str, Any], active_job: str)
         unsafe_allow_html=True,
     )
     with st.container(border=True, key="cswf_workflow_canvas"):
-        for level in range(max_level + 1):
-            current = [job_id for job_id in jobs if levels.get(job_id) == level]
-            if not current:
-                continue
-            columns = st.columns(lane_count, gap="small")
-            for job_id in current:
-                col = columns[lanes[job_id]]
-                job = jobs[job_id]
-                with col:
-                    title = _job_label(job_id, job)
-                    is_active = job_id == active_job
-                    if st.button(
-                        f"{job_id}  {title}",
-                        key=f"cswf_node_{job_id}",
-                        type="primary" if is_active else "secondary",
-                        use_container_width=True,
-                    ):
-                        st.session_state[_ACTIVE_JOB_KEY] = job_id
-                        st.rerun()
-                    sources = _job_sources(job, jobs)
-                    phase = JOB_PHASE_LABELS.get(job.get("jobType", ""), "JOB")
-                    parameter_count = len(job.get("parameters", {}))
-                    parameter_label = "PARAM" if parameter_count == 1 else "PARAMS"
-                    source_text = " + ".join(sources) if sources else "START"
+        with st.container(key="cswf_graph_inner"):
+            for level in range(max_level + 1):
+                current = [job_id for job_id in jobs if levels.get(job_id) == level]
+                if not current:
+                    continue
+                column_widths = [1] * lane_count
+                if len(current) == 1:
+                    column_widths[lanes[current[0]]] = 2
+                columns = st.columns(column_widths, gap="medium")
+                for job_id in current:
+                    col = columns[lanes[job_id]]
+                    job = jobs[job_id]
+                    with col:
+                        with st.container(key=f"cswf_shell_{job_id}"):
+                            title = _job_label(job_id, job)
+                            is_active = job_id == active_job
+                            if st.button(
+                                f"{job_id}  {title}",
+                                key=f"cswf_node_{job_id}",
+                                type="primary" if is_active else "secondary",
+                                use_container_width=True,
+                            ):
+                                st.session_state[_ACTIVE_JOB_KEY] = job_id
+                                st.rerun()
+                            sources = _job_sources(job, jobs)
+                            phase = JOB_PHASE_LABELS.get(job.get("jobType", ""), "JOB")
+                            phase_class = phase.lower() if phase in JOB_PHASE_LABELS.values() else "job"
+                            parameter_count = len(job.get("parameters", {}))
+                            parameter_label = "param" if parameter_count == 1 else "params"
+                            source_text = " + ".join(sources) if sources else "source"
+                            st.markdown(
+                                '<div class="cswf-node-meta">'
+                                '<span class="cswf-node-meta-main">'
+                                f'<b class="cswf-node-phase cswf-node-phase--{phase_class}">'
+                                f'{html.escape(phase)}</b>'
+                                f'<span>{parameter_count} {parameter_label}</span></span>'
+                                f'<span class="cswf-node-source">← {html.escape(source_text)}</span>'
+                                "</div>",
+                                unsafe_allow_html=True,
+                            )
+                if level < max_level:
                     st.markdown(
-                        '<div class="cswf-node-meta">'
-                        f'<span>{html.escape(phase)} · {parameter_count} {parameter_label}</span>'
-                        f'<span>IN&nbsp; {html.escape(source_text)}</span>'
-                        "</div>",
+                        _workflow_connector_markup(jobs, levels, lanes, lane_count, level),
                         unsafe_allow_html=True,
                     )
-            if level < max_level:
-                st.markdown(
-                    _workflow_connector_markup(jobs, levels, lanes, lane_count, level),
-                    unsafe_allow_html=True,
-                )
 
 
 def _canonical_parameters(values: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -835,7 +846,7 @@ def render_workflow_config(
         .cswf-phase { color: #475569; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.2rem; }
         .cswf-canvas-title {
           display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
-          margin: 0.05rem 0 0.55rem;
+          flex-wrap: wrap; margin: 0.05rem 0 0.55rem;
         }
         .cswf-canvas-title h4 { margin: 0.05rem 0 0 !important; font-size: 1.05rem !important; }
         .cswf-canvas-kicker {
@@ -851,21 +862,35 @@ def render_workflow_config(
         .cswf-legend-dot--active { background: #1683d8; box-shadow: 0 0 0 3px #e2f1fc; }
         .cswf-legend-line { width: 1.15rem; height: 1px; background: #a8bacb; }
         div.st-key-cswf_workflow_canvas {
-          border-color: #d7e0e8 !important; background: #f7f9fb;
-          padding: 0.9rem 1rem 0.75rem !important;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+          border-color: #d3dee8 !important; background: #f8fafc;
+          padding: 1rem 0.8rem 0.85rem !important;
+          box-shadow: 0 2px 7px rgba(15, 23, 42, 0.035);
         }
-        div[class*="st-key-cswf_node_"] { margin-bottom: 0 !important; }
+        div.st-key-cswf_graph_inner {
+          width: min(100%, 780px); margin: 0 auto;
+        }
+        div[class*="st-key-cswf_shell_"] {
+          width: min(100%, 240px); margin: 0 auto !important;
+        }
+        div[class*="st-key-cswf_shell_"] > div[data-testid="stVerticalBlock"] {
+          gap: 0 !important;
+        }
+        div[class*="st-key-cswf_node_"] { width: 100%; margin: 0 !important; }
+        div[class*="st-key-cswf_shell_"] div[data-testid="stButton"] > button {
+          display: flex !important; width: 100% !important;
+          min-width: 100% !important; max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
         div[class*="st-key-cswf_node_"] button {
-          min-height: 3.15rem; justify-content: flex-start; text-align: left;
-          padding: 0.48rem 0.62rem; border-radius: 6px;
-          border: 1px solid #cfd9e3; background: #ffffff; color: #26374a;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          width: 100% !important; min-height: 3.35rem; justify-content: flex-start; text-align: left;
+          padding: 0.55rem 0.72rem; border-radius: 6px 6px 4px 4px;
+          border: 1px solid #cbd7e2; background: #ffffff; color: #203246;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
           transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
         }
         div[class*="st-key-cswf_node_"] button::before {
-          content: ""; flex: 0 0 auto; width: 0.42rem; height: 0.42rem;
-          border-radius: 50%; background: #90a2b4; margin-right: 0.08rem;
+          content: ""; flex: 0 0 auto; width: 0.46rem; height: 0.46rem;
+          border-radius: 50%; background: #8ea1b3; margin-right: 0.25rem;
         }
         div[class*="st-key-cswf_node_"] button:hover {
           border-color: #70a9d5; background: #fbfdff;
@@ -879,31 +904,47 @@ def render_workflow_config(
           background: #1683d8; box-shadow: 0 0 0 3px rgba(22, 131, 216, 0.13);
         }
         div[class*="st-key-cswf_node_"] button p {
-          font-size: 0.72rem !important; font-weight: 680; line-height: 1.18;
-          white-space: normal; letter-spacing: -0.01em;
+          font-size: 0.78rem !important; font-weight: 680; line-height: 1.22;
+          white-space: normal; letter-spacing: 0;
         }
         .cswf-node-meta {
           display: flex; align-items: center; justify-content: space-between; gap: 0.35rem;
-          min-height: 1.05rem; padding: 0.2rem 0.22rem 0;
-          color: #738497; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-          font-size: 0.56rem; line-height: 1.1; letter-spacing: 0.025em; white-space: nowrap;
+          width: 100%; min-height: 1.35rem;
+          margin: -1px 0 0; padding: 0.34rem 0.48rem 0.22rem;
+          border: 1px solid #dbe3ea; border-top: 0; border-radius: 0 0 5px 5px;
+          background: rgba(255,255,255,0.72); color: #6b7d90;
+          font-size: 0.61rem; line-height: 1.1; white-space: nowrap;
         }
-        .cswf-edge-row { height: 1.5rem; margin: -0.05rem 0; overflow: visible; }
+        .cswf-node-meta-main { display: inline-flex; align-items: center; gap: 0.34rem; }
+        .cswf-node-phase { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.055em; }
+        .cswf-node-phase--import { color: #0f766e; }
+        .cswf-node-phase--preprocess { color: #a16207; }
+        .cswf-node-phase--curate { color: #536779; }
+        .cswf-node-phase--pick { color: #15803d; }
+        .cswf-node-phase--extract { color: #2563a7; }
+        .cswf-node-phase--classify { color: #6d4aae; }
+        .cswf-node-phase--select { color: #475569; }
+        .cswf-node-phase--job { color: #64748b; }
+        .cswf-node-source { color: #526b82; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .cswf-edge-row { position: relative; height: 1.35rem; margin: -0.05rem 0; overflow: visible; }
         .cswf-edge-row svg { display: block; width: 100%; height: 100%; overflow: visible; }
         .cswf-edge-row path {
-          fill: none; stroke: #9db1c3; stroke-width: 0.58; vector-effect: non-scaling-stroke;
+          fill: none; stroke: #91a8ba; stroke-width: 1.05; vector-effect: non-scaling-stroke;
         }
         .cswf-edge-row path.cswf-edge--carry {
-          stroke: #6f91ad; stroke-dasharray: 3 2;
+          stroke: #5f86a5; stroke-width: 1; stroke-dasharray: 4 3;
         }
-        .cswf-edge-row circle { fill: #6f8ca5; }
-        .cswf-edge-row text {
-          fill: #58758e; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-          font-size: 4px; font-weight: 700; letter-spacing: 0.04em;
+        .cswf-edge-row circle { fill: #587b96; }
+        .cswf-carry-label {
+          position: absolute; left: 0.05rem; z-index: 1; display: inline-flex;
+          align-items: center; justify-content: center; min-width: 1.45rem; height: 1rem;
+          padding: 0 0.26rem; border: 1px solid #b8cad8; border-radius: 3px;
+          background: #f8fafc; color: #41647e; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 0.55rem; font-weight: 750; line-height: 1;
         }
         .cswf-edge-row--empty { height: 0.8rem; }
         div[class*="st-key-cswf_card_selector_"] button {
-          min-height: 2.25rem; border-radius: 5px; padding: 0.25rem 0.45rem;
+          width: 100%; min-height: 2.25rem; border-radius: 5px; padding: 0.25rem 0.45rem;
           border-color: #d5dee7; color: #44576a; background: #ffffff;
         }
         div[class*="st-key-cswf_card_selector_"] button p {
@@ -917,9 +958,11 @@ def render_workflow_config(
           .cswf-canvas-summary { display: none; }
           .cswf-canvas-legend { gap: 0.6rem; flex-wrap: wrap; }
           div.st-key-cswf_workflow_canvas { padding: 0.7rem 0.6rem 0.55rem !important; }
+          div.st-key-cswf_graph_inner { width: 100%; }
           div[class*="st-key-cswf_node_"] button { min-height: 2.9rem; padding: 0.38rem 0.42rem; }
-          div[class*="st-key-cswf_node_"] button p { font-size: 0.64rem !important; }
-          .cswf-node-meta { font-size: 0.5rem; }
+          div[class*="st-key-cswf_node_"] button p { font-size: 0.68rem !important; }
+          .cswf-node-meta { padding-inline: 0.28rem; font-size: 0.52rem; }
+          .cswf-node-phase { font-size: 0.5rem; }
         }
         </style>
         <div class='cswf-head'><h2>🎯 cryoSPARC Workflow 参数填写</h2></div>
