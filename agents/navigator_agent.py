@@ -10,6 +10,7 @@ from graph.state import PipelineState, CheckpointStatus
 from knowledge_base.paths import load_json_with_fallback
 from validator.validator import InputValidator, extract_params_from_text
 from version import APP_DISPLAY_NAME
+from utils.knowledge_relevance import UNKNOWN_KNOWLEDGE_REPLY
 
 # Performance: cached JSON loader (uses st.cache_data when Streamlit is available,
 # falls back to direct file read in non-Streamlit contexts like tests/eval).
@@ -203,7 +204,8 @@ class NavigatorAgent:
     _CONTROL_HINTS = [
         "开始", "从头", "跳过", "进度", "报告", "下一步", "继续", "完成",
         "重来", "重新", "帮助", "设置", "退出", "回到", "返回", "总结",
-        "怎么用这个", "教程", "演示",
+        "怎么用这个", "教程", "演示", "当前步骤", "当前阶段", "当前站点",
+        "现在流程", "哪一步", "切换到",
     ]
 
     def _has_domain_keyword(self, text_lower: str) -> bool:
@@ -224,7 +226,7 @@ class NavigatorAgent:
         return True
 
     def casual_rule_reply(self, user_text: str) -> str:
-        """无 Key / 基础模式下的闲聊友好回复（零网络、零 LLM）。"""
+        """Only greetings are answered without knowledge-base evidence."""
         t = (user_text or "").lower()
         greetings = ["你好", "您好", "hi", "hello", "在吗", "在不在", "哈喽"]
         if any(g in t for g in greetings):
@@ -233,12 +235,7 @@ class NavigatorAgent:
                 "陪跑教练 🤝。关于冷冻电镜数据处理 14 步流程（导入、运动校正、CTF、颗粒拾取、"
                 "2D/3D 分类、精修、锐化、分辨率验证等）的任意一步，直接告诉我即可～"
             )
-        return (
-            "我是 **StructPilot**，专注 cryo-EM 单颗粒分析的陪跑教练。你的问题似乎与流程操作无关；"
-            "若想了解某一步的**原理、参数或操作**，直接问我就好。\n\n"
-            "（当前为基础模式、未启用 AI，通用问答能力有限；可在「设置」中填写 API Key "
-            "启用 AI 模式，让我更自由地回答通用问题。）"
-        )
+        return UNKNOWN_KNOWLEDGE_REPLY
 
     def handle_input(self, state: PipelineState, user_text: str) -> Tuple[str, str]:
         state.user_input = user_text
@@ -251,6 +248,11 @@ class NavigatorAgent:
         params = extract_params_from_text(user_text)
         if params:
             state.params.update(params)
+
+        if "切换到 cryosparc" in state.user_input_lower:
+            state.software = "cryosparc"
+        elif "切换到 relion" in state.user_input_lower:
+            state.software = "relion"
 
         if not state.session_started and any(k in state.user_input_lower for k in ["开始", "start", "从头"]):
             state.session_started = True
@@ -270,10 +272,14 @@ class NavigatorAgent:
             state.mark_checkpoint(state.current_cp_id, "in_progress", "进入下一站", user_text)
             return f"⏭️ 已跳过当前阶段，进入下一阶段：{state.current_cp_name}。", "stage_guide_sop"
 
-        if any(k in state.user_input_lower for k in ["进度", "progress", "到哪里了"]):
+        if any(k in state.user_input_lower for k in [
+            "进度", "progress", "到哪里了", "哪一步", "现在流程", "当前步骤", "当前阶段",
+        ]):
             return self.get_progress(state), "progress"
         if any(k in state.user_input_lower for k in ["报告", "总结", "report"]):
             return self.generate_report(state), "report"
+        if "当前站点" in state.user_input_lower:
+            return self.get_stage_guide(state), "stage_guide"
 
         # 双轨路由（A 域）：简单/通用问题（无 cryo-EM 领域关键词、非控制指令）
         # -> Track L（casual 轨道：LLM 直答 / 无 Key 时规则友好回复），不进入工作流管线。

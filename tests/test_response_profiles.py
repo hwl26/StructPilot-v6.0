@@ -136,6 +136,7 @@ def test_app_handle_updates_dict_result_and_keeps_answer_on_topic():
     with tempfile.TemporaryDirectory() as tmpdir:
         llm = LLMAgent()
         llm.enabled = False
+        llm.embedding_enabled = False
         app = StructPilotApp(memory=MemoryAgent(tmpdir), llm=llm)
         state = PipelineState(session_id="low_res_handle")
         state.software = "relion"
@@ -154,6 +155,7 @@ def test_app_handle_persists_generation_profile_in_message_metadata():
     with tempfile.TemporaryDirectory() as tmpdir:
         llm = LLMAgent()
         llm.enabled = False
+        llm.embedding_enabled = False
         app = StructPilotApp(memory=MemoryAgent(tmpdir), llm=llm)
         state = PipelineState(session_id="profile_metadata_test")
 
@@ -196,3 +198,80 @@ def test_memory_round_trip_keeps_multimodal_evidence():
     assert restored is not None
     assert restored.messages[0].image_refs[0]["image_name"] == "ctf.png"
     assert restored.messages[0].metadata["image_observations"][0]["stage_guess"] == "cp_03"
+
+
+def _offline_app(memory_dir: str) -> StructPilotApp:
+    llm = LLMAgent()
+    llm.enabled = False
+    llm.embedding_enabled = False
+    llm.audio_enabled = False
+    return StructPilotApp(memory=MemoryAgent(memory_dir), llm=llm)
+
+
+def test_unknown_question_refuses_instead_of_returning_current_sop():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="unknown_sop")
+        result = app.handle(state, "量子纠缠怎么做？")
+
+    assert "我不知道" in result.agent_reply
+    assert "知识库没有找到" in result.agent_reply
+    assert "SOP:" not in result.agent_reply
+    assert "数据导入" not in result.agent_reply
+    assert result.last_qa_trace["fallback_reason"] == "knowledge_not_found"
+
+
+def test_unknown_general_question_does_not_use_freeform_llm_answer():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="unknown_general")
+        result = app.handle(state, "量子纠缠是什么？")
+
+    assert result.action_tag == "casual"
+    assert "我不知道" in result.agent_reply
+    assert "数据导入" not in result.agent_reply
+    assert result.last_qa_trace["fallback"] is True
+    assert result.last_qa_trace["fallback_reason"] == "knowledge_not_found"
+
+
+def test_unknown_error_code_is_not_answered_from_software_context_alone():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="unknown_error_code")
+        result = app.handle(state, "RELION 里的 XJQ-999 报错怎么处理？")
+
+    assert "我不知道" in result.agent_reply
+    assert "XJQ-999" not in result.agent_reply
+    assert "数据导入" not in result.agent_reply
+
+
+def test_known_fault_uses_matching_knowledge_instead_of_unrelated_parameter_template():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="known_ctf")
+        result = app.handle(state, "CTF 拟合失败，很多 micrograph 没有结果")
+
+    assert "CTF" in result.agent_reply
+    assert "maximum_resolution" not in result.agent_reply
+    assert result.last_qa_trace["fallback_reason"] != "knowledge_not_found"
+
+
+def test_workflow_control_query_still_returns_current_stage():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="workflow_control")
+        result = app.handle(state, "下一步我应该做什么？")
+
+    assert "数据导入" in result.agent_reply
+    assert "我不知道" not in result.agent_reply
+
+
+def test_referenced_but_missing_image_is_not_guessed():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        app = _offline_app(tmpdir)
+        state = PipelineState(session_id="missing_image")
+        result = app.handle(state, "这张 CTF 截图是否合格？")
+
+    assert "没有收到可读取的图片" in result.agent_reply
+    assert "不知道" in result.agent_reply
+    assert result.last_qa_trace["fallback_reason"] == "image_missing"

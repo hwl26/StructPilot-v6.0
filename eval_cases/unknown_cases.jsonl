@@ -1,0 +1,4 @@
+{"id":"unknown_sop_quantum","category":"unknown","input":"量子纠缠怎么做？","expected_keywords":["知识库","我不知道"],"forbidden_keywords":["SOP:","数据导入","maximum_resolution"]}
+{"id":"unknown_relion_error_code","category":"unknown","input":"RELION 里的 XJQ-999 报错怎么处理？","expected_keywords":["知识库","我不知道"],"forbidden_keywords":["SOP:","数据导入","maximum_resolution"]}
+{"id":"unknown_general_stock","category":"unknown","input":"股票明天会涨吗？","expected_keywords":["知识库","我不知道"],"forbidden_keywords":["SOP:","数据导入","maximum_resolution"]}
+{"id":"unknown_concept_foobar","category":"unknown","input":"未收录术语 FoobarCryo 是什么？","expected_keywords":["知识库","我不知道"],"forbidden_keywords":["SOP:","数据导入","maximum_resolution"]}

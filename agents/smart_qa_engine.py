@@ -37,6 +37,11 @@ from response_profiles import (
     format_response_for_profile,
     normalize_response_profile,
 )
+from utils.knowledge_relevance import (
+    UNKNOWN_KNOWLEDGE_REPLY,
+    filter_direct_results,
+    has_direct_knowledge_support,
+)
 
 if TYPE_CHECKING:
     from graph.state import PipelineState
@@ -1678,13 +1683,12 @@ class SmartQAEngine:
                         search_queries.append(" ".join(acronym_terms[:5]))
                     for sq in search_queries[:2]:
                         try:
-                            docs = rag.search(sq, top_k=4)
+                            docs = filter_direct_results(user_text, rag.search(sq, top_k=4), min_score=0.2)
                             for doc_id, text, score in docs:
-                                if score >= 0.25:
-                                    snippet = (text or "")[:300]
-                                    rag_context_parts.append(
-                                        f"[{doc_id}] (score={score:.2f}) {snippet}"
-                                    )
+                                snippet = (text or "")[:300]
+                                rag_context_parts.append(
+                                    f"[{doc_id}] (score={score:.2f}) {snippet}"
+                                )
                         except Exception:
                             pass
                     # 也取当前步骤的 SOP 片段作为补充
@@ -1692,12 +1696,15 @@ class SmartQAEngine:
                         sop_snippet = self._get_stage_sop(
                             current_cp_id, current_software
                         )
-                        if sop_snippet:
+                        if sop_snippet and has_direct_knowledge_support(user_text, sop_snippet):
                             rag_context_parts.append(f"[当前步骤SOP] {sop_snippet[:400]}")
             except Exception:
                 pass  # RAG 检索失败不阻断主路径
 
             rag_references = "\n\n".join(rag_context_parts) if rag_context_parts else ""
+
+            if top_entry is None and not rag_context_parts:
+                return UNKNOWN_KNOWLEDGE_REPLY
 
             # 2b. 调用 LLM（注入 glossary + RAG 上下文）
             try:
@@ -1793,15 +1800,7 @@ class SmartQAEngine:
                 content_parts.append("\n".join(extras))
             content_parts.append("> 来源：术语库（规则模式，未启用 LLM，答案基于本地知识库）")
         else:
-            term_display = (user_text or "").strip()
-            content_parts.append(f"## 概念解释")
-            content_parts.append(f"当前**术语库（规则模式）尚未收录**你提到的术语（{term_display}）。")
-            content_parts.append("**你可以：**")
-            suggestions = ["- 在「设置」中填写 API Key 启用 AI 模式，我将基于专业 cryo-EM 知识直接解释；"]
-            if acronym_terms:
-                suggestions.append(f"- 已识别缩写全称：{', '.join(acronym_terms)}（仅作提示，仍需 AI 模式给出权威解释）；")
-            suggestions.append("- 或检查术语拼写，常见如 EER / CTF / MRC / STAR / FSC 等。")
-            content_parts.append("\n".join(suggestions))
+            return UNKNOWN_KNOWLEDGE_REPLY
 
         # 直接返回 Markdown 文本
         return "\n\n".join(content_parts)

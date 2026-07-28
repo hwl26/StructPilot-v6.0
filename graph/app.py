@@ -23,6 +23,13 @@ if TYPE_CHECKING:
 from graph.state import PipelineState
 from knowledge_base.retriever import KnowledgeRetriever
 from response_profiles import detect_response_focus, format_response_for_profile, normalize_response_profile
+from utils.knowledge_relevance import (
+    UNKNOWN_KNOWLEDGE_REPLY,
+    filter_direct_results,
+    has_direct_knowledge_support,
+    is_image_evidence_query,
+    is_workflow_control_query,
+)
 from validator.validator import InputValidator
 
 Route = Literal["expert", "sop", "memory", "fault", "plot_interp", "end", "concept", "casual"]
@@ -31,8 +38,6 @@ Route = Literal["expert", "sop", "memory", "fault", "plot_interp", "end", "conce
 # For these, the navigator's reply is a transitional prefix (advance notice / greeting)
 # that should be prepended to the downstream node's reply as a single message.
 _ROUTING_TAGS = {"stage_guide_sop", "param_advice", "plot_interpretation", "concept_explain"}
-_RAG_INJECTION_MIN_SCORE = 0.5
-_LAB_EXP_INJECTION_MIN_SCORE = 0.4
 _LOCAL_ONLY_ACTIONS = {
     "progress",
     "report",
@@ -319,6 +324,9 @@ class StructPilotApp:
     def _filter_retrieved(self, state: PipelineState, retrieved: List[Tuple[str, str, float]]) -> List[Tuple[str, str, float]]:
         if not retrieved:
             return []
+        retrieved = filter_direct_results(state.user_input or "", retrieved, min_score=0.2)
+        if not retrieved:
+            return []
         cp = (state.current_cp_id or "").lower()
         software = (state.software or "").lower()
         lab_preferred: List[Tuple[str, str, float]] = []
@@ -327,9 +335,6 @@ class StructPilotApp:
         for doc_id, text, score in retrieved:
             haystack = f"{doc_id}\n{text}".lower()
             is_lab_experience = doc_id.lower().startswith("lab_")
-            min_score = _LAB_EXP_INJECTION_MIN_SCORE if is_lab_experience else _RAG_INJECTION_MIN_SCORE
-            if score < min_score:
-                continue
             if is_lab_experience:
                 lab_preferred.append((doc_id, text, score))
             elif (cp and cp in haystack) or (software and software in haystack):
@@ -518,6 +523,36 @@ class StructPilotApp:
             for i, (doc_id, _text, score) in enumerate(filtered, start=1)
         ]
 
+        image_paths = [img.get("image_path") for img in state.pending_images if img.get("image_path")]
+        if is_image_evidence_query(state.user_input or "") and not image_paths:
+            trace["fallback"] = True
+            trace["fallback_reason"] = "image_missing"
+            trace["mode_label"] = "缺少图像证据"
+            trace["guard"] = {"passed": False, "reason": "referenced_image_not_received"}
+            trace["timings_ms"]["llm"] = 0
+            trace["timings_ms"]["total"] = _elapsed_ms(total_start)
+            state.smart_qa_cards = {}
+            state.last_qa_trace = trace
+            return (
+                "我没有收到可读取的图片，所以不知道这张图是否合格，也不能判断应保留还是丢弃。"
+                "请重新上传原始截图，并注明软件和处理步骤。"
+            )
+
+        knowledge_supported = bool(filtered) or state.action_tag in _LOCAL_ONLY_ACTIONS
+        workflow_control = is_workflow_control_query(state.user_input or "")
+        if not knowledge_supported and not workflow_control:
+            trace["fallback"] = True
+            trace["fallback_reason"] = "knowledge_not_found"
+            trace["mode_label"] = "知识库未命中"
+            trace["guard"] = {"passed": False, "reason": "no_direct_knowledge_support"}
+            trace["timings_ms"]["llm"] = 0
+            trace["timings_ms"]["total"] = _elapsed_ms(total_start)
+            state.smart_qa_cards = {}
+            state.last_qa_trace = trace
+            if state.pending_images:
+                state.pending_images = []
+            return UNKNOWN_KNOWLEDGE_REPLY
+
         references = "\n\n".join(
             f"[R{i}] source_type={_classify_source_type(doc_id)} doc_id={doc_id} score={score:.2f}\n{text}"
             for i, (doc_id, text, score) in enumerate(filtered, start=1)
@@ -525,14 +560,27 @@ class StructPilotApp:
         # 将 SmartQA 推理结果追加到 references（此时 references 已定义）
         if smart_qa_reasoning_md:
             references = f"{references}\n\n[SmartQA] 智能推理结果\n{smart_qa_reasoning_md}" if references else f"[SmartQA] 智能推理结果\n{smart_qa_reasoning_md}"
-        image_paths = [img.get("image_path") for img in state.pending_images if img.get("image_path")]
         skip_llm = state.action_tag in _LOCAL_ONLY_ACTIONS and not image_paths
-        use_smartqa_direct = (
-            bool(smart_qa_answer_md)
-            and not bool(getattr(self.llm, "enabled", False))
-            and state.action_tag not in _LOCAL_ONLY_ACTIONS
-            and _is_generic_rule_reply(reply)
+        smart_confidence = float(
+            getattr(smart_qa_result.get("understanding"), "confidence", 0.0) or 0.0
         )
+        smart_intent = str(
+            getattr(smart_qa_result.get("understanding"), "user_intent", "") or ""
+        )
+        prefer_smartqa_answer = (
+            bool(smart_qa_answer_md)
+            and knowledge_supported
+            and smart_confidence >= 0.4
+            and state.action_tag not in _LOCAL_ONLY_ACTIONS
+            and (
+                _is_generic_rule_reply(reply)
+                or smart_intent == "fault_troubleshoot"
+                or not has_direct_knowledge_support(state.user_input or "", reply)
+            )
+        )
+        if prefer_smartqa_answer:
+            reply = smart_qa_answer_md
+        use_smartqa_direct = prefer_smartqa_answer and not bool(getattr(self.llm, "enabled", False))
         facts = _extract_must_keep_facts(reply, state, state.user_input or "")
         trace["rule_layer_json"] = facts
 
@@ -768,32 +816,24 @@ class StructPilotApp:
         return state
 
     def _casual_node(self, state: PipelineState) -> PipelineState:
-        """双轨 Track L：闲聊/通用问题节点。
-
-        有 Key（AI 模式）：llm.casual_reply 直接生成自然回复（1 次 LLM 调用）；
-        无 Key（基础模式）：navigator.casual_rule_reply 返回友好规则回复（零网络、零 LLM）。
-
-        刻意不进入 _polish_reply（无 RAG refs、无二次改写），保持轻量；
-        casual 本身已是「LLM 直答」轨道，无需再叠加规则层增强。
-        """
+        """Answer greetings locally and refuse unsupported general questions."""
         user_text = state.user_input or ""
-        reply = ""
         try:
-            if getattr(self.llm, "enabled", False):
-                reply = self.llm.casual_reply(
-                    user_text,
-                    response_profile=getattr(state, "response_profile", "teaching"),
-                )
+            reply = self.navigator.casual_rule_reply(user_text)
         except Exception:
-            reply = ""
+            reply = UNKNOWN_KNOWLEDGE_REPLY
         if not reply:
-            try:
-                reply = self.navigator.casual_rule_reply(user_text)
-            except Exception:
-                reply = "（闲聊回复暂时不可用，请稍后再试。）"
-        if not reply:
-            reply = "（闲聊回复暂时不可用，请稍后再试。）"
+            reply = UNKNOWN_KNOWLEDGE_REPLY
+        is_unknown = reply == UNKNOWN_KNOWLEDGE_REPLY
+        response_profile = normalize_response_profile(getattr(state, "response_profile", "teaching"))
         state.action_tag = "casual"
+        state.last_qa_trace = {
+            "mode_label": "知识库未命中" if is_unknown else "本地问候",
+            "fallback": is_unknown,
+            "fallback_reason": "knowledge_not_found" if is_unknown else "",
+            "response_profile": response_profile,
+            "response_focus": detect_response_focus(user_text, state.action_tag),
+        }
         state.agent_reply = reply
         self._record_assistant(state, state.agent_reply, "casual")
         return state

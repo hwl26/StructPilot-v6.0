@@ -135,6 +135,10 @@ def main() -> int:
 
     os.environ.setdefault("STRUCTPILOT_LLM_PROVIDER", "none")
     app = StructPilotApp()
+    # Eval must remain deterministic even when runtime config enables remote services.
+    app.llm.enabled = False
+    app.llm.embedding_enabled = False
+    app.llm.audio_enabled = False
     results = [run_case(app, case) for case in cases]
     failed = [r for r in results if r["status"] == "failed"]
     skipped = [r for r in results if r["status"] == "skipped"]
