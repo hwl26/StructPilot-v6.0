@@ -4636,11 +4636,10 @@ if _pet_enabled_check:
     }
     _i_msgs = _interact_msgs.get(_pet_type, _interact_msgs["cat"])
     _pet_default = "你好～"
-    import json as _json
-    _pet_ctx_msgs = _json.dumps(_pet_msgs_map.get(_pet_ctx, [_pet_default]), ensure_ascii=False)
-    _pet_pet_msgs = _json.dumps(_i_msgs["pet"], ensure_ascii=False)
-    _pet_body_msgs = _json.dumps(_i_msgs["body"], ensure_ascii=False)
-    _pet_tail_msgs = _json.dumps(_i_msgs["tail"], ensure_ascii=False)
+    _pet_ctx_msgs = _pet_msgs_map.get(_pet_ctx, [_pet_default])
+    _pet_pet_msgs = _i_msgs["pet"]
+    _pet_body_msgs = _i_msgs["body"]
+    _pet_tail_msgs = _i_msgs["tail"]
 
     # Quick questions based on current context
     _quick_qs = []
@@ -4659,7 +4658,7 @@ if _pet_enabled_check:
             "下一步该做什么？",
             "我卡住了，帮帮我！",
         ]
-    _pet_quick_qs = _json.dumps(_quick_qs, ensure_ascii=False)
+    _pet_quick_qs = _quick_qs
 
     # Render the desk pet through an isolated Streamlit custom component so
     # its JavaScript runs reliably and can send quick-question events back.

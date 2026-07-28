@@ -57,10 +57,24 @@ def render_desk_pet(
     # CSS
     # =======================================================================
     pet_css = f"""<style>
-.sp-pet {{
+/* ===== Desk Pet core styles - maximum specificity to override any Streamlit rules ===== */
+#spPet, .sp-pet {{
     position: fixed !important;
-    right: 16px; bottom: 96px;
-    z-index: 99999;
+    top: auto !important;
+    right: 16px !important;
+    bottom: 96px !important;
+    left: auto !important;
+    z-index: 2147483647 !important;  /* max z-index */
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    clip: auto !important;
+    clip-path: none !important;
+    overflow: visible !important;
+    width: auto !important;
+    height: auto !important;
     user-select: none;
     touch-action: none;
     transition: transform 0.2s ease;
@@ -339,13 +353,172 @@ def render_desk_pet(
     .sp-pet {{ bottom: 88px !important; right: 8px !important; }}
     .sp-pet-quick-panel {{ bottom: 112px !important; right: 72px !important; }}
 }}
+
+/* ===== Quick Center grid panel ===== */
+.sp-qc-panel {{
+    position: fixed; right: 90px; bottom: 120px;
+    background: {t['sidebar']}; border: 1px solid {t['sidebar_border']};
+    border-radius: 16px; padding: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,{panel_shadow_alpha});
+    opacity: 0; pointer-events: none;
+    transform: translateY(10px) scale(0.92);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 100000; width: 320px;
+}}
+.sp-qc-panel.sp-show {{ opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }}
+.sp-qc-title {{
+    font-size: 0.85rem; font-weight: 700; color: {t['text']};
+    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}}
+.sp-qc-close {{ margin-left: auto; cursor: pointer; opacity: 0.5; font-size: 1.1rem; padding: 0 4px; transition: opacity 0.15s; }}
+.sp-qc-close:hover {{ opacity: 1; }}
+.sp-qc-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }}
+.sp-qc-item {{
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 4px; border-radius: 12px; cursor: pointer;
+    background: {t['app']}; border: 1px solid {t['sidebar_border']};
+    transition: all 0.15s ease; text-align: center;
+}}
+.sp-qc-item:hover {{
+    background: {t['accent']}15; border-color: {t['accent']};
+    transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}}
+.sp-qc-icon {{ font-size: 1.5rem; line-height: 1; }}
+.sp-qc-label {{ font-size: 0.65rem; color: {t['text']}; line-height: 1.2; }}
+
+/* ===== Modal overlay ===== */
+.sp-modal-overlay {{
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.35); z-index: 100002;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+    display: flex; align-items: center; justify-content: center;
+}}
+.sp-modal-overlay.sp-show {{ opacity: 1; pointer-events: auto; }}
+.sp-modal {{
+    background: {t['sidebar']}; border: 1px solid {t['sidebar_border']};
+    border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    width: 480px; max-width: 90vw; max-height: 75vh;
+    display: flex; flex-direction: column;
+    transform: scale(0.9); transition: transform 0.25s ease;
+}}
+.sp-modal-overlay.sp-show .sp-modal {{ transform: scale(1); }}
+.sp-modal-header {{
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 20px; border-bottom: 1px solid {t['sidebar_border']};
+    font-size: 0.95rem; font-weight: 700; color: {t['text']};
+}}
+.sp-modal-body {{ padding: 16px 20px; overflow-y: auto; flex: 1; }}
+.sp-modal-footer {{ padding: 10px 20px; border-top: 1px solid {t['sidebar_border']}; display: flex; gap: 8px; justify-content: flex-end; }}
+.sp-modal-btn {{
+    padding: 6px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 0.82rem; font-weight: 600; transition: all 0.15s ease;
+}}
+.sp-modal-btn-primary {{ background: {t['accent']}; color: #fff; }}
+.sp-modal-btn-primary:hover {{ opacity: 0.85; }}
+.sp-modal-btn-secondary {{ background: {t['app']}; color: {t['text']}; border: 1px solid {t['sidebar_border']}; }}
+.sp-modal-btn-secondary:hover {{ background: {t['sidebar_border']}; }}
+.sp-notes-area {{
+    width: 100%; min-height: 180px; border: 1px solid {t['sidebar_border']};
+    border-radius: 10px; padding: 10px 12px; font-size: 0.85rem;
+    background: {t['app']}; color: {t['text']}; resize: vertical;
+    font-family: inherit; line-height: 1.6;
+}}
+.sp-notes-area:focus {{ outline: none; border-color: {t['accent']}; box-shadow: 0 0 0 3px {t['accent']}20; }}
+.sp-notes-status {{ font-size: 0.7rem; color: #94a3b8; margin-top: 6px; }}
+.sp-todo-input-row {{ display: flex; gap: 8px; margin-bottom: 10px; }}
+.sp-todo-input {{
+    flex: 1; padding: 8px 12px; border: 1px solid {t['sidebar_border']};
+    border-radius: 8px; font-size: 0.82rem; background: {t['app']}; color: {t['text']};
+}}
+.sp-todo-input:focus {{ outline: none; border-color: {t['accent']}; }}
+.sp-todo-add-btn {{
+    padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+    background: {t['accent']}; color: #fff; font-size: 0.82rem; font-weight: 600;
+}}
+.sp-todo-list {{ list-style: none; padding: 0; margin: 0; }}
+.sp-todo-item {{
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    border-radius: 8px; margin-bottom: 4px; transition: background 0.15s;
+}}
+.sp-todo-item:hover {{ background: {t['app']}; }}
+.sp-todo-check {{
+    width: 20px; height: 20px; border: 2px solid {t['sidebar_border']};
+    border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s; font-size: 0.7rem;
+}}
+.sp-todo-check.done {{ background: {t['accent']}; border-color: {t['accent']}; color: #fff; }}
+.sp-todo-text {{ flex: 1; font-size: 0.82rem; color: {t['text']}; }}
+.sp-todo-item.done .sp-todo-text {{ text-decoration: line-through; opacity: 0.5; }}
+.sp-todo-del {{ cursor: pointer; opacity: 0.3; font-size: 1rem; padding: 0 4px; transition: opacity 0.15s; }}
+.sp-todo-del:hover {{ opacity: 1; color: #ef4444; }}
+.sp-inspire-input {{
+    width: 100%; padding: 10px 12px; border: 1px solid {t['sidebar_border']};
+    border-radius: 10px; font-size: 0.85rem; background: {t['app']}; color: {t['text']};
+    margin-bottom: 10px; font-family: inherit;
+}}
+.sp-inspire-input:focus {{ outline: none; border-color: {t['accent']}; }}
+.sp-inspire-list {{ display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; }}
+.sp-inspire-card {{
+    background: {t['app']}; border-left: 3px solid {t['accent']};
+    border-radius: 0 8px 8px 0; padding: 10px 12px;
+    font-size: 0.8rem; color: {t['text']}; position: relative;
+}}
+.sp-inspire-time {{ font-size: 0.65rem; color: #94a3b8; margin-top: 4px; }}
+.sp-inspire-del {{
+    position: absolute; top: 6px; right: 8px; cursor: pointer;
+    opacity: 0.3; font-size: 0.9rem; transition: opacity 0.15s;
+}}
+.sp-inspire-del:hover {{ opacity: 1; color: #ef4444; }}
+.sp-pomo-display {{
+    text-align: center; font-size: 3rem; font-weight: 700;
+    color: {t['accent']}; font-variant-numeric: tabular-nums;
+    margin: 10px 0; letter-spacing: 2px;
+}}
+.sp-pomo-status {{ text-align: center; font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px; }}
+.sp-pomo-controls {{ display: flex; gap: 8px; justify-content: center; }}
+.sp-pomo-btn {{
+    padding: 8px 20px; border: none; border-radius: 10px; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; transition: all 0.15s;
+}}
+.sp-pomo-start {{ background: {t['accent']}; color: #fff; }}
+.sp-pomo-start:hover {{ opacity: 0.85; }}
+.sp-pomo-reset {{ background: {t['app']}; color: {t['text']}; border: 1px solid {t['sidebar_border']}; }}
+.sp-meeting-item {{
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: {t['app']}; border-radius: 10px; margin-bottom: 8px;
+    border-left: 3px solid {t['accent']};
+}}
+.sp-meeting-date {{ font-size: 0.7rem; color: #94a3b8; white-space: nowrap; }}
+.sp-meeting-title {{ font-size: 0.82rem; color: {t['text']}; flex: 1; }}
+.sp-meeting-link {{
+    font-size: 0.72rem; color: {t['accent']}; cursor: pointer; text-decoration: underline;
+}}
+.sp-forum-info {{ text-align: center; padding: 20px 0; }}
+.sp-forum-info-icon {{ font-size: 2.5rem; margin-bottom: 8px; }}
+.sp-forum-info-text {{ font-size: 0.85rem; color: {t['text']}; margin-bottom: 12px; line-height: 1.6; }}
+.sp-exp-item {{
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: {t['app']}; border-radius: 8px; margin-bottom: 6px; font-size: 0.8rem;
+}}
+.sp-exp-step {{ width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }}
+.sp-exp-step.done {{ background: #22c55e; color: #fff; }}
+.sp-exp-step.todo {{ background: {t['sidebar_border']}; color: {t['text']}; }}
+.sp-exp-name {{ flex: 1; color: {t['text']}; }}
+.sp-exp-status {{ font-size: 0.7rem; color: #94a3b8; }}
+.sp-lit-item {{
+    padding: 10px 12px; background: {t['app']}; border-radius: 8px;
+    margin-bottom: 8px; border-left: 3px solid {t['accent']};
+}}
+.sp-lit-title {{ font-size: 0.8rem; font-weight: 600; color: {t['text']}; margin-bottom: 2px; }}
+.sp-lit-meta {{ font-size: 0.68rem; color: #94a3b8; }}
 </style>"""
 
     # =======================================================================
     # HTML
     # =======================================================================
     pet_html = f"""{pet_css}
-<div class="sp-pet" id="spPet" data-pet="{pet_type}" data-mood="{pet_mood}" data-size="{pet_size}">
+<div class="sp-pet" id="spPet" data-pet="{pet_type}" data-mood="{pet_mood}" data-size="{pet_size}" style="position:fixed;right:16px;bottom:96px;z-index:99999;display:block;visibility:visible;opacity:1;pointer-events:auto;">
     <div class="sp-pet-bubble" id="spPetBubble"></div>
     <div class="sp-pet-quick-panel" id="spPetQuickPanel">
         <div class="sp-pet-quick-panel-title">
@@ -371,6 +544,7 @@ def render_desk_pet(
         <div class="sp-pet-ctx-item" data-action="size" data-size="80">📊 大号</div>
         <div class="sp-pet-ctx-separator"></div>
         <div class="sp-pet-ctx-item" data-action="quick">💬 快捷提问</div>
+        <div class="sp-pet-ctx-item" data-action="quick_center">⚡ 快捷中心</div>
         <div class="sp-pet-ctx-item" data-action="hide">👋 隐藏伙伴</div>
     </div>
     {pet_svg}
@@ -379,6 +553,33 @@ def render_desk_pet(
     <div class="sp-pet-zzz">z</div>
     <div class="sp-pet-drag-hint">拖动可移动 · 右键设置</div>
     <div class="sp-pet-hint-btn" id="spPetHintBtn" title="点我问问题">?</div>
+</div>
+
+<!-- Quick Center Panel -->
+<div class="sp-qc-panel" id="spQcPanel">
+    <div class="sp-qc-title">
+        <span>⚡ 快捷中心</span>
+        <span class="sp-qc-close" id="spQcClose">x</span>
+    </div>
+    <div class="sp-qc-grid">
+        <div class="sp-qc-item" data-panel="forum"><span class="sp-qc-icon">🗣️</span><span class="sp-qc-label">逛论坛</span></div>
+        <div class="sp-qc-item" data-panel="notes"><span class="sp-qc-icon">📝</span><span class="sp-qc-label">个人笔记</span></div>
+        <div class="sp-qc-item" data-panel="experiment"><span class="sp-qc-icon">📊</span><span class="sp-qc-label">实验速查</span></div>
+        <div class="sp-qc-item" data-panel="literature"><span class="sp-qc-icon">📚</span><span class="sp-qc-label">文献速递</span></div>
+        <div class="sp-qc-item" data-panel="pomodoro"><span class="sp-qc-icon">⏰</span><span class="sp-qc-label">番茄钟</span></div>
+        <div class="sp-qc-item" data-panel="todo"><span class="sp-qc-icon">📌</span><span class="sp-qc-label">待办速记</span></div>
+        <div class="sp-qc-item" data-panel="inspire"><span class="sp-qc-icon">💡</span><span class="sp-qc-label">灵感便签</span></div>
+        <div class="sp-qc-item" data-panel="meeting"><span class="sp-qc-icon">🔔</span><span class="sp-qc-label">会议提醒</span></div>
+    </div>
+</div>
+
+<!-- Modal Overlay (content injected dynamically) -->
+<div class="sp-modal-overlay" id="spModalOverlay">
+    <div class="sp-modal" id="spModal">
+        <div class="sp-modal-header" id="spModalHeader"></div>
+        <div class="sp-modal-body" id="spModalBody"></div>
+        <div class="sp-modal-footer" id="spModalFooter"></div>
+    </div>
 </div>"""
 
     st.markdown(pet_html, unsafe_allow_html=True)
@@ -386,12 +587,30 @@ def render_desk_pet(
     # =======================================================================
     # JS (injected via components.html iframe, accesses parent.document)
     # =======================================================================
+
+    def _ensure_list(value, default=None):
+        """Ensure a config value is a list (defensive for callers passing JSON strings)."""
+        if default is None:
+            default = []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            # Fallback: treat non-list string as a single message.
+            return [value]
+        return default
+
     config = json.dumps({
-        "ctxMsgs": ctx_msgs,
-        "petMsgs": pet_msgs,
-        "bodyMsgs": body_msgs,
-        "tailMsgs": tail_msgs,
-        "quickQs": quick_qs,
+        "ctxMsgs": _ensure_list(ctx_msgs, ["你好～"]),
+        "petMsgs": _ensure_list(pet_msgs, ["需要帮忙吗？"]),
+        "bodyMsgs": _ensure_list(body_msgs, ["加油！"]),
+        "tailMsgs": _ensure_list(tail_msgs, ["注意检查参数！"]),
+        "quickQs": _ensure_list(quick_qs, []),
         "petType": pet_type,
         "petMood": pet_mood,
         "petSize": pet_size,
@@ -401,8 +620,33 @@ def render_desk_pet(
     # Dynamic values are injected via __CONFIG__ placeholder.
     js_code = r"""
 (function() {
-    var doc = parent.document;
-    var win = parent.window;
+    /* sp-pet-js-v3 - sandbox safe */
+    // Try to access parent.document (cross-frame); fall back to own document.
+    // pet HTML is rendered into the main page via st.markdown, so we want parent.document
+    // when the browser allows it. If sandbox blocks access, the pet will still be visible
+    // (markup already rendered), only interactions may be limited.
+    var doc = null, win = null;
+    try {
+        var p = parent;
+        if (p && p.document && p.document.body) {
+            doc = p.document;
+            win = p;
+        }
+    } catch(e) { /* sandbox blocked */ }
+    if (!doc) { doc = document; win = window; }
+
+    // Verify the pet element actually exists in `doc`. If not (e.g. pet HTML was not
+    // rendered into this document and parent access failed), try the other one.
+    if (!doc.getElementById || !doc.getElementById('spPet')) {
+        var altDoc = (doc === document) ? null : document;
+        if (!altDoc) {
+            try { altDoc = parent.document; } catch(e) { altDoc = null; }
+        }
+        if (altDoc && altDoc.getElementById && altDoc.getElementById('spPet')) {
+            doc = altDoc;
+            win = altDoc.defaultView || (altDoc === document ? window : parent);
+        }
+    }
 
     // ===== CLEAN UP PREVIOUS INSTANCE =====
     // This is the KEY FIX: properly remove old observers, listeners, and timers
@@ -436,6 +680,8 @@ def render_desk_pet(
         if (S.onTouchMove) doc.removeEventListener('touchmove', S.onTouchMove);
         if (S.onTouchEnd) doc.removeEventListener('touchend', S.onTouchEnd);
         if (S.onOutsideClick) doc.removeEventListener('click', S.onOutsideClick);
+        if (S.onEsc) doc.removeEventListener('keydown', S.onEsc);
+        if (S.pomoTimer) clearInterval(S.pomoTimer);
         // Clear __spBound on ALL spPet elements (old and new) so the fresh instance can rebind
         var pets = doc.querySelectorAll('#spPet');
         for (var i = 0; i < pets.length; i++) { delete pets[i].__spBound; }
@@ -454,6 +700,15 @@ def render_desk_pet(
         for (var i = 0; i < pets.length - 1; i++) {
             if (pets[i] && pets[i].parentNode) pets[i].parentNode.removeChild(pets[i]);
         }
+        // Also clean up duplicate Quick Center panel and modal overlay (outside #spPet)
+        var dupQc = doc.querySelectorAll('#spQcPanel');
+        for (var dq = 0; dq < dupQc.length - 1; dq++) {
+            if (dupQc[dq] && dupQc[dq].parentNode) dupQc[dq].parentNode.removeChild(dupQc[dq]);
+        }
+        var dupModal = doc.querySelectorAll('#spModalOverlay');
+        for (var dm = 0; dm < dupModal.length - 1; dm++) {
+            if (dupModal[dm] && dupModal[dm].parentNode) dupModal[dm].parentNode.removeChild(dupModal[dm]);
+        }
         if (pet.__spBound) return true;
         pet.__spBound = true;
 
@@ -463,11 +718,14 @@ def render_desk_pet(
         var quickPanelOpen = false;
 
         // ===== Helpers =====
+        function getBubble() { return pet.querySelector('#spPetBubble'); }
         function show(text, duration) {
+            var bubble = getBubble();
+            if (!bubble) return;
             bubble.textContent = text;
             bubble.classList.add('sp-show');
             if (S.bubbleTimer) clearTimeout(S.bubbleTimer);
-            S.bubbleTimer = setTimeout(function() { bubble.classList.remove('sp-show'); }, duration || 3500);
+            S.bubbleTimer = setTimeout(function() { if (bubble) bubble.classList.remove('sp-show'); }, duration || 3500);
         }
 
         function setMood(cls, duration) {
@@ -567,43 +825,12 @@ def render_desk_pet(
             if (ctxMenu && ctxMenu.classList.contains('sp-show') && !ctxMenu.contains(e.target) && !pet.contains(e.target)) {
                 hideCtxMenu();
             }
+            var qcPanel = getQcPanel();
+            if (qcPanel && qcPanel.classList.contains('sp-show') && !qcPanel.contains(e.target) && !pet.contains(e.target)) {
+                toggleQuickCenter(false);
+            }
         };
         doc.addEventListener('click', S.onOutsideClick);
-
-        if (ctxMenu) {
-            var menuItems = ctxMenu.querySelectorAll('.sp-pet-ctx-item');
-            for (var k = 0; k < menuItems.length; k++) {
-                (function(item) {
-                    item.onclick = function(e) {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        var action = item.getAttribute('data-action');
-                        if (action === 'switch') {
-                            var newType = item.getAttribute('data-pet');
-                            sendToPython({ action: 'switch_pet', pet_type: newType });
-                            setMood('sp-happy', 1500);
-                            show('切换中...', 2000);
-                        } else if (action === 'size') {
-                            var size = parseInt(item.getAttribute('data-size'));
-                            applySize(size);
-                            sendToPython({ action: 'set_size', pet_size: size });
-                            // Update active state
-                            var sizeItems2 = ctxMenu.querySelectorAll('[data-action="size"]');
-                            for (var m = 0; m < sizeItems2.length; m++) {
-                                if (parseInt(sizeItems2[m].getAttribute('data-size')) === size) sizeItems2[m].classList.add('active');
-                                else sizeItems2[m].classList.remove('active');
-                            }
-                            show('大小已调整～', 1500);
-                        } else if (action === 'quick') {
-                            toggleQuickPanel();
-                        } else if (action === 'hide') {
-                            sendToPython({ action: 'hide_pet' });
-                        }
-                        hideCtxMenu();
-                    };
-                })(menuItems[k]);
-            }
-        }
 
         // ===== Size control =====
         function applySize(size) {
@@ -677,6 +904,483 @@ def render_desk_pet(
             tripleTimer = setTimeout(function() { tripleCount = 0; }, 600);
             if (tripleCount >= 3) { tripleCount = 0; toggleQuickPanel(); }
         });
+
+        // ===== Quick Center =====
+        // Use event delegation because Streamlit's React may recreate the
+        // st.markdown-injected DOM nodes on rerun, invalidating cached references.
+        var qcOpen = false;
+        function getQcPanel() { return doc.querySelector('#spQcPanel'); }
+        function getModalOverlay() { return doc.querySelector('#spModalOverlay'); }
+        function getModalHeader() { return doc.querySelector('#spModalHeader'); }
+        function getModalBody() { return doc.querySelector('#spModalBody'); }
+        function getModalFooter() { return doc.querySelector('#spModalFooter'); }
+
+        function toggleQuickCenter(force) {
+            var panel = getQcPanel();
+            if (!panel) return;
+            var showIt = (typeof force === 'boolean') ? force : !qcOpen;
+            qcOpen = showIt;
+            if (showIt) { panel.classList.add('sp-show'); setMood('sp-happy', 1000); }
+            else { panel.classList.remove('sp-show'); }
+        }
+
+        // Unified event delegation for pet-related interactive elements.
+        // Streamlit's React may recreate the st.markdown-injected DOM on rerun,
+        // so binding directly to ephemeral elements can silently stop working.
+        doc.addEventListener('click', function(e) {
+            // Context menu items
+            var ctxItem = e.target.closest('.sp-pet-ctx-item');
+            if (ctxItem) {
+                e.stopPropagation();
+                e.preventDefault();
+                var action = ctxItem.getAttribute('data-action');
+                if (action === 'switch') {
+                    var newType = ctxItem.getAttribute('data-pet');
+                    sendToPython({ action: 'switch_pet', pet_type: newType });
+                    setMood('sp-happy', 1500);
+                    show('切换中...', 2000);
+                } else if (action === 'size') {
+                    var size = parseInt(ctxItem.getAttribute('data-size'));
+                    applySize(size);
+                    sendToPython({ action: 'set_size', pet_size: size });
+                    var sizeItems2 = ctxMenu.querySelectorAll('[data-action="size"]');
+                    for (var m = 0; m < sizeItems2.length; m++) {
+                        if (parseInt(sizeItems2[m].getAttribute('data-size')) === size) sizeItems2[m].classList.add('active');
+                        else sizeItems2[m].classList.remove('active');
+                    }
+                    show('大小已调整～', 1500);
+                } else if (action === 'quick') {
+                    toggleQuickPanel();
+                } else if (action === 'quick_center') {
+                    toggleQuickCenter();
+                } else if (action === 'hide') {
+                    sendToPython({ action: 'hide_pet' });
+                }
+                hideCtxMenu();
+                return;
+            }
+            // Quick center grid items
+            var qcItem = e.target.closest('.sp-qc-item');
+            if (qcItem) {
+                e.stopPropagation();
+                e.preventDefault();
+                var panel = qcItem.getAttribute('data-panel');
+                toggleQuickCenter(false);
+                setTimeout(function() { openPanel(panel); }, 50);
+                return;
+            }
+            if (e.target.closest('#spQcClose')) {
+                e.stopPropagation();
+                toggleQuickCenter(false);
+                return;
+            }
+            if (e.target.closest('#spModalClose')) {
+                e.stopPropagation();
+                closeModal();
+                return;
+            }
+            if (e.target.closest('#spForumClose')) {
+                e.stopPropagation();
+                closeModal();
+                return;
+            }
+        });
+
+        function openModal(title, bodyHTML, footerHTML) {
+            var modalOverlay = getModalOverlay();
+            var modalHeader = getModalHeader();
+            var modalBody = getModalBody();
+            var modalFooter = getModalFooter();
+            if (!modalOverlay || !modalHeader || !modalBody || !modalFooter) return;
+            modalHeader.innerHTML = title;
+            modalBody.innerHTML = bodyHTML;
+            modalFooter.innerHTML = footerHTML || '';
+            modalOverlay.classList.add('sp-show');
+        }
+
+        function closeModal() {
+            var modalOverlay = getModalOverlay();
+            if (modalOverlay) modalOverlay.classList.remove('sp-show');
+            if (S.pomoTimer) { clearInterval(S.pomoTimer); S.pomoTimer = null; }
+        }
+
+        var modalOverlayForClick = getModalOverlay();
+        if (modalOverlayForClick) {
+            modalOverlayForClick.addEventListener('click', function(e) {
+                if (e.target === modalOverlayForClick) closeModal();
+            });
+        }
+
+        S.onEsc = function(e) {
+            if (e.key === 'Escape') {
+                var mo = getModalOverlay();
+                if (mo && mo.classList.contains('sp-show')) closeModal();
+                else { var qp = getQcPanel(); if (qp && qp.classList.contains('sp-show')) toggleQuickCenter(false); }
+            }
+        };
+        doc.addEventListener('keydown', S.onEsc);
+
+        function openPanel(panelId) {
+            setMood('sp-happy', 800);
+            switch(panelId) {
+                case 'forum': openForumPanel(); break;
+                case 'notes': openNotesPanel(); break;
+                case 'experiment': openExperimentPanel(); break;
+                case 'literature': openLiteraturePanel(); break;
+                case 'pomodoro': openPomodoroPanel(); break;
+                case 'todo': openTodoPanel(); break;
+                case 'inspire': openInspirePanel(); break;
+                case 'meeting': openMeetingPanel(); break;
+            }
+        }
+
+        function clickTab(label) {
+            var tabs = doc.querySelectorAll('[role="tab"]');
+            for (var i = 0; i < tabs.length; i++) {
+                if (tabs[i].textContent.indexOf(label) >= 0) {
+                    tabs[i].click();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // --- 1. Forum panel ---
+        function openForumPanel() {
+            openModal(
+                '🗣️ 逛论坛',
+                '<div class="sp-forum-info">' +
+                    '<div class="sp-forum-info-icon">🗣️</div>' +
+                    '<div class="sp-forum-info-text">课题组论坛已有 20+ 帖子<br>包含参数调试、经验分享、问题讨论</div>' +
+                '</div>',
+                '<button class="sp-modal-btn sp-modal-btn-primary" id="spForumGo">前往论坛</button>' +
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spForumClose">关闭</button>'
+            );
+            var goBtn = getModalFooter().querySelector('#spForumGo');
+            var closeBtn = getModalFooter().querySelector('#spForumClose');
+            if (closeBtn) closeBtn.onclick = closeModal;
+            if (goBtn) goBtn.onclick = function() {
+                closeModal();
+                clickTab('社区');
+                show('已切换到论坛～', 2000);
+            };
+        }
+
+        // --- 2. Notes panel ---
+        function openNotesPanel() {
+            var saved = '';
+            try { saved = localStorage.getItem('sp_notes') || ''; } catch(e) {}
+            openModal(
+                '📝 个人笔记',
+                '<textarea class="sp-notes-area" id="spNotesArea" placeholder="记录实验心得、文献笔记、灵感碎片...（自动保存）">' + saved + '</textarea>' +
+                '<div class="sp-notes-status" id="spNotesStatus">' + (saved ? '上次保存: ' + new Date(localStorage.getItem('sp_notes_time') || Date.now()).toLocaleString() : '尚未保存') + '</div>',
+                '<button class="sp-modal-btn sp-modal-btn-primary" id="spNotesSave">保存</button>' +
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spModalClose">关闭</button>'
+            );
+            var area = getModalBody().querySelector('#spNotesArea');
+            var status = getModalBody().querySelector('#spNotesStatus');
+            var saveBtn = getModalFooter().querySelector('#spNotesSave');
+            if (area && saveBtn) {
+                var autoSave = null;
+                area.oninput = function() {
+                    if (autoSave) clearTimeout(autoSave);
+                    autoSave = setTimeout(function() {
+                        try {
+                            localStorage.setItem('sp_notes', area.value);
+                            var now = new Date().toLocaleString();
+                            localStorage.setItem('sp_notes_time', now);
+                            status.textContent = '已自动保存: ' + now;
+                        } catch(e) {}
+                    }, 1000);
+                };
+                saveBtn.onclick = function() {
+                    try {
+                        localStorage.setItem('sp_notes', area.value);
+                        var now = new Date().toLocaleString();
+                        localStorage.setItem('sp_notes_time', now);
+                        status.textContent = '已保存: ' + now;
+                    } catch(e) {}
+                    show('笔记已保存～', 1500);
+                };
+            }
+        }
+
+        // --- 3. Experiment panel ---
+        function openExperimentPanel() {
+            var steps = [
+                { name: '数据导入', done: true },
+                { name: '运动校正', done: true },
+                { name: 'CTF 估计', done: true },
+                { name: '颗粒挑选', done: false },
+                { name: '2D 分类', done: false },
+                { name: '3D 初始模型', done: false },
+                { name: '3D 精修', done: false }
+            ];
+            var html = '<div>';
+            for (var i = 0; i < steps.length; i++) {
+                html += '<div class="sp-exp-item">' +
+                    '<div class="sp-exp-step ' + (steps[i].done ? 'done' : 'todo') + '">' + (i + 1) + '</div>' +
+                    '<div class="sp-exp-name">' + steps[i].name + '</div>' +
+                    '<div class="sp-exp-status">' + (steps[i].done ? '已完成' : '待处理') + '</div>' +
+                '</div>';
+            }
+            html += '</div>';
+            openModal(
+                '📊 实验记录速查',
+                html + '<div class="sp-notes-status" style="margin-top:10px;">当前进度: 3/7 步骤已完成</div>',
+                '<button class="sp-modal-btn sp-modal-btn-primary" id="spExpGo">前往工作流</button>' +
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spExpClose">关闭</button>'
+            );
+            var goBtn = getModalFooter().querySelector('#spExpGo');
+            var closeBtn = getModalFooter().querySelector('#spExpClose');
+            if (closeBtn) closeBtn.onclick = closeModal;
+            if (goBtn) goBtn.onclick = function() {
+                closeModal();
+                clickTab('对话陪跑');
+                show('已切换到工作流～', 2000);
+            };
+        }
+
+        // --- 4. Literature panel ---
+        function openLiteraturePanel() {
+            var papers = [
+                { title: 'CryoSPARC: new methods for structure determination', meta: 'Nature Methods, 2024' },
+                { title: 'In situ structure biology by cryo-ET', meta: 'Nature Reviews, 2024' },
+                { title: 'Topaz-Denoise: for cryo-EM particle picking', meta: 'J Struct Biol, 2024' },
+                { title: 'ISG15 in innate immunity and stress response', meta: 'Cell Reports, 2024' },
+                { title: 'Advances in single-particle analysis pipelines', meta: 'Acta Cryst D, 2025' }
+            ];
+            var html = '';
+            for (var i = 0; i < papers.length; i++) {
+                html += '<div class="sp-lit-item">' +
+                    '<div class="sp-lit-title">' + papers[i].title + '</div>' +
+                    '<div class="sp-lit-meta">' + papers[i].meta + '</div>' +
+                '</div>';
+            }
+            openModal(
+                '📚 文献速递',
+                html + '<div class="sp-notes-status" style="margin-top:8px;">共 5 篇最新推送 · 点击标题可查看详情</div>',
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spModalClose">关闭</button>'
+            );
+        }
+
+        // --- 5. Pomodoro panel ---
+        function openPomodoroPanel() {
+            openModal(
+                '⏰ 番茄钟 · 专注计时',
+                '<div class="sp-pomo-display" id="spPomoDisplay">25:00</div>' +
+                '<div class="sp-pomo-status" id="spPomoStatus">点击开始，进入 25 分钟专注</div>',
+                '<button class="sp-pomo-btn sp-pomo-start" id="spPomoStart">开始</button>' +
+                '<button class="sp-pomo-btn sp-pomo-reset" id="spPomoReset">重置</button>'
+            );
+            var display = getModalBody().querySelector('#spPomoDisplay');
+            var statusEl = getModalBody().querySelector('#spPomoStatus');
+            var startBtn = getModalFooter().querySelector('#spPomoStart');
+            var resetBtn = getModalFooter().querySelector('#spPomoReset');
+            var pomoSeconds = 25 * 60;
+            var pomoRunning = false;
+
+            function updateDisplay() {
+                var m = Math.floor(pomoSeconds / 60);
+                var s = pomoSeconds % 60;
+                display.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            }
+
+            if (startBtn) startBtn.onclick = function() {
+                if (pomoRunning) {
+                    pomoRunning = false;
+                    clearInterval(S.pomoTimer);
+                    S.pomoTimer = null;
+                    startBtn.textContent = '继续';
+                    statusEl.textContent = '已暂停';
+                } else {
+                    pomoRunning = true;
+                    startBtn.textContent = '暂停';
+                    statusEl.textContent = '专注中... 保持心流！';
+                    S.pomoTimer = setInterval(function() {
+                        pomoSeconds--;
+                        updateDisplay();
+                        if (pomoSeconds <= 0) {
+                            clearInterval(S.pomoTimer);
+                            S.pomoTimer = null;
+                            pomoRunning = false;
+                            startBtn.textContent = '开始';
+                            statusEl.textContent = '完成了！休息 5 分钟吧～';
+                            show('番茄钟完成！休息一下吧～', 4000);
+                            setMood('sp-happy', 3000);
+                        }
+                    }, 1000);
+                }
+            };
+
+            if (resetBtn) resetBtn.onclick = function() {
+                if (S.pomoTimer) { clearInterval(S.pomoTimer); S.pomoTimer = null; }
+                pomoRunning = false;
+                pomoSeconds = 25 * 60;
+                updateDisplay();
+                startBtn.textContent = '开始';
+                statusEl.textContent = '点击开始，进入 25 分钟专注';
+            };
+        }
+
+        // --- 6. Todo panel ---
+        function openTodoPanel() {
+            var todos = [];
+            try { todos = JSON.parse(localStorage.getItem('sp_todos') || '[]'); } catch(e) {}
+            function renderTodos() {
+                var listEl = getModalBody().querySelector('#spTodoList');
+                if (!listEl) return;
+                listEl.innerHTML = '';
+                if (todos.length === 0) {
+                    listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px;font-size:0.8rem;">暂无待办，添加一个吧～</div>';
+                    return;
+                }
+                for (var i = 0; i < todos.length; i++) {
+                    (function(idx) {
+                        var item = doc.createElement('div');
+                        item.className = 'sp-todo-item' + (todos[idx].done ? ' done' : '');
+                        var check = doc.createElement('div');
+                        check.className = 'sp-todo-check' + (todos[idx].done ? ' done' : '');
+                        check.textContent = todos[idx].done ? '\u2713' : '';
+                        check.onclick = function() {
+                            todos[idx].done = !todos[idx].done;
+                            try { localStorage.setItem('sp_todos', JSON.stringify(todos)); } catch(e) {}
+                            renderTodos();
+                        };
+                        var text = doc.createElement('div');
+                        text.className = 'sp-todo-text';
+                        text.textContent = todos[idx].text;
+                        var del = doc.createElement('span');
+                        del.className = 'sp-todo-del';
+                        del.textContent = '\u00d7';
+                        del.onclick = function() {
+                            todos.splice(idx, 1);
+                            try { localStorage.setItem('sp_todos', JSON.stringify(todos)); } catch(e) {}
+                            renderTodos();
+                        };
+                        item.appendChild(check);
+                        item.appendChild(text);
+                        item.appendChild(del);
+                        listEl.appendChild(item);
+                    })(i);
+                }
+            }
+            openModal(
+                '📌 待办速记',
+                '<div class="sp-todo-input-row">' +
+                    '<input type="text" class="sp-todo-input" id="spTodoInput" placeholder="输入待办事项后回车..." />' +
+                    '<button class="sp-todo-add-btn" id="spTodoAdd">添加</button>' +
+                '</div>' +
+                '<div class="sp-todo-list" id="spTodoList"></div>',
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spModalClose">关闭</button>'
+            );
+            var input = getModalBody().querySelector('#spTodoInput');
+            var addBtn = getModalBody().querySelector('#spTodoAdd');
+            function addTodo() {
+                var val = input.value.trim();
+                if (!val) return;
+                todos.push({ text: val, done: false });
+                try { localStorage.setItem('sp_todos', JSON.stringify(todos)); } catch(e) {}
+                input.value = '';
+                renderTodos();
+            }
+            if (addBtn) addBtn.onclick = addTodo;
+            if (input) input.onkeydown = function(e) { if (e.key === 'Enter') addTodo(); };
+            renderTodos();
+        }
+
+        // --- 7. Inspiration panel ---
+        function openInspirePanel() {
+            var notes = [];
+            try { notes = JSON.parse(localStorage.getItem('sp_inspires') || '[]'); } catch(e) {}
+            function renderNotes() {
+                var listEl = getModalBody().querySelector('#spInspireList');
+                if (!listEl) return;
+                listEl.innerHTML = '';
+                if (notes.length === 0) {
+                    listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px;font-size:0.8rem;">还没有灵感记录～</div>';
+                    return;
+                }
+                for (var i = 0; i < notes.length; i++) {
+                    (function(idx) {
+                        var card = doc.createElement('div');
+                        card.className = 'sp-inspire-card';
+                        var text = doc.createElement('div');
+                        text.textContent = notes[idx].text;
+                        var time = doc.createElement('div');
+                        time.className = 'sp-inspire-time';
+                        time.textContent = notes[idx].time;
+                        var del = doc.createElement('span');
+                        del.className = 'sp-inspire-del';
+                        del.textContent = '\u00d7';
+                        del.onclick = function() {
+                            notes.splice(idx, 1);
+                            try { localStorage.setItem('sp_inspires', JSON.stringify(notes)); } catch(e) {}
+                            renderNotes();
+                        };
+                        card.appendChild(del);
+                        card.appendChild(text);
+                        card.appendChild(time);
+                        listEl.appendChild(card);
+                    })(i);
+                }
+            }
+            openModal(
+                '💡 灵感便签',
+                '<input type="text" class="sp-inspire-input" id="spInspireInput" placeholder="记录一闪而过的灵感后回车..." />' +
+                '<div class="sp-inspire-list" id="spInspireList"></div>',
+                '<button class="sp-modal-btn sp-modal-btn-primary" id="spInspireAdd">记录</button>' +
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spInspireClose">关闭</button>'
+            );
+            var closeBtn = getModalFooter().querySelector('#spInspireClose');
+            if (closeBtn) closeBtn.onclick = closeModal;
+            var input = getModalBody().querySelector('#spInspireInput');
+            var addBtn = getModalFooter().querySelector('#spInspireAdd');
+            function addNote() {
+                var val = input.value.trim();
+                if (!val) return;
+                notes.unshift({ text: val, time: new Date().toLocaleString() });
+                try { localStorage.setItem('sp_inspires', JSON.stringify(notes)); } catch(e) {}
+                input.value = '';
+                renderNotes();
+            }
+            if (addBtn) addBtn.onclick = addNote;
+            if (input) input.onkeydown = function(e) { if (e.key === 'Enter') addNote(); };
+            renderNotes();
+        }
+
+        // --- 8. Meeting panel ---
+        function openMeetingPanel() {
+            var meetings = [];
+            try { meetings = JSON.parse(localStorage.getItem('sp_meetings') || '[]'); } catch(e) {}
+            if (meetings.length === 0) {
+                meetings = [
+                    { title: '课题组周会', date: '每周五 14:00', link: '' },
+                    { title: '1V1 指导', date: '每周三 10:00', link: '' },
+                    { title: '文献分享会', date: '每月最后一周', link: '' }
+                ];
+            }
+            var html = '';
+            for (var i = 0; i < meetings.length; i++) {
+                html += '<div class="sp-meeting-item">' +
+                    '<div class="sp-meeting-date">' + meetings[i].date + '</div>' +
+                    '<div class="sp-meeting-title">' + meetings[i].title + '</div>' +
+                    (meetings[i].link ? '<div class="sp-meeting-link" data-link="' + meetings[i].link + '">加入</div>' : '') +
+                '</div>';
+            }
+            openModal(
+                '🔔 会议/组会提醒',
+                html + '<div class="sp-notes-status" style="margin-top:8px;">最近会议安排（点击「加入」可跳转会议链接）</div>',
+                '<button class="sp-modal-btn sp-modal-btn-secondary" id="spModalClose">关闭</button>'
+            );
+            var links = getModalBody().querySelectorAll('.sp-meeting-link');
+            for (var li = 0; li < links.length; li++) {
+                links[li].onclick = function() {
+                    var link = this.getAttribute('data-link');
+                    if (link) win.open(link, '_blank');
+                };
+            }
+        }
 
         // ===== Interaction (click areas) =====
         function distToRect(px, py, rect) {
@@ -758,14 +1462,20 @@ def render_desk_pet(
         // ===== Drag (FIXED: proper event lifecycle) =====
         function onDown(e) {
             if (e.button !== undefined && e.button !== 0) return;
-            // Don't start drag if clicking on context menu or quick panel
-            if (e.target.closest && (e.target.closest('.sp-pet-ctx-menu') || e.target.closest('.sp-pet-quick-panel'))) return;
+            // Don't start drag if clicking on context menu, quick panel, quick center, or modal
+            if (e.target.closest && (e.target.closest('.sp-pet-ctx-menu') || e.target.closest('.sp-pet-quick-panel') || e.target.closest('.sp-qc-panel') || e.target.closest('.sp-modal-overlay'))) return;
+            // Close any open panels so they don't appear to "float behind" while dragging
+            toggleQuickCenter(false);
+            toggleQuickPanel(false);
+            if (ctxMenu) ctxMenu.classList.remove('sp-show');
             isDragging = true; dragMoved = false;
             var r = pet.getBoundingClientRect();
             startX = e.clientX; startY = e.clientY; origLeft = r.left; origTop = r.top;
             pet.classList.add('sp-dragging');
-            pet.style.right = 'auto'; pet.style.bottom = 'auto';
-            pet.style.left = origLeft + 'px'; pet.style.top = origTop + 'px';
+            pet.style.setProperty('right', 'auto', 'important');
+            pet.style.setProperty('bottom', 'auto', 'important');
+            pet.style.setProperty('left', origLeft + 'px', 'important');
+            pet.style.setProperty('top', origTop + 'px', 'important');
             if (e.preventDefault) e.preventDefault();
         }
 
@@ -779,7 +1489,8 @@ def render_desk_pet(
                 var pw = pet.offsetWidth || 64, ph = pet.offsetHeight || 64;
                 nl = Math.max(-pw / 2, Math.min(nl, vw - pw / 2));
                 nt = Math.max(-ph / 2, Math.min(nt, vh - ph / 2));
-                pet.style.left = nl + 'px'; pet.style.top = nt + 'px';
+                pet.style.setProperty('left', nl + 'px', 'important');
+                pet.style.setProperty('top', nt + 'px', 'important');
                 return;
             }
             // Eye tracking
@@ -800,7 +1511,8 @@ def render_desk_pet(
             if (!isDragging) return;
             isDragging = false;
             pet.classList.remove('sp-dragging');
-            try { localStorage.setItem(petId, JSON.stringify({ left: pet.style.left, top: pet.style.top })); } catch(err) {}
+            // Do not persist drag position across refreshes — always reset to default corner
+            // to avoid the pet being restored off-screen on different viewport sizes.
             var ev = e;
             setTimeout(function() { if (!dragMoved) onClick(ev); }, 0);
         };
@@ -812,7 +1524,7 @@ def render_desk_pet(
 
         // Touch support
         pet.addEventListener('touchstart', function(e) {
-            if (e.target.closest && (e.target.closest('.sp-pet-ctx-menu') || e.target.closest('.sp-pet-quick-panel'))) return;
+            if (e.target.closest && (e.target.closest('.sp-pet-ctx-menu') || e.target.closest('.sp-pet-quick-panel') || e.target.closest('.sp-qc-panel') || e.target.closest('.sp-modal-overlay'))) return;
             var t = e.touches[0];
             onDown({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: function() {} });
         }, { passive: false });
@@ -833,13 +1545,15 @@ def render_desk_pet(
         doc.addEventListener('touchmove', S.onTouchMove, { passive: false });
         doc.addEventListener('touchend', S.onTouchEnd);
 
-        // ===== Load saved position =====
+        // ===== Position reset =====
+        // Pet always starts from the default bottom-right corner on every load.
+        // Dragging is session-only; we do not persist the offset to avoid off-screen restores.
         try {
-            var s = JSON.parse(localStorage.getItem(petId) || 'null');
-            if (s && s.left && s.top) {
-                pet.style.right = 'auto'; pet.style.bottom = 'auto';
-                pet.style.left = s.left; pet.style.top = s.top;
-            }
+            pet.style.removeProperty('left');
+            pet.style.removeProperty('top');
+            pet.style.removeProperty('right');
+            pet.style.removeProperty('bottom');
+            localStorage.removeItem(petId);
         } catch(err) {}
 
         // ===== Mood system =====
