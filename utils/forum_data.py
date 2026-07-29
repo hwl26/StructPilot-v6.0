@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 import uuid
 import functools
 from utils.atomic_io import atomic_write_json, path_lock
+from utils.community_seed import merge_forum_seed
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FORUM_DIR = BASE_DIR / "runtime" / "forum"
@@ -89,21 +90,13 @@ def load_forum_data() -> Dict:
     """
     ensure_forum_dir()
 
-    if not FORUM_DATA_PATH.exists():
-        default_data = {
-            "posts": [],
-            "answers": [],
-            "comments": [],
-            "votes": []
-        }
-        save_forum_data(default_data)
-        return default_data
-
     try:
-        return json.loads(FORUM_DATA_PATH.read_text(encoding="utf-8"))
+        current_data = json.loads(FORUM_DATA_PATH.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"Error loading forum data: {e}")
-        return {"posts": [], "answers": [], "comments": [], "votes": []}
+        if FORUM_DATA_PATH.exists():
+            print(f"Error loading forum data: {e}")
+        current_data = {"posts": [], "answers": [], "comments": [], "votes": []}
+    return merge_forum_seed(current_data)
 
 
 def save_forum_data(data: Dict) -> bool:

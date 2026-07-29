@@ -2,6 +2,7 @@
 """StructPilot 论坛模块快速测试"""
 
 import sys
+import tempfile
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
@@ -19,9 +20,10 @@ from utils.forum_data import (
     get_answers,
     accept_answer
 )
+import utils.forum_data as forum_data
 
 
-def test_forum():
+def _run_forum_test():
     """测试论坛功能"""
     print("=" * 60)
     print("StructPilot 论坛模块测试")
@@ -142,9 +144,19 @@ def test_forum():
     print()
 
 
+def test_forum(tmp_path, monkeypatch):
+    forum_path = tmp_path / "forum" / "forum_posts.json"
+    monkeypatch.setattr(forum_data, "FORUM_DIR", forum_path.parent)
+    monkeypatch.setattr(forum_data, "FORUM_DATA_PATH", forum_path)
+    _run_forum_test()
+
+
 if __name__ == "__main__":
     try:
-        test_forum()
+        with tempfile.TemporaryDirectory(prefix="structpilot-forum-test-") as temp_dir:
+            forum_data.FORUM_DIR = Path(temp_dir) / "forum"
+            forum_data.FORUM_DATA_PATH = forum_data.FORUM_DIR / "forum_posts.json"
+            _run_forum_test()
     except Exception as e:
         print(f"\n❌ 测试失败: {e}")
         import traceback

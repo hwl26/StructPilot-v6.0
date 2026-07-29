@@ -21,6 +21,7 @@ from utils.forum_data import (
     has_user_upvoted
 )
 from utils.security import sanitize_html
+from utils.community_seed import get_public_members, get_registered_user_count
 
 
 def render_forum_tab():
@@ -28,6 +29,29 @@ def render_forum_tab():
     from utils.auth import get_current_user
 
     st.markdown("## 💬 讨论区")
+
+    forum_snapshot = load_forum_data()
+    try:
+        from components.lab_board import load_posts as load_board_posts
+        board_count = len(load_board_posts())
+    except Exception:
+        board_count = 0
+    st.caption(
+        f"👥 注册用户 {get_registered_user_count()} · "
+        f"讨论 {len(forum_snapshot.get('posts', []))} · "
+        f"回答 {len(forum_snapshot.get('answers', []))} · 留言 {board_count}"
+    )
+
+    public_members = get_public_members()
+    if public_members:
+        with st.expander(f"👤 公开成员目录（{len(public_members)}）", expanded=False):
+            for member in public_members:
+                display_name = sanitize_html(member.get("display_name") or member.get("username", ""))
+                title = sanitize_html(member.get("title", ""))
+                bio = sanitize_html(member.get("bio", ""))
+                st.markdown(f"**{display_name}** · {title}")
+                if bio:
+                    st.caption(bio)
 
     # 获取当前用户权限
     current_user = get_current_user(st.session_state)
@@ -72,7 +96,7 @@ def render_forum_tab():
         st.markdown("---")
 
     # 问题列表
-    data = load_forum_data()
+    data = forum_snapshot
     questions = data.get("posts", [])
 
     # 过滤

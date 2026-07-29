@@ -12,6 +12,7 @@ from pathlib import Path
 import streamlit as st
 from utils.security import sanitize_html
 from utils.atomic_io import atomic_write_json, path_lock
+from utils.community_seed import merge_lab_board_seed
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _POSTS_PATH = BASE_DIR / "runtime" / "lab_board" / "posts.json"
@@ -24,9 +25,10 @@ def load_posts() -> list[dict]:
     try:
         data = json.loads(_POSTS_PATH.read_text(encoding="utf-8"))
         posts = data if isinstance(data, list) else data.get("posts", [])
-        return sorted(posts, key=lambda p: p.get("timestamp", ""), reverse=True)
     except Exception:
-        return []
+        posts = []
+    posts = merge_lab_board_seed(posts)
+    return sorted(posts, key=lambda p: p.get("timestamp", ""), reverse=True)
 
 
 def _save_posts(posts: list[dict]) -> bool:
